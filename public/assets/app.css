@@ -134,8 +134,15 @@ th, td { text-align: left; padding: 10px 8px; border-bottom: 1px solid var(--lin
 .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px 28px; }
 .form-grid fieldset { border: 1px solid var(--line); border-radius: 14px; padding: 16px; display: grid; gap: 12px; margin: 0; }
 .form-grid legend { padding: 0 6px; color: var(--gold); font-size: 12px; letter-spacing: .12em; text-transform: uppercase; }
-.form-inline { display: grid; grid-template-columns: 1.4fr 1fr 1fr auto; gap: 12px; align-items: end; }
-.form-inline .btn { margin-top: 18px; }
+.form-inline {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: end;
+}
+.form-inline label { min-width: 0; }
+.form-inline input { width: 100%; }
+.form-inline .btn { margin-top: 18px; white-space: nowrap; }
 .conn-banner {
   display: grid;
   gap: 4px;

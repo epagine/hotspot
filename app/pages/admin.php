@@ -214,7 +214,7 @@ function saas_nav(string $tab): void
                 </table>
             </div>
         </section>
-        <section class="card card-narrow">
+        <section class="card">
             <h2>Novo cliente</h2>
             <form method="post" action="/admin/stores" class="form form-inline">
                 <input type="hidden" name="do" value="create">
