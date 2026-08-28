@@ -65,6 +65,7 @@ function migrate_multi_store(PDO $pdo): void
             PRIMARY KEY (store_id, k)
         )'
     );
+    ensure_store_saas_columns($pdo);
 
     $cols = $pdo->query('PRAGMA table_info(clients)')->fetchAll();
     $names = array_column($cols, 'name');
@@ -121,6 +122,149 @@ function migrate_multi_store(PDO $pdo): void
 
     if (!is_file(cloud_config_path())) {
         write_cloud_config(guess_panel_url(), $token);
+    }
+}
+
+function ensure_store_saas_columns(PDO $pdo): void
+{
+    $cols = array_column($pdo->query('PRAGMA table_info(stores)')->fetchAll(), 'name');
+    $add = [
+        'active' => "INTEGER NOT NULL DEFAULT 1",
+        'billing_status' => "TEXT NOT NULL DEFAULT 'em_dia'",
+        'plan' => "TEXT NOT NULL DEFAULT 'mensal'",
+        'monthly_fee' => "TEXT NOT NULL DEFAULT ''",
+        'paid_until' => "TEXT NOT NULL DEFAULT ''",
+        'contact' => "TEXT NOT NULL DEFAULT ''",
+        'notes' => "TEXT NOT NULL DEFAULT ''",
+    ];
+    foreach ($add as $col => $def) {
+        if (!in_array($col, $cols, true)) {
+            $pdo->exec("ALTER TABLE stores ADD COLUMN {$col} {$def}");
+        }
+    }
+}
+
+function store_connection_health(array $store): array
+{
+    $status = store_status_payload($store);
+    $error = trim((string) ($status['error'] ?? ''));
+    $alive = !empty($status['agent_alive']);
+    $seen = (string) ($store['last_seen_at'] ?? '');
+    if (!$alive) {
+        return [
+            'key' => 'offline',
+            'label' => 'Offline',
+            'detail' => $seen !== '' ? 'Sem contato recente' : 'PC ainda não vinculou',
+        ];
+    }
+    if ($error !== '') {
+        return [
+            'key' => 'erro',
+            'label' => 'Erro',
+            'detail' => $error,
+        ];
+    }
+    $hot = !empty($status['hotspot_on']);
+    return [
+        'key' => 'ok',
+        'label' => 'OK',
+        'detail' => $hot ? 'Conexão ok · hotspot ligado' : 'Conexão ok · hotspot desligado',
+    ];
+}
+
+function billing_label(string $status): string
+{
+    return match ($status) {
+        'em_dia' => 'Em dia',
+        'atrasado' => 'Atrasado',
+        'cortesia' => 'Cortesia',
+        'cancelado' => 'Cancelado',
+        default => $status,
+    };
+}
+
+function saas_overview(): array
+{
+    $kpi = [
+        'total' => 0,
+        'ativos' => 0,
+        'ok' => 0,
+        'erro' => 0,
+        'offline' => 0,
+        'atrasados' => 0,
+    ];
+    $rows = [];
+    foreach (all_stores() as $store) {
+        $health = store_connection_health($store);
+        $active = (int) ($store['active'] ?? 1) === 1;
+        $bill = (string) ($store['billing_status'] ?? 'em_dia');
+        $st = store_status_payload($store);
+        $kpi['total']++;
+        if ($active) {
+            $kpi['ativos']++;
+        }
+        if ($health['key'] === 'ok') {
+            $kpi['ok']++;
+        } elseif ($health['key'] === 'erro') {
+            $kpi['erro']++;
+        } else {
+            $kpi['offline']++;
+        }
+        if ($bill === 'atrasado') {
+            $kpi['atrasados']++;
+        }
+        $seen = parse_time_any((string) ($store['last_seen_at'] ?? ''));
+        $rows[] = [
+            'id' => (int) $store['id'],
+            'name' => (string) $store['name'],
+            'city' => (string) ($store['city'] ?? ''),
+            'contact' => (string) ($store['contact'] ?? ''),
+            'active' => $active,
+            'plan' => (string) ($store['plan'] ?? 'mensal'),
+            'monthly_fee' => (string) ($store['monthly_fee'] ?? ''),
+            'paid_until' => (string) ($store['paid_until'] ?? ''),
+            'billing_status' => $bill,
+            'billing_label' => billing_label($bill),
+            'health' => $health,
+            'hotspot_on' => !empty($st['hotspot_on']),
+            'ssid' => (string) ($st['ssid'] ?? ''),
+            'internet_ip' => (string) ($st['internet_ip'] ?? ''),
+            'last_seen' => $seen > 0 ? date('d/m H:i', $seen) : '—',
+            'token' => (string) $store['token'],
+        ];
+    }
+    return ['kpis' => $kpi, 'clients' => $rows];
+}
+
+function update_store_saas(int $id, array $fields): void
+{
+    $store = find_store($id);
+    if (!$store) {
+        return;
+    }
+    $wasActive = (int) ($store['active'] ?? 1) === 1;
+    db()->prepare(
+        'UPDATE stores SET name = ?, city = ?, active = ?, billing_status = ?, plan = ?, monthly_fee = ?, paid_until = ?, contact = ?, notes = ? WHERE id = ?'
+    )->execute([
+        (string) $fields['name'],
+        (string) $fields['city'],
+        !empty($fields['active']) ? 1 : 0,
+        (string) $fields['billing_status'],
+        (string) $fields['plan'],
+        (string) $fields['monthly_fee'],
+        (string) $fields['paid_until'],
+        (string) $fields['contact'],
+        (string) $fields['notes'],
+        $id,
+    ]);
+    $ins = db()->prepare(
+        'INSERT INTO store_settings (store_id, k, v) VALUES (?,?,?) ON CONFLICT(store_id, k) DO UPDATE SET v = excluded.v'
+    );
+    $ins->execute([$id, 'store_name', (string) $fields['name']]);
+    $ins->execute([$id, 'store_city', (string) $fields['city']]);
+    $nowActive = !empty($fields['active']);
+    if ($wasActive && !$nowActive) {
+        queue_store_command($id, 'stop');
     }
 }
 

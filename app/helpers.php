@@ -511,4 +511,29 @@ function h(?string $value): string
     return htmlspecialchars((string) $value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
 }
 
+function installer_downloads_dir(): string
+{
+    $dir = storage_dir() . DIRECTORY_SEPARATOR . 'downloads';
+    if (!is_dir($dir)) {
+        mkdir($dir, 0777, true);
+    }
+    return $dir;
+}
+
+function installer_setup_path(): ?string
+{
+    $name = 'WiFiDaLoja-Setup.exe';
+    $root = dirname(__DIR__);
+    foreach ([
+        installer_downloads_dir() . DIRECTORY_SEPARATOR . $name,
+        $root . DIRECTORY_SEPARATOR . $name,
+        $root . DIRECTORY_SEPARATOR . 'dist' . DIRECTORY_SEPARATOR . $name,
+    ] as $path) {
+        if (is_file($path) && filesize($path) > 100000) {
+            return $path;
+        }
+    }
+    return null;
+}
+
 require_once __DIR__ . '/stores.php';

@@ -92,6 +92,9 @@ try {
 }
 
 Copy-Item $OutExe (Join-Path $Root "WiFiDaLoja-Setup.exe") -Force
+$dl = Join-Path $Root "storage\downloads"
+New-Item -ItemType Directory -Path $dl -Force | Out-Null
+Copy-Item $OutExe (Join-Path $dl "WiFiDaLoja-Setup.exe") -Force
 $mb = [math]::Round((Get-Item $OutExe).Length / 1MB, 1)
 Write-Host "Pronto: $OutExe ($mb MB)"
 Write-Host "Copie esse arquivo para o outro computador e execute como administrador."

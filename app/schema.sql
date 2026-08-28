@@ -12,6 +12,13 @@ CREATE TABLE IF NOT EXISTS stores (
   pending_command_id TEXT,
   last_seen_at TEXT,
   last_status TEXT,
+  active INTEGER NOT NULL DEFAULT 1,
+  billing_status TEXT NOT NULL DEFAULT 'em_dia',
+  plan TEXT NOT NULL DEFAULT 'mensal',
+  monthly_fee TEXT NOT NULL DEFAULT '',
+  paid_until TEXT NOT NULL DEFAULT '',
+  contact TEXT NOT NULL DEFAULT '',
+  notes TEXT NOT NULL DEFAULT '',
   created_at TEXT NOT NULL
 );
 

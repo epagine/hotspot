@@ -92,6 +92,9 @@ switch (true) {
     case $path === '/admin/stores':
         require __DIR__ . '/app/pages/admin-stores.php';
         break;
+    case $path === '/admin/instalador':
+        require __DIR__ . '/app/pages/admin-instalador.php';
+        break;
     case in_array($path, [
         '/generate_204',
         '/gen_204',

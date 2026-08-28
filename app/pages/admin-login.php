@@ -18,13 +18,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Painel</title>
+    <title>Painel SaaS</title>
     <link rel="stylesheet" href="/assets/app.css">
 </head>
 <body class="page admin">
 <header class="top">
     <div>
-        <p class="eyebrow">Painel da loja</p>
+        <p class="eyebrow">Painel SaaS</p>
         <h1>Entrar</h1>
     </div>
 </header>

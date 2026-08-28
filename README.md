@@ -18,9 +18,7 @@ PC da loja          →  agente Windows  →  /agent/sync no painel
 - **PC da loja:** hotspot do Windows (Ponto de acesso móvel), DNS cativo, portal em `192.168.137.1`.
 - O Windows **não** coloca foto no seletor de redes. A imagem da loja aparece no portal e na arte do status.
 
-Não suba o hotspot para a hospedagem. Lá vai só o painel PHP.
-
-Na GitHub, o branch **`hospedagem`** tem **somente** esses arquivos (clone/FTP desse branch). O branch `master` tem o projeto completo (Windows, instalador, agente).
+Não suba o hotspot para a hospedagem. Lá vai só o painel PHP. Use o branch **`master`**.
 
 ---
 
@@ -28,9 +26,9 @@ Na GitHub, o branch **`hospedagem`** tem **somente** esses arquivos (clone/FTP d
 
 Use um VPS ou hospedagem com PHP 8.1+ (PDO SQLite ou, no mínimo, permissão de escrita). HTTPS é obrigatório para as lojas falarem com o painel pela internet.
 
-### O que enviar (só o painel)
+### O que enviar (do master)
 
-Envie **apenas** esta árvore (é o conteúdo do branch `hospedagem`):
+Envie **apenas** estes caminhos:
 
 | Enviar | Função |
 |--------|--------|
@@ -38,23 +36,27 @@ Envie **apenas** esta árvore (é o conteúdo do branch `hospedagem`):
 | `.htaccess` | Apache (se a hospedagem usar Apache) |
 | `app/` | PHP do painel, API do agente, schema |
 | `public/` | CSS e JavaScript |
-| `storage/.gitkeep` | Garante a pasta; o PHP grava o banco aqui |
+| `storage/` | Só a pasta (e `.gitkeep` / `downloads/.gitkeep`). Vazia, gravável. |
 | `.gitignore` | Evita versionar senha e SQLite |
 | `README.md` | Este guia |
 
-**Não envie** (é Windows / loja / gerado na hora):
+**Não envie:**
 
 - `installer/`, `scripts/`, `bin/`
 - `*.exe`, `*.bat`, `HotspotBandeja.exe`
 - `app/config.php` (criado em `/install`)
 - `storage/hotspot.sqlite`, `storage/brand/`, `storage/cloud.json`
-- `runtime/`, `dist/`, `WiFiDaLoja-Setup.exe`
+- `runtime/`, `dist/`
 
-O DocumentRoot deve apontar para a pasta que contém `index.php` (raiz do painel), não só `public/`.
+O instalador Windows **não entra no Git** (~32 MB). Depois do painel no ar, publique o `.exe` na aba **Clientes** (enviar arquivo) ou copie `WiFiDaLoja-Setup.exe` para `storage/downloads/`. O dono baixa pelo botão **Baixar WiFiDaLoja-Setup.exe**.
+
+O DocumentRoot deve apontar para a pasta que contém `index.php`.
 
 ```bash
-git clone -b hospedagem --single-branch https://github.com/epagine/hotspot.git
+git clone -b master https://github.com/epagine/hotspot.git
 ```
+
+Na hospedagem você pode apagar `installer/`, `scripts/` e `bin/` se tiver clonado o master inteiro.
 
 ### Permissões
 

@@ -70,7 +70,10 @@ th, td { text-align: left; padding: 10px 8px; border-bottom: 1px solid var(--lin
 .tag { padding: 4px 8px; border-radius: 999px; font-size: 12px; }
 .tag.online { background: #1c331c; color: var(--ok); }
 .tag.pending, .tag.awaiting_approval { background: #3a3014; color: var(--gold); }
-.tag.blocked, .tag.expired { background: #3a1c18; color: var(--danger); }
+.tag.conn-ok { background: #1c331c; color: var(--ok); }
+.tag.conn-erro { background: #3a1c18; color: var(--danger); }
+.tag.conn-offline { background: #2a2a2a; color: var(--muted); }
+.admin a.eyebrow, .eyebrow a { color: var(--gold); text-decoration: none; }
 .inline { display: flex; gap: 6px; }
 .inline button { padding: 8px 10px; font-size: 12px; }
 details { color: var(--muted); }

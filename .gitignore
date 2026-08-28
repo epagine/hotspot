@@ -10,6 +10,7 @@ storage/brand/
 storage/cloud.json
 storage/install.log
 storage/php-path.txt
+storage/downloads/*.exe
 storage/agent.pid
 storage/panel.pid
 dist/

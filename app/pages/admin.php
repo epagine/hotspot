@@ -8,52 +8,36 @@ if ((int) ($_GET['store'] ?? 0) > 0) {
     select_store((int) $_GET['store']);
 }
 
-$tab = preg_replace('/[^a-z]/', '', (string) ($_GET['tab'] ?? 'operacao')) ?: 'operacao';
-if (!in_array($tab, ['operacao', 'clientes', 'config', 'lojas'], true)) {
-    $tab = 'operacao';
+$tab = preg_replace('/[^a-z]/', '', (string) ($_GET['tab'] ?? 'clientes')) ?: 'clientes';
+if (!in_array($tab, ['clientes', 'instalador', 'config'], true)) {
+    $tab = 'clientes';
 }
 
-$stores = all_stores();
-$storeId = current_store_id();
-$data = dashboard_payload();
-$k = $data['kpis'];
-$hot = $data['hotspot'];
-$clients = $data['clients'];
-$agentAlive = !empty($hot['agent_alive']);
-$hotOn = !empty($hot['hotspot_on']);
-$local = !empty($data['local_store']);
-$currentStore = find_store($storeId);
-$installer = dirname(__DIR__, 2) . DIRECTORY_SEPARATOR . 'Instalar-Hotspot.exe';
-$qs = 'store=' . $storeId;
+$saas = saas_overview();
+$k = $saas['kpis'];
+$rows = $saas['clients'];
+$fichaId = (int) ($_GET['id'] ?? 0);
+$ficha = $fichaId > 0 ? find_store($fichaId) : null;
+$fichaHealth = $ficha ? store_connection_health($ficha) : null;
+$fichaStatus = $ficha ? store_status_payload($ficha) : [];
+$setupFile = installer_setup_path();
+$setupReady = $setupFile !== null;
 ?><!doctype html>
 <html lang="pt-BR">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Painel · <?= h($data['store']) ?></title>
+    <title>Painel SaaS · Hotspot</title>
     <link rel="stylesheet" href="/assets/app.css">
 </head>
-<body class="page admin" data-tab="<?= h($tab) ?>" data-store="<?= (int) $storeId ?>">
+<body class="page admin" data-tab="<?= h($tab) ?>">
 <header class="top">
     <div>
-        <p class="eyebrow">Painel central</p>
-        <h1><?= h($data['store']) ?></h1>
+        <p class="eyebrow">Painel SaaS</p>
+        <h1>Clientes hotspot</h1>
     </div>
     <a class="btn ghost" href="/admin/logout">Sair</a>
 </header>
-
-<nav class="store-switch" aria-label="Lojas">
-    <?php foreach ($stores as $s): ?>
-        <a class="chip <?= (int) $s['id'] === $storeId ? 'active' : '' ?>" href="/admin?tab=<?= h($tab) ?>&amp;store=<?= (int) $s['id'] ?>">
-            <?= h((string) $s['name']) ?>
-            <?php
-            $seen = parse_time_any((string) ($s['last_seen_at'] ?? ''));
-            $onlineChip = $seen > (time() - 45);
-            ?>
-            <small><?= $onlineChip ? 'PC online' : 'PC offline' ?></small>
-        </a>
-    <?php endforeach; ?>
-</nav>
 
 <?php if (!empty($_SESSION['flash_error'])): ?>
     <p class="alert flash-global"><?= h((string) $_SESSION['flash_error']) ?></p>
@@ -64,217 +48,179 @@ $qs = 'store=' . $storeId;
 <?php endif; ?>
 
 <nav class="tabs" role="tablist">
-    <a class="tab <?= $tab === 'operacao' ? 'active' : '' ?>" href="/admin?tab=operacao&amp;<?= $qs ?>">Operação</a>
-    <a class="tab <?= $tab === 'clientes' ? 'active' : '' ?>" href="/admin?tab=clientes&amp;<?= $qs ?>">Clientes</a>
-    <a class="tab <?= $tab === 'config' ? 'active' : '' ?>" href="/admin?tab=config&amp;<?= $qs ?>">Configuração</a>
-    <a class="tab <?= $tab === 'lojas' ? 'active' : '' ?>" href="/admin?tab=lojas&amp;<?= $qs ?>">Lojas</a>
+    <a class="tab <?= $tab === 'clientes' ? 'active' : '' ?>" href="/admin?tab=clientes">Clientes</a>
+    <a class="tab <?= $tab === 'instalador' ? 'active' : '' ?>" href="/admin?tab=instalador">Instalador</a>
+    <a class="tab <?= $tab === 'config' ? 'active' : '' ?>" href="/admin?tab=config">Configuração</a>
 </nav>
 
-<section class="tab-panel <?= $tab === 'operacao' ? 'active' : '' ?>" id="panel-operacao">
-    <div class="stats" id="kpi-grid">
-        <article><strong id="kpi-slots"><?= h((string) ($k['slots'] ?? '0/8')) ?></strong><span>conexões (máx. 8)</span></article>
-        <article><strong id="kpi-online"><?= (int) $k['online'] ?></strong><span>liberados no portal</span></article>
-        <article><strong id="kpi-pending"><?= (int) $k['pending'] ?></strong><span>na fila do status</span></article>
-        <article><strong id="kpi-wifi"><?= (int) $k['windows_clients'] ?></strong><span>no Wi-Fi agora</span></article>
-        <article><strong id="kpi-visits"><?= (int) $k['visits_today'] ?></strong><span>visitas hoje</span></article>
-        <article><strong id="kpi-ssid"><?= h((string) $k['ssid']) ?></strong><span>nome da rede</span></article>
+<section class="tab-panel <?= $tab === 'clientes' ? 'active' : '' ?>" id="panel-clientes">
+    <div class="stats" id="saas-kpis">
+        <article><strong id="kpi-ativos"><?= (int) $k['ativos'] ?></strong><span>clientes ativos</span></article>
+        <article><strong id="kpi-ok"><?= (int) $k['ok'] ?></strong><span>conexão OK</span></article>
+        <article><strong id="kpi-erro"><?= (int) $k['erro'] ?></strong><span>conexão com erro</span></article>
+        <article><strong id="kpi-offline"><?= (int) $k['offline'] ?></strong><span>PC offline</span></article>
+        <article><strong id="kpi-atrasados"><?= (int) $k['atrasados'] ?></strong><span>financeiro atrasado</span></article>
+        <article><strong id="kpi-total"><?= (int) $k['total'] ?></strong><span>clientes no total</span></article>
     </div>
 
-    <section class="card">
-        <h2><?= $local ? 'Rede neste PC' : 'Rede nesta loja' ?></h2>
-        <p class="net-state" id="net-state">
-            <?php if ($hotOn): ?>
-                Rede ligada<?= !empty($hot['ssid']) ? ' · ' . h((string) $hot['ssid']) : '' ?>
-                · portal <?= h((string) ($hot['portal_ip'] ?? $data['portal_ip'])) ?>
-            <?php elseif (!$agentAlive && !$local): ?>
-                Serviço parado. O PC da loja precisa do agente (instalador + token).
-            <?php elseif (!$agentAlive): ?>
-                Serviço parado. Use Ligar rede ou o ícone na bandeja (canto da barra de tarefas).
-            <?php else: ?>
-                Rede desligada.
+    <?php if ($ficha): ?>
+        <section class="card">
+            <p class="eyebrow"><a href="/admin?tab=clientes">← Todos os clientes</a></p>
+            <h2><?= h((string) $ficha['name']) ?></h2>
+            <p>
+                <span class="tag <?= !empty($ficha['active']) ? 'online' : 'blocked' ?>"><?= !empty($ficha['active']) ? 'Ativo' : 'Suspenso' ?></span>
+                <span class="tag conn-<?= h($fichaHealth['key']) ?>"><?= h($fichaHealth['label']) ?></span>
+                <span class="tag <?= ($ficha['billing_status'] ?? '') === 'atrasado' ? 'blocked' : (($ficha['billing_status'] ?? '') === 'em_dia' ? 'online' : 'pending') ?>"><?= h(billing_label((string) ($ficha['billing_status'] ?? 'em_dia'))) ?></span>
+            </p>
+            <p class="hint" id="ficha-conn"><?= h($fichaHealth['detail']) ?></p>
+            <?php
+            $fichaBits = [];
+            if (!empty($fichaStatus['ssid'])) {
+                $fichaBits[] = 'SSID ' . h((string) $fichaStatus['ssid']);
+            }
+            if (!empty($fichaStatus['internet_ip'])) {
+                $fichaBits[] = 'Internet ' . h((string) $fichaStatus['internet_ip']);
+            }
+            if (!empty($ficha['last_seen_at'])) {
+                $fichaBits[] = 'último contato ' . h(date('d/m H:i', parse_time_any((string) $ficha['last_seen_at']) ?: time()));
+            }
+            ?>
+            <?php if ($fichaBits): ?>
+                <p class="hint"><?= implode(' · ', $fichaBits) ?></p>
             <?php endif; ?>
-        </p>
-        <p class="hint" id="net-real">
-            Internet: <?= h((string) (($k['internet_alias'] ?? '') . ' ' . ($k['internet_ip'] ?? 'não detectada'))) ?>
-        </p>
-        <?php if (!empty($hot['error'])): ?>
-            <p class="alert" id="net-error"><?= h((string) $hot['error']) ?></p>
-        <?php else: ?>
-            <p class="alert hidden" id="net-error"></p>
-        <?php endif; ?>
-        <div class="actions row">
-            <button class="btn" type="button" id="btn-start">Ligar rede</button>
-            <button class="btn ghost" type="button" id="btn-stop">Desligar rede</button>
-            <?php if ($local): ?>
-                <button class="btn ghost" type="button" id="btn-install-agent">Instalar no Windows</button>
-            <?php endif; ?>
-        </div>
-        <p class="hint"><?= $local ? 'O programa fica no canto da barra de tarefas (ícone ao lado do relógio). Clique com o botão direito para ligar, desligar ou abrir o painel.' : 'Ligar/Desligar envia o comando para o PC desta loja. O agente precisa estar online.' ?></p>
-        <p class="hint hidden" id="install-hint">Se a permissão não abrir, execute: <code><?= h($installer) ?></code></p>
-        <div id="live-devices"></div>
-    </section>
 
-    <section class="card">
-        <h2>Hoje</h2>
-        <p class="lead" id="today-line">
-            <?= (int) $k['visits_today'] ?> viram o portal · <?= (int) $k['online_today'] ?> ficaram online
-        </p>
-        <p class="hint">No modo balcão, confira o código do status antes de Liberar.</p>
-    </section>
+            <form method="post" action="/admin/stores" class="form">
+                <input type="hidden" name="do" value="save">
+                <input type="hidden" name="id" value="<?= (int) $ficha['id'] ?>">
+                <h2>Situação</h2>
+                <label>Nome do cliente<input name="name" value="<?= h((string) $ficha['name']) ?>" required></label>
+                <label>Cidade<input name="city" value="<?= h((string) ($ficha['city'] ?? '')) ?>"></label>
+                <label>Contato<input name="contact" value="<?= h((string) ($ficha['contact'] ?? '')) ?>" placeholder="Telefone ou responsável"></label>
+                <label>Situação do contrato
+                    <select name="active">
+                        <option value="1" <?= !empty($ficha['active']) ? 'selected' : '' ?>>Ativo</option>
+                        <option value="0" <?= empty($ficha['active']) ? 'selected' : '' ?>>Suspenso</option>
+                    </select>
+                </label>
+                <p class="hint">Suspender envia comando para desligar o hotspot no PC da loja.</p>
+
+                <h2>Financeiro</h2>
+                <label>Plano
+                    <select name="plan">
+                        <?php foreach (['mensal' => 'Mensal', 'trimestral' => 'Trimestral', 'anual' => 'Anual'] as $val => $lab): ?>
+                            <option value="<?= h($val) ?>" <?= ($ficha['plan'] ?? 'mensal') === $val ? 'selected' : '' ?>><?= h($lab) ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                </label>
+                <label>Valor (R$)<input name="monthly_fee" value="<?= h((string) ($ficha['monthly_fee'] ?? '')) ?>" placeholder="0,00"></label>
+                <label>Pago até<input name="paid_until" type="date" value="<?= h((string) ($ficha['paid_until'] ?? '')) ?>"></label>
+                <label>Situação financeira
+                    <select name="billing_status">
+                        <?php foreach (['em_dia' => 'Em dia', 'atrasado' => 'Atrasado', 'cortesia' => 'Cortesia', 'cancelado' => 'Cancelado'] as $val => $lab): ?>
+                            <option value="<?= h($val) ?>" <?= ($ficha['billing_status'] ?? 'em_dia') === $val ? 'selected' : '' ?>><?= h($lab) ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                </label>
+                <label>Observações<textarea name="notes" rows="3"><?= h((string) ($ficha['notes'] ?? '')) ?></textarea></label>
+
+                <h2>Acesso do PC</h2>
+                <p class="hint">Token do agente: <code class="token"><?= h((string) $ficha['token']) ?></code></p>
+                <p class="hint">URL do painel: <code><?= h(guess_panel_url()) ?></code></p>
+                <div class="actions row">
+                    <button class="btn" type="submit">Salvar gestão</button>
+                    <button class="btn ghost" name="do" value="rotate">Novo token</button>
+                    <?php if ($setupReady): ?>
+                        <a class="btn ghost" href="/admin/instalador">Baixar instalador</a>
+                    <?php endif; ?>
+                </div>
+            </form>
+        </section>
+    <?php else: ?>
+        <section class="card">
+            <h2>Clientes</h2>
+            <p class="lead">Situação do contrato, financeiro e se a conexão do PC da loja está ok.</p>
+            <div class="table-wrap">
+                <table>
+                    <thead>
+                    <tr>
+                        <th>Cliente</th>
+                        <th>Contrato</th>
+                        <th>Conexão</th>
+                        <th>Financeiro</th>
+                        <th>Pago até</th>
+                        <th></th>
+                    </tr>
+                    </thead>
+                    <tbody id="saas-rows">
+                    <?php foreach ($rows as $r): ?>
+                        <tr>
+                            <td>
+                                <strong><?= h($r['name']) ?></strong>
+                                <br><small><?= h($r['city'] !== '' ? $r['city'] : '—') ?><?= $r['contact'] !== '' ? ' · ' . h($r['contact']) : '' ?></small>
+                            </td>
+                            <td><span class="tag <?= $r['active'] ? 'online' : 'blocked' ?>"><?= $r['active'] ? 'Ativo' : 'Suspenso' ?></span></td>
+                            <td>
+                                <span class="tag conn-<?= h($r['health']['key']) ?>"><?= h($r['health']['label']) ?></span>
+                                <br><small><?= h($r['health']['detail']) ?></small>
+                            </td>
+                            <td>
+                                <span class="tag <?= $r['billing_status'] === 'atrasado' ? 'blocked' : ($r['billing_status'] === 'em_dia' ? 'online' : 'pending') ?>"><?= h($r['billing_label']) ?></span>
+                                <br><small><?= h($r['plan']) ?><?= $r['monthly_fee'] !== '' ? ' · R$ ' . h($r['monthly_fee']) : '' ?></small>
+                            </td>
+                            <td><?= h($r['paid_until'] !== '' ? date('d/m/Y', strtotime($r['paid_until']) ?: time()) : '—') ?></td>
+                            <td><a class="btn ghost" href="/admin?tab=clientes&amp;id=<?= (int) $r['id'] ?>">Gestão</a></td>
+                        </tr>
+                    <?php endforeach; ?>
+                    <?php if (!$rows): ?>
+                        <tr class="empty"><td colspan="6">Nenhum cliente ainda.</td></tr>
+                    <?php endif; ?>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+        <section class="card">
+            <h2>Novo cliente</h2>
+            <form method="post" action="/admin/stores" class="form">
+                <input type="hidden" name="do" value="create">
+                <label>Nome<input name="name" required placeholder="Ex.: Loja Centro"></label>
+                <label>Cidade<input name="city" placeholder="Opcional"></label>
+                <label>Contato<input name="contact" placeholder="Opcional"></label>
+                <button class="btn" type="submit">Cadastrar cliente</button>
+            </form>
+        </section>
+    <?php endif; ?>
 </section>
 
-<section class="tab-panel <?= $tab === 'clientes' ? 'active' : '' ?>" id="panel-clientes">
+<section class="tab-panel <?= $tab === 'instalador' ? 'active' : '' ?>" id="panel-instalador">
     <section class="card">
-        <h2>Clientes</h2>
-        <div class="toolbar">
-            <select id="filter-state">
-                <option value="">Todos</option>
-                <option value="online">Online</option>
-                <option value="fila">Fila</option>
-                <option value="blocked">Bloqueados</option>
-            </select>
-            <input id="filter-q" type="search" placeholder="IP, código ou WhatsApp">
-        </div>
-        <div class="table-wrap">
-            <table>
-                <thead>
-                <tr>
-                    <th>Quando</th>
-                    <th>IP</th>
-                    <th>Código</th>
-                    <th>WhatsApp</th>
-                    <th>Estado</th>
-                    <th>Tempo</th>
-                    <th></th>
-                </tr>
-                </thead>
-                <tbody id="client-rows">
-                <?php foreach ($clients as $c): ?>
-                    <tr data-state="<?= h((string) $c['state']) ?>" data-q="<?= h(strtolower($c['ip'] . ' ' . $c['status_code'] . ' ' . (string) $c['phone'])) ?>">
-                        <td><?= h(date('d/m H:i', strtotime((string) $c['created_at']))) ?></td>
-                        <td><?= h((string) $c['ip']) ?><br><small><?= h((string) $c['mac']) ?></small></td>
-                        <td><strong><?= h((string) $c['status_code']) ?></strong></td>
-                        <td><?= h((string) $c['phone']) ?></td>
-                        <td><span class="tag <?= h((string) $c['state']) ?>"><?= h((string) $c['label']) ?></span></td>
-                        <td><?= h((string) $c['remaining']) ?><?php if ($c['state'] === 'online' && !empty($c['authorized_at'])): ?><br><small>liberado <?= h(date('H:i', strtotime((string) $c['authorized_at']))) ?></small><?php endif; ?></td>
-                        <td>
-                            <form class="inline" method="post" action="/admin/action">
-                                <input type="hidden" name="id" value="<?= (int) $c['id'] ?>">
-                                <input type="hidden" name="store_id" value="<?= (int) $storeId ?>">
-                                <?php if ($c['state'] !== 'online'): ?>
-                                    <button name="do" value="allow">Liberar</button>
-                                <?php endif; ?>
-                                <?php if ($c['state'] === 'online'): ?>
-                                    <button name="do" value="kick">Encerrar</button>
-                                <?php endif; ?>
-                                <?php if ($c['state'] !== 'blocked'): ?>
-                                    <button name="do" value="block">Bloquear</button>
-                                <?php endif; ?>
-                            </form>
-                        </td>
-                    </tr>
-                <?php endforeach; ?>
-                <?php if (!$clients): ?>
-                    <tr class="empty"><td colspan="7">Ninguém conectou ainda.</td></tr>
-                <?php endif; ?>
-                </tbody>
-            </table>
-        </div>
+        <h2>Instalador para o PC da loja</h2>
+        <?php if ($setupReady): ?>
+            <p class="lead">Baixe no Windows da loja, execute como administrador e cole a URL deste painel + o token do cliente.</p>
+            <div class="actions row">
+                <a class="btn" href="/admin/instalador">Baixar WiFiDaLoja-Setup.exe</a>
+            </div>
+            <p class="hint">Arquivo atual: <?= h(basename($setupFile)) ?> · <?= h((string) round((int) filesize($setupFile) / 1048576, 1)) ?> MB</p>
+        <?php else: ?>
+            <p class="lead">O .exe não vai no Git. Gere com Empacotar.ps1 ou envie abaixo.</p>
+        <?php endif; ?>
+        <form method="post" action="/admin/instalador" class="form" enctype="multipart/form-data">
+            <label>Publicar instalador (.exe)
+                <input name="setup" type="file" accept=".exe,application/vnd.microsoft.portable-executable" required>
+            </label>
+            <button class="btn <?= $setupReady ? 'ghost' : '' ?>" type="submit"><?= $setupReady ? 'Substituir instalador' : 'Enviar instalador' ?></button>
+        </form>
+        <p class="hint">URL do painel: <code><?= h(guess_panel_url()) ?></code></p>
     </section>
 </section>
 
 <section class="tab-panel <?= $tab === 'config' ? 'active' : '' ?>" id="panel-config">
     <section class="card">
-        <h2>Loja</h2>
-        <form method="post" action="/admin/save" class="form" enctype="multipart/form-data">
-            <input type="hidden" name="store_id" value="<?= (int) $storeId ?>">
-            <label>Nome da loja<input name="store_name" value="<?= h(setting('store_name')) ?>" required></label>
-            <label>Cidade<input name="store_city" value="<?= h(setting('store_city')) ?>"></label>
-            <label>Texto do status<textarea name="status_template" rows="3"><?= h(setting('status_template')) ?></textarea></label>
-            <p class="hint">Use {loja} e {codigo}. O código muda a cada visita.</p>
-            <img class="story-img" src="/story/DEMO.png" alt="Prévia da arte do status">
-
-            <h2>Rede</h2>
-            <div class="wifi-card">
-                <?php if (brand_image_url()): ?>
-                    <img src="<?= h(brand_image_url()) ?>" alt="Imagem da conexão">
-                <?php else: ?>
-                    <div class="wifi-card-placeholder">Wi-Fi</div>
-                <?php endif; ?>
-                <div>
-                    <p class="eyebrow">Cartão da conexão</p>
-                    <strong><?= h(setting('wifi_ssid')) ?></strong>
-                    <p class="hint">A imagem entra no portal e na arte do WhatsApp. O Windows não permite foto no seletor de redes, mas o cliente vê a marca ao conectar.</p>
-                </div>
-            </div>
-            <label>SSID<input name="wifi_ssid" value="<?= h(setting('wifi_ssid')) ?>" required></label>
-            <label>Senha do Wi-Fi<input name="wifi_pass" value="<?= h(setting('wifi_pass')) ?>" minlength="8" required></label>
-            <label>Imagem da conexão (logo ou foto)
-                <input name="brand_image" type="file" accept="image/png,image/jpeg,image/webp">
-            </label>
-            <?php if (brand_image_url()): ?>
-                <label class="check"><input type="checkbox" name="remove_brand" value="1"> Remover imagem atual</label>
-            <?php endif; ?>
-            <label>IP do portal<input name="portal_ip" value="<?= h(setting('portal_ip', '192.168.137.1')) ?>"></label>
-            <label>Horas de internet após o status<input name="session_hours" type="number" min="1" max="24" value="<?= h(setting('session_hours', '2')) ?>"></label>
-            <label>Liberação
-                <select name="approval_mode">
-                    <option value="instant" <?= setting('approval_mode') === 'instant' ? 'selected' : '' ?>>Na hora, quando o cliente diz que publicou</option>
-                    <option value="manual" <?= setting('approval_mode') === 'manual' ? 'selected' : '' ?>>Só depois que o balcão conferir o status</option>
-                </select>
-            </label>
-
-            <h2>Conta</h2>
-            <label>Usuário do painel<input name="admin_user" value="<?= h(setting('admin_user')) ?>" required></label>
+        <h2>Conta do painel SaaS</h2>
+        <form method="post" action="/admin/save" class="form">
+            <label>Usuário<input name="admin_user" value="<?= h(setting('admin_user')) ?>" required></label>
             <label>Nova senha (deixe em branco para manter)<input name="admin_pass" type="password"></label>
             <button class="btn" type="submit">Salvar</button>
         </form>
-    </section>
-</section>
-
-<section class="tab-panel <?= $tab === 'lojas' ? 'active' : '' ?>" id="panel-lojas">
-    <section class="card">
-        <h2>Lojas</h2>
-        <p class="lead">Cada loja tem um token. No PC dela, instale o sistema e cole o endereço deste painel + o token.</p>
-        <div class="table-wrap">
-            <table>
-                <thead>
-                <tr>
-                    <th>Loja</th>
-                    <th>Token do agente</th>
-                    <th>Último contato</th>
-                    <th></th>
-                </tr>
-                </thead>
-                <tbody>
-                <?php foreach ($stores as $s): ?>
-                    <tr>
-                        <td>
-                            <strong><?= h((string) $s['name']) ?></strong>
-                            <br><small><?= h((string) $s['city']) ?></small>
-                        </td>
-                        <td><code class="token"><?= h((string) $s['token']) ?></code></td>
-                        <td><?= !empty($s['last_seen_at']) ? h(date('d/m H:i', parse_time_any((string) $s['last_seen_at']) ?: time())) : 'nunca' ?></td>
-                        <td>
-                            <form class="inline" method="post" action="/admin/stores">
-                                <input type="hidden" name="id" value="<?= (int) $s['id'] ?>">
-                                <button name="do" value="select">Abrir</button>
-                                <button name="do" value="rotate">Novo token</button>
-                            </form>
-                        </td>
-                    </tr>
-                <?php endforeach; ?>
-                </tbody>
-            </table>
-        </div>
-        <h2>Nova loja</h2>
-        <form method="post" action="/admin/stores" class="form">
-            <input type="hidden" name="do" value="create">
-            <label>Nome<input name="name" required placeholder="Ex.: Loja Centro"></label>
-            <label>Cidade<input name="city" placeholder="Opcional"></label>
-            <button class="btn" type="submit">Criar loja</button>
-        </form>
-        <p class="hint">Endereço deste painel para colar no instalador: <code><?= h(guess_panel_url()) ?></code></p>
     </section>
 </section>
 <script src="/assets/admin.js"></script>
