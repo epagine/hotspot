@@ -1,0 +1,17 @@
+app/config.php
+storage/hotspot.sqlite
+storage/hotspot.sqlite-wal
+storage/hotspot.sqlite-shm
+storage/authorized.json
+storage/command.json
+storage/status.json
+storage/brand.png
+storage/brand/
+storage/cloud.json
+storage/install.log
+storage/php-path.txt
+storage/agent.pid
+storage/panel.pid
+dist/
+runtime/
+WiFiDaLoja-Setup.exe
