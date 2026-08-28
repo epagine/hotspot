@@ -1,0 +1,179 @@
+param(
+    [string]$PanelUrl = "",
+    [string]$Token = ""
+)
+# Instalador do Wi-Fi da loja (administrador).
+$ErrorActionPreference = "Stop"
+$Root = Split-Path -Parent $PSScriptRoot
+$Storage = Join-Path $Root "storage"
+$Scripts = Join-Path $Root "scripts"
+$Log = Join-Path $Storage "install.log"
+$TaskAgent = "HotspotLoja"
+$TaskPanel = "HotspotLojaPainel"
+
+function Write-Log([string]$Message) {
+    $line = "{0}  {1}" -f (Get-Date -Format "yyyy-MM-dd HH:mm:ss"), $Message
+    Add-Content -Path $Log -Value $line -Encoding UTF8
+    Write-Host $Message
+}
+
+function Test-Admin {
+    $id = [Security.Principal.WindowsIdentity]::GetCurrent()
+    $p = New-Object Security.Principal.WindowsPrincipal($id)
+    return $p.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+}
+
+function Find-Php {
+    $bundled = Join-Path $Root "runtime\php\php.exe"
+    if (Test-Path $bundled) { return $bundled }
+    $saved = Join-Path $Storage "php-path.txt"
+    if (Test-Path $saved) {
+        $p = (Get-Content $saved -Raw).Trim()
+        if ($p -and (Test-Path $p)) { return $p }
+    }
+    $cmd = Get-Command php -ErrorAction SilentlyContinue
+    if ($cmd) { return $cmd.Source }
+    $found = Get-ChildItem "C:\laragon\bin\php" -Recurse -Filter php.exe -ErrorAction SilentlyContinue |
+        Select-Object -First 1
+    if ($found) { return $found.FullName }
+    return $null
+}
+
+function Get-TaskAccount {
+    $name = [Security.Principal.WindowsIdentity]::GetCurrent().Name
+    if ($name -and $name -match '\\') {
+        return $name
+    }
+    if ($env:USERDOMAIN) {
+        return "$($env:USERDOMAIN)\$($env:USERNAME)"
+    }
+    return ".\$($env:USERNAME)"
+}
+
+function Register-TaskSafe {
+    param($Name, $Execute, $Arguments = "")
+    Unregister-ScheduledTask -TaskName $Name -Confirm:$false -ErrorAction SilentlyContinue
+    $tr = if ($Arguments) { "`"$Execute`" $Arguments" } else { "`"$Execute`"" }
+    & schtasks.exe /Create /TN $Name /SC ONLOGON /RL HIGHEST /F /IT /TR $tr | Out-Host
+    if ($LASTEXITCODE -eq 0) {
+        return
+    }
+    $account = Get-TaskAccount
+    $action = New-ScheduledTaskAction -Execute $Execute -Argument $Arguments
+    $trigger = New-ScheduledTaskTrigger -AtLogOn
+    $principal = New-ScheduledTaskPrincipal -UserId $account -LogonType Interactive -RunLevel Highest
+    $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -RestartCount 3 -RestartInterval (New-TimeSpan -Minutes 1)
+    Register-ScheduledTask -TaskName $Name -Action $action -Trigger $trigger -Principal $principal -Settings $settings -Force | Out-Null
+}
+
+function New-AppShortcut {
+    param([string]$Path, [string]$Target, [string]$Arguments = "")
+    $shell = New-Object -ComObject WScript.Shell
+    $lnk = $shell.CreateShortcut($Path)
+    $lnk.TargetPath = $Target
+    $lnk.Arguments = $Arguments
+    $lnk.WorkingDirectory = $Root
+    $lnk.WindowStyle = 7
+    $lnk.IconLocation = "imageres.dll,109"
+    $lnk.Description = "Wi-Fi da loja"
+    $lnk.Save()
+}
+
+if (-not (Test-Admin)) {
+    Write-Host "Este instalador precisa ser executado como administrador."
+    exit 1
+}
+
+if (-not (Test-Path (Join-Path $Root "index.php"))) {
+    Write-Host "Pasta invalida: nao achei index.php em $Root"
+    exit 1
+}
+
+if (-not (Test-Path $Storage)) {
+    New-Item -ItemType Directory -Path $Storage | Out-Null
+}
+
+Write-Log "Instalando em $Root"
+
+$php = Find-Php
+if (-not $php) {
+    Write-Log "PHP nao encontrado. Instale o Laragon ou coloque o php.exe no PATH."
+    exit 1
+}
+Set-Content -Path (Join-Path $Storage "php-path.txt") -Value $php -Encoding ASCII
+Write-Log "PHP: $php"
+
+if ($PanelUrl -and $Token) {
+    $cloud = @{ panel_url = $PanelUrl.TrimEnd("/"); token = $Token; updated_at = (Get-Date).ToString("s") } | ConvertTo-Json
+    Set-Content -Path (Join-Path $Storage "cloud.json") -Value $cloud -Encoding UTF8
+    Write-Log "Vinculado ao painel $PanelUrl"
+}
+
+$oldPidPath = Join-Path $Storage "agent.pid"
+if (Test-Path $oldPidPath) {
+    $old = 0
+    [void][int]::TryParse((Get-Content $oldPidPath | Select-Object -First 1), [ref]$old)
+    if ($old -gt 0) { Stop-Process -Id $old -Force -ErrorAction SilentlyContinue }
+    Remove-Item $oldPidPath -Force -ErrorAction SilentlyContinue
+}
+
+$bandeja = Join-Path $Root "HotspotBandeja.exe"
+if (-not (Test-Path $bandeja)) {
+    Write-Log "Compile o icone da bandeja (installer\compilar.ps1)."
+}
+
+Register-TaskSafe -Name $TaskAgent -Execute "powershell.exe" -Arguments "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$(Join-Path $Scripts 'agente-hotspot.ps1')`""
+if (Test-Path $bandeja) {
+    Register-TaskSafe -Name "HotspotBandeja" -Execute $bandeja
+}
+Write-Log "Tarefas agendadas registradas"
+
+foreach ($rule in @("HotspotLoja-Painel-8080", "HotspotLoja-DNS-53")) {
+    Get-NetFirewallRule -DisplayName $rule -ErrorAction SilentlyContinue | Remove-NetFirewallRule -ErrorAction SilentlyContinue
+}
+New-NetFirewallRule -DisplayName "HotspotLoja-Painel-8080" -Direction Inbound -Protocol TCP -LocalPort 8080 -Action Allow -Profile Any | Out-Null
+New-NetFirewallRule -DisplayName "HotspotLoja-DNS-53" -Direction Inbound -Protocol UDP -LocalPort 53 -Action Allow -Profile Any | Out-Null
+Write-Log "Regras de firewall (8080 TCP, 53 UDP)"
+
+$desktop = [Environment]::GetFolderPath("Desktop")
+$programs = Join-Path ([Environment]::GetFolderPath("StartMenu")) "Programs\Wi-Fi da loja"
+if (-not (Test-Path $programs)) {
+    New-Item -ItemType Directory -Path $programs | Out-Null
+}
+$iniciar = if (Test-Path $bandeja) { $bandeja } else { Join-Path $Scripts "iniciar-painel.ps1" }
+$desinst = Join-Path $Root "Desinstalar-Hotspot.exe"
+if (-not (Test-Path $desinst)) { $desinst = Join-Path $Scripts "desinstalar-windows.ps1" }
+if (Test-Path $bandeja) {
+    New-AppShortcut -Path (Join-Path $desktop "Wi-Fi da loja.lnk") -Target $bandeja
+    New-AppShortcut -Path (Join-Path $programs "Wi-Fi da loja.lnk") -Target $bandeja
+} else {
+    New-AppShortcut -Path (Join-Path $desktop "Wi-Fi da loja.lnk") -Target "powershell.exe" -Arguments "-NoProfile -ExecutionPolicy Bypass -File `"$iniciar`""
+}
+if (Test-Path $desinst) {
+    New-AppShortcut -Path (Join-Path $programs "Desinstalar Wi-Fi da loja.lnk") -Target $desinst
+}
+Write-Log "Atalhos no Desktop e no Menu Iniciar"
+
+$uninst = "HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\HotspotLoja"
+New-Item -Path $uninst -Force | Out-Null
+New-ItemProperty -Path $uninst -Name "DisplayName" -Value "Wi-Fi da loja" -PropertyType String -Force | Out-Null
+New-ItemProperty -Path $uninst -Name "Publisher" -Value "Hotspot Loja" -PropertyType String -Force | Out-Null
+New-ItemProperty -Path $uninst -Name "DisplayVersion" -Value "1.0" -PropertyType String -Force | Out-Null
+New-ItemProperty -Path $uninst -Name "InstallLocation" -Value $Root -PropertyType String -Force | Out-Null
+New-ItemProperty -Path $uninst -Name "UninstallString" -Value ("powershell.exe -NoProfile -ExecutionPolicy Bypass -File `"$desinst`"") -PropertyType String -Force | Out-Null
+New-ItemProperty -Path $uninst -Name "NoModify" -Value 1 -PropertyType DWord -Force | Out-Null
+
+try { Start-ScheduledTask -TaskName $TaskAgent } catch { Write-Log $_.Exception.Message }
+Start-Sleep -Seconds 1
+if (-not (Test-Path (Join-Path $Storage "agent.pid"))) {
+    $agent = Join-Path $Scripts "agente-hotspot.ps1"
+    Start-Process powershell.exe -ArgumentList @("-NoProfile", "-ExecutionPolicy", "Bypass", "-WindowStyle", "Hidden", "-File", $agent) -WorkingDirectory $Root -WindowStyle Hidden
+}
+if (Test-Path $bandeja) {
+    Start-Process $bandeja -WorkingDirectory $Root
+}
+Write-Log "Agente e bandeja iniciados"
+
+& (Join-Path $Scripts "iniciar-painel.ps1")
+Write-Log "Instalacao concluida."
+exit 0
