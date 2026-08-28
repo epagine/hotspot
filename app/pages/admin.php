@@ -5,7 +5,10 @@ declare(strict_types=1);
 require_admin();
 
 $tab = preg_replace('/[^a-z]/', '', (string) ($_GET['tab'] ?? 'clientes')) ?: 'clientes';
-if (!in_array($tab, ['clientes', 'instalador', 'conta'], true)) {
+if ($tab === 'conta') {
+    $tab = 'config';
+}
+if (!in_array($tab, ['clientes', 'instalador', 'config'], true)) {
     $tab = 'clientes';
 }
 
@@ -16,6 +19,7 @@ $fichaId = (int) ($_GET['id'] ?? 0);
 $ficha = $fichaId > 0 ? find_store($fichaId) : null;
 $fichaHealth = $ficha ? store_connection_health($ficha) : null;
 $fichaStatus = $ficha ? store_status_payload($ficha) : [];
+$fichaPayments = $ficha ? store_payments((int) $ficha['id']) : [];
 $setupFile = installer_setup_path();
 $setupReady = $setupFile !== null;
 $me = setting('admin_user', 'admin');
@@ -25,7 +29,7 @@ function saas_nav(string $tab): void
     $items = [
         'clientes' => 'Clientes',
         'instalador' => 'Instalador',
-        'conta' => 'Conta',
+        'config' => 'Configuração',
     ];
     foreach ($items as $key => $label) {
         $active = $tab === $key ? ' active' : '';
@@ -67,6 +71,10 @@ function saas_nav(string $tab): void
 <?php elseif (!empty($_SESSION['flash_ok'])): ?>
     <p class="hint flash-ok"><?= h((string) $_SESSION['flash_ok']) ?></p>
     <?php unset($_SESSION['flash_ok']); ?>
+    <?php if (!empty($_SESSION['flash_pay_url'])): ?>
+        <p class="pay-box">Link PagSeguro<br><a href="<?= h((string) $_SESSION['flash_pay_url']) ?>" target="_blank" rel="noopener"><?= h((string) $_SESSION['flash_pay_url']) ?></a></p>
+        <?php unset($_SESSION['flash_pay_url']); ?>
+    <?php endif; ?>
 <?php endif; ?>
 
 <?php if ($tab === 'clientes'): ?>
@@ -166,6 +174,45 @@ function saas_nav(string $tab): void
                     <button class="btn" type="submit">Salvar</button>
                 </div>
             </form>
+            <div class="pagseguro-box">
+                <h2>PagSeguro</h2>
+                <?php if (!pagseguro_configured()): ?>
+                    <p class="hint">Salve o token em Configuração para gerar o link de cobrança.</p>
+                <?php else: ?>
+                    <form method="post" action="/admin/pagseguro" class="form">
+                        <input type="hidden" name="do" value="charge">
+                        <input type="hidden" name="id" value="<?= (int) $ficha['id'] ?>">
+                        <p class="hint">Cria um checkout no valor do plano. O cliente paga no PagSeguro; o painel marca em dia quando o pagamento confirmar.</p>
+                        <button class="btn ghost" type="submit">Gerar cobrança</button>
+                    </form>
+                <?php endif; ?>
+                <?php if ($fichaPayments): ?>
+                    <table class="saas-table">
+                        <thead>
+                        <tr>
+                            <th>Quando</th>
+                            <th>Valor</th>
+                            <th>Status</th>
+                            <th></th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        <?php foreach ($fichaPayments as $p): ?>
+                            <tr>
+                                <td><?= h(date('d/m/Y H:i', strtotime((string) $p['created_at']) ?: time())) ?></td>
+                                <td><?= h(cents_label((int) $p['amount_cents'])) ?></td>
+                                <td><span class="tag <?= ($p['status'] ?? '') === 'paid' ? 'online' : 'pending' ?>"><?= ($p['status'] ?? '') === 'paid' ? 'Pago' : 'Aguardando' ?></span></td>
+                                <td>
+                                    <?php if (($p['status'] ?? '') !== 'paid' && ($p['pay_url'] ?? '') !== ''): ?>
+                                        <a class="btn ghost" href="<?= h((string) $p['pay_url']) ?>" target="_blank" rel="noopener">Abrir link</a>
+                                    <?php endif; ?>
+                                </td>
+                            </tr>
+                        <?php endforeach; ?>
+                        </tbody>
+                    </table>
+                <?php endif; ?>
+            </div>
         </section>
     <?php else: ?>
         <section class="card">
@@ -249,8 +296,40 @@ function saas_nav(string $tab): void
 
 <?php else: ?>
     <section class="card card-narrow">
+        <h1>PagSeguro</h1>
+        <p class="lead">Receba as mensalidades na sua conta PagBank. O token fica só neste painel.</p>
+        <ol class="steps">
+            <li>Abra a conta em <a href="https://acesso.pagseguro.uol.com.br/" target="_blank" rel="noopener">PagSeguro / PagBank</a>.</li>
+            <li>Em sandbox use o <a href="https://sandbox.pagseguro.uol.com.br/" target="_blank" rel="noopener">ambiente de testes</a>. Em produção: Vendas → Integrações → Gerar token.</li>
+            <li>Cole o token abaixo. Cadastre esta URL de notificação se o painel pedir: <code><?= h(pagseguro_webhook_url()) ?></code></li>
+        </ol>
+        <form method="post" action="/admin/pagseguro" class="form">
+            <input type="hidden" name="do" value="save">
+            <label>Ambiente
+                <select name="pagseguro_env">
+                    <option value="sandbox" <?= pagseguro_env() === 'sandbox' ? 'selected' : '' ?>>Sandbox (testes)</option>
+                    <option value="production" <?= pagseguro_env() === 'production' ? 'selected' : '' ?>>Produção</option>
+                </select>
+            </label>
+            <label>Token da API
+                <input name="pagseguro_token" type="password" autocomplete="off" placeholder="<?= pagseguro_configured() ? h(pagseguro_mask_token()) : 'Cole o token Bearer' ?>">
+            </label>
+            <p class="hint"><?= pagseguro_configured() ? 'Token salvo (' . h(pagseguro_mask_token()) . '). Deixe em branco para manter.' : 'O token não aparece inteiro depois de salvar.' ?></p>
+            <div class="actions row">
+                <button class="btn" type="submit">Salvar integração</button>
+            </div>
+        </form>
+        <?php if (pagseguro_configured()): ?>
+            <form method="post" action="/admin/pagseguro" class="form">
+                <input type="hidden" name="do" value="test">
+                <button class="btn ghost" type="submit">Testar token</button>
+            </form>
+        <?php endif; ?>
+        <p class="hint">Webhook: <code><?= h(pagseguro_webhook_url()) ?></code> — precisa ser HTTPS público para o PagSeguro avisar o pagamento.</p>
+    </section>
+    <section class="card card-narrow">
         <h1>Conta</h1>
-        <p class="lead">Acesso a este painel de gestão. Não altera o hotspot das lojas.</p>
+        <p class="lead">Acesso a este painel. Não altera o hotspot das lojas.</p>
         <form method="post" action="/admin/save" class="form">
             <label>Usuário<input name="admin_user" value="<?= h(setting('admin_user')) ?>" required></label>
             <label>Nova senha (em branco mantém a atual)<input name="admin_pass" type="password" autocomplete="new-password"></label>

@@ -159,7 +159,19 @@ th, td { text-align: left; padding: 10px 8px; border-bottom: 1px solid var(--lin
 .vinculo summary { cursor: pointer; color: var(--ink); }
 .flash-ok { max-width: none; color: var(--ok); }
 .saas .flash-global, .saas .flash-ok { margin: 0 0 16px; }
-.saas-table tbody tr:hover td { background: rgba(232, 176, 88, .06); }
+.pagseguro-box { margin-top: 24px; padding-top: 20px; border-top: 1px solid var(--line); }
+.pagseguro-box .saas-table { margin-top: 12px; }
+.pay-box {
+  max-width: 1180px;
+  margin: 0 auto 16px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--card);
+  word-break: break-all;
+}
+.pay-box a { color: var(--gold); }
+.saas .steps a { color: var(--gold); }
 @media (max-width: 900px) {
   .saas .stats { grid-template-columns: repeat(2, 1fr); }
   .form-grid, .form-inline { grid-template-columns: 1fr; }

@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 function owner_setting_keys(): array
 {
-    return ['admin_user', 'admin_pass_hash'];
+    return ['admin_user', 'admin_pass_hash', 'pagseguro_env', 'pagseguro_token'];
 }
 
 function is_owner_key(string $key): bool
@@ -66,6 +66,7 @@ function migrate_multi_store(PDO $pdo): void
         )'
     );
     ensure_store_saas_columns($pdo);
+    ensure_payments_table($pdo);
 
     $cols = $pdo->query('PRAGMA table_info(clients)')->fetchAll();
     $names = array_column($cols, 'name');
@@ -142,6 +143,66 @@ function ensure_store_saas_columns(PDO $pdo): void
             $pdo->exec("ALTER TABLE stores ADD COLUMN {$col} {$def}");
         }
     }
+}
+
+function ensure_payments_table(PDO $pdo): void
+{
+    $pdo->exec(
+        'CREATE TABLE IF NOT EXISTS payments (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            store_id INTEGER NOT NULL,
+            reference_id TEXT NOT NULL UNIQUE,
+            checkout_id TEXT NOT NULL DEFAULT \'\',
+            pay_url TEXT NOT NULL DEFAULT \'\',
+            amount_cents INTEGER NOT NULL DEFAULT 0,
+            status TEXT NOT NULL DEFAULT \'pending\',
+            raw TEXT,
+            created_at TEXT NOT NULL,
+            paid_at TEXT
+        )'
+    );
+    $pdo->exec('CREATE INDEX IF NOT EXISTS idx_payments_store ON payments (store_id, id)');
+}
+
+function money_to_cents(string $raw): int
+{
+    $s = trim(preg_replace('/[^\d,.\-]/', '', $raw) ?? '');
+    if ($s === '' || $s === '-' || $s === '.' || $s === ',') {
+        return 0;
+    }
+    if (str_contains($s, ',') && str_contains($s, '.')) {
+        $s = str_replace('.', '', $s);
+        $s = str_replace(',', '.', $s);
+    } elseif (str_contains($s, ',')) {
+        $s = str_replace(',', '.', $s);
+    }
+    $n = (float) $s;
+    if ($n <= 0) {
+        return 0;
+    }
+    return (int) round($n * 100);
+}
+
+function cents_label(int $cents): string
+{
+    return 'R$ ' . number_format($cents / 100, 2, ',', '.');
+}
+
+function next_paid_until(array $store): string
+{
+    $plan = (string) ($store['plan'] ?? 'mensal');
+    $months = match ($plan) {
+        'trimestral' => 3,
+        'anual' => 12,
+        default => 1,
+    };
+    $base = time();
+    $until = trim((string) ($store['paid_until'] ?? ''));
+    $t = $until !== '' ? strtotime($until) : false;
+    if ($t !== false && $t > $base) {
+        $base = $t;
+    }
+    return date('Y-m-d', strtotime('+' . $months . ' months', $base) ?: $base);
 }
 
 function store_connection_health(array $store): array

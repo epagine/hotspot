@@ -47,3 +47,17 @@ CREATE TABLE IF NOT EXISTS clients (
 CREATE INDEX IF NOT EXISTS idx_ip_state ON clients (ip, state);
 CREATE INDEX IF NOT EXISTS idx_code ON clients (status_code);
 CREATE INDEX IF NOT EXISTS idx_clients_store ON clients (store_id, id);
+
+CREATE TABLE IF NOT EXISTS payments (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  store_id INTEGER NOT NULL,
+  reference_id TEXT NOT NULL UNIQUE,
+  checkout_id TEXT NOT NULL DEFAULT '',
+  pay_url TEXT NOT NULL DEFAULT '',
+  amount_cents INTEGER NOT NULL DEFAULT 0,
+  status TEXT NOT NULL DEFAULT 'pending',
+  raw TEXT,
+  created_at TEXT NOT NULL,
+  paid_at TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_payments_store ON payments (store_id, id);

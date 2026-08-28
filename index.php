@@ -89,6 +89,12 @@ switch (true) {
     case $path === '/admin/instalador':
         require __DIR__ . '/app/pages/admin-instalador.php';
         break;
+    case $path === '/admin/pagseguro':
+        require __DIR__ . '/app/pages/admin-pagseguro.php';
+        break;
+    case $path === '/webhooks/pagbank':
+        require __DIR__ . '/app/pages/webhook-pagbank.php';
+        break;
     case in_array($path, [
         '/generate_204',
         '/gen_204',
