@@ -244,6 +244,9 @@ function start_windows_agent(): void
     if (!is_file($ps1)) {
         return;
     }
+    if (!php_cmd_allowed('popen')) {
+        return;
+    }
     $cmd = 'powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File ' . escapeshellarg($ps1);
     pclose(popen('cmd /c start "" /B ' . $cmd, 'r'));
 }
@@ -439,10 +442,37 @@ function client_is_online(?array $client): bool
     return true;
 }
 
+function php_cmd_allowed(string $fn): bool
+{
+    if (!function_exists($fn)) {
+        return false;
+    }
+    $disabled = strtolower((string) ini_get('disable_functions'));
+    if ($disabled === '') {
+        return true;
+    }
+    $names = array_filter(array_map('trim', explode(',', $disabled)));
+    return !in_array(strtolower($fn), $names, true);
+}
+
+function is_hotspot_lan(): bool
+{
+    $host = strtolower((string) ($_SERVER['HTTP_HOST'] ?? ''));
+    $host = explode(':', $host)[0];
+    if ($host === '192.168.137.1' || str_starts_with($host, '192.168.137.')) {
+        return true;
+    }
+    $addr = (string) ($_SERVER['SERVER_ADDR'] ?? '');
+    return str_starts_with($addr, '192.168.137.');
+}
+
 function lookup_mac(string $ip): ?string
 {
+    if ($ip === '' || !php_cmd_allowed('exec')) {
+        return null;
+    }
     $out = [];
-    exec('arp -a ' . escapeshellarg($ip), $out);
+    @exec('arp -a ' . escapeshellarg($ip), $out);
     $text = strtolower(implode("\n", $out));
     if (preg_match('/([0-9a-f]{2}[-:]){5}[0-9a-f]{2}/', $text, $m)) {
         return strtoupper(str_replace('-', ':', $m[0]));

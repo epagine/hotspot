@@ -26,7 +26,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if (!move_uploaded_file($tmp, $dest)) {
             throw new RuntimeException('Não foi possível gravar em storage/downloads/.');
         }
-        $_SESSION['flash_ok'] = 'Instalador publicado. Baixe na aba Instalador ou na ficha do cliente.';
+        $_SESSION['flash_ok'] = 'Instalador publicado.';
     } catch (Throwable $e) {
         $_SESSION['flash_error'] = $e->getMessage();
     }
@@ -36,7 +36,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 $path = installer_setup_path();
 if ($path === null) {
-    $_SESSION['flash_error'] = 'Ainda não há instalador neste painel. Envie o WiFiDaLoja-Setup.exe na aba Instalador.';
+    $_SESSION['flash_error'] = 'Ainda não há instalador neste painel. Envie o WiFiDaLoja-Setup.exe em Instalador.';
     header('Location: /admin?tab=instalador');
     exit;
 }

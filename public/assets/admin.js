@@ -46,7 +46,7 @@ function renderSaas(data) {
       <td><span class="tag conn-${esc(health.key)}">${esc(health.label)}</span><br><small>${esc(health.detail)}</small></td>
       <td><span class="tag ${billClass(r.billing_status)}">${esc(r.billing_label)}</span><br><small>${esc(r.plan)}${fee}</small></td>
       <td>${paid}</td>
-      <td><a class="btn ghost" href="/admin?tab=clientes&id=${Number(r.id)}">Gestão</a></td>
+      <td><a class="btn ghost" href="/admin?tab=clientes&id=${Number(r.id)}">Abrir</a></td>
     </tr>`;
   }).join('');
 }

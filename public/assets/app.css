@@ -72,7 +72,93 @@ th, td { text-align: left; padding: 10px 8px; border-bottom: 1px solid var(--lin
 .tag.pending, .tag.awaiting_approval { background: #3a3014; color: var(--gold); }
 .tag.conn-ok { background: #1c331c; color: var(--ok); }
 .tag.conn-erro { background: #3a1c18; color: var(--danger); }
-.tag.conn-offline { background: #2a2a2a; color: var(--muted); }
+.tag.blocked { background: #3a1c18; color: var(--danger); }
+.saas {
+  padding: 0;
+  background: #0c0b0a;
+  min-height: 100vh;
+}
+.saas-bar {
+  background: #161310;
+  border-bottom: 1px solid var(--line);
+  padding: 12px 24px;
+}
+.saas-bar-inner {
+  max-width: 1180px;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 24px;
+}
+.saas-brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
+}
+.saas-brand strong { display: block; font-size: 16px; }
+.saas-brand .eyebrow { margin: 0; }
+.saas-mark {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  background: var(--gold);
+  color: #1a1308;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 800;
+  letter-spacing: .04em;
+}
+.saas-nav { display: flex; gap: 6px; flex: 1; flex-wrap: wrap; }
+.saas-link {
+  color: var(--muted);
+  text-decoration: none;
+  padding: 8px 14px;
+  border-radius: 999px;
+  font-size: 14px;
+}
+.saas-link.active { background: var(--gold); color: #1a1308; font-weight: 700; }
+.saas-user { display: flex; align-items: center; gap: 12px; color: var(--muted); font-size: 14px; }
+.saas-user .btn { padding: 8px 12px; font-size: 13px; }
+.saas-main { max-width: 1180px; margin: 0 auto; padding: 28px 24px 56px; }
+.saas .card { max-width: none; margin: 0 0 20px; border-radius: 16px; padding: 22px 24px; }
+.saas .card-narrow { max-width: 520px; }
+.saas h1 { font-size: 28px; margin-bottom: 8px; }
+.saas .stats { max-width: none; grid-template-columns: repeat(6, 1fr); margin: 0 0 20px; }
+.saas .stats article { border-radius: 14px; padding: 14px 16px; }
+.saas .stats strong { font-size: 22px; }
+.saas .stats span { color: var(--muted); font-size: 13px; }
+.card-head { display: flex; justify-content: space-between; align-items: flex-end; gap: 16px; margin-bottom: 8px; }
+.ficha-head { margin-bottom: 16px; }
+.form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px 28px; }
+.form-grid fieldset { border: 1px solid var(--line); border-radius: 14px; padding: 16px; display: grid; gap: 12px; margin: 0; }
+.form-grid legend { padding: 0 6px; color: var(--gold); font-size: 12px; letter-spacing: .12em; text-transform: uppercase; }
+.form-inline { display: grid; grid-template-columns: 1.4fr 1fr 1fr auto; gap: 12px; align-items: end; }
+.form-inline .btn { margin-top: 18px; }
+.conn-banner {
+  display: grid;
+  gap: 4px;
+  border-radius: 12px;
+  padding: 14px 16px;
+  margin: 0 0 20px;
+  border: 1px solid var(--line);
+  background: #12100e;
+}
+.conn-banner.conn-ok { border-color: #2a4a2a; }
+.conn-banner.conn-erro { border-color: #5a2a24; }
+.conn-banner.conn-offline { border-color: var(--line); }
+.vinculo { margin-top: 8px; border: 1px solid var(--line); border-radius: 12px; padding: 10px 14px; }
+.vinculo summary { cursor: pointer; color: var(--ink); }
+.flash-ok { max-width: none; color: var(--ok); }
+.saas .flash-global, .saas .flash-ok { margin: 0 0 16px; }
+.saas-table tbody tr:hover td { background: rgba(232, 176, 88, .06); }
+@media (max-width: 900px) {
+  .saas .stats { grid-template-columns: repeat(2, 1fr); }
+  .form-grid, .form-inline { grid-template-columns: 1fr; }
+  .form-inline .btn { margin-top: 0; }
+  .saas-bar-inner { flex-wrap: wrap; }
+}
 .admin a.eyebrow, .eyebrow a { color: var(--gold); text-decoration: none; }
 .inline { display: flex; gap: 6px; }
 .inline button { padding: 8px 10px; font-size: 12px; }

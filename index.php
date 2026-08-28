@@ -80,14 +80,8 @@ switch (true) {
     case $path === '/admin/save':
         require __DIR__ . '/app/pages/admin-save.php';
         break;
-    case $path === '/admin/hotspot':
-        require __DIR__ . '/app/pages/admin-hotspot.php';
-        break;
     case $path === '/admin/status':
         require __DIR__ . '/app/api/admin-status.php';
-        break;
-    case $path === '/admin/action':
-        require __DIR__ . '/app/pages/admin-action.php';
         break;
     case $path === '/admin/stores':
         require __DIR__ . '/app/pages/admin-stores.php';
@@ -108,5 +102,9 @@ switch (true) {
         require __DIR__ . '/app/pages/captive.php';
         break;
     default:
+        if (!is_hotspot_lan()) {
+            header('Location: /admin');
+            exit;
+        }
         require __DIR__ . '/app/pages/portal.php';
 }
