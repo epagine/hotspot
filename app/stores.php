@@ -4,7 +4,11 @@ declare(strict_types=1);
 
 function owner_setting_keys(): array
 {
-    return ['admin_user', 'admin_pass_hash', 'pagseguro_env', 'pagseguro_token'];
+    return [
+        'admin_user', 'admin_pass_hash',
+        'pagseguro_env', 'pagseguro_token',
+        'pagseguro_cron_key', 'pagseguro_last_run', 'pagseguro_advance_days', 'pagseguro_auto',
+    ];
 }
 
 function is_owner_key(string $key): bool
@@ -137,6 +141,7 @@ function ensure_store_saas_columns(PDO $pdo): void
         'paid_until' => "TEXT NOT NULL DEFAULT ''",
         'contact' => "TEXT NOT NULL DEFAULT ''",
         'notes' => "TEXT NOT NULL DEFAULT ''",
+        'auto_billing' => 'INTEGER NOT NULL DEFAULT 1',
     ];
     foreach ($add as $col => $def) {
         if (!in_array($col, $cols, true)) {
@@ -188,14 +193,18 @@ function cents_label(int $cents): string
     return 'R$ ' . number_format($cents / 100, 2, ',', '.');
 }
 
+function plan_meta(string $plan): array
+{
+    return match ($plan) {
+        'trimestral' => ['label' => 'Trimestral', 'unit' => 'MONTH', 'length' => 3, 'months' => 3],
+        'anual' => ['label' => 'Anual', 'unit' => 'YEAR', 'length' => 1, 'months' => 12],
+        default => ['label' => 'Mensal', 'unit' => 'MONTH', 'length' => 1, 'months' => 1],
+    };
+}
+
 function next_paid_until(array $store): string
 {
-    $plan = (string) ($store['plan'] ?? 'mensal');
-    $months = match ($plan) {
-        'trimestral' => 3,
-        'anual' => 12,
-        default => 1,
-    };
+    $months = (int) plan_meta((string) ($store['plan'] ?? 'mensal'))['months'];
     $base = time();
     $until = trim((string) ($store['paid_until'] ?? ''));
     $t = $until !== '' ? strtotime($until) : false;
@@ -305,7 +314,7 @@ function update_store_saas(int $id, array $fields): void
     }
     $wasActive = (int) ($store['active'] ?? 1) === 1;
     db()->prepare(
-        'UPDATE stores SET name = ?, city = ?, active = ?, billing_status = ?, plan = ?, monthly_fee = ?, paid_until = ?, contact = ?, notes = ? WHERE id = ?'
+        'UPDATE stores SET name = ?, city = ?, active = ?, billing_status = ?, plan = ?, monthly_fee = ?, paid_until = ?, contact = ?, notes = ?, auto_billing = ? WHERE id = ?'
     )->execute([
         (string) $fields['name'],
         (string) $fields['city'],
@@ -316,6 +325,7 @@ function update_store_saas(int $id, array $fields): void
         (string) $fields['paid_until'],
         (string) $fields['contact'],
         (string) $fields['notes'],
+        !empty($fields['auto_billing']) ? 1 : 0,
         $id,
     ]);
     $ins = db()->prepare(

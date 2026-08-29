@@ -231,7 +231,131 @@ function mark_payment_paid(array $payment, array $raw = []): void
     )->execute(['em_dia', $until, $storeId]);
 }
 
-function pagseguro_create_charge(int $storeId): array
+function pagseguro_cron_key(): string
+{
+    $key = trim(setting('pagseguro_cron_key', ''));
+    if ($key === '') {
+        $key = bin2hex(random_bytes(16));
+        set_setting('pagseguro_cron_key', $key);
+    }
+    return $key;
+}
+
+function pagseguro_cron_url(): string
+{
+    return rtrim(guess_panel_url(), '/') . '/cron/pagseguro?key=' . rawurlencode(pagseguro_cron_key());
+}
+
+function pagseguro_auto_enabled(): bool
+{
+    return setting('pagseguro_auto', '1') !== '0';
+}
+
+function pagseguro_advance_days(): int
+{
+    $n = (int) setting('pagseguro_advance_days', '5');
+    return max(0, min(30, $n));
+}
+
+function store_id_from_reference(string $reference): int
+{
+    if (preg_match('/^wl-(\d+)-/', $reference, $m)) {
+        return (int) $m[1];
+    }
+    return 0;
+}
+
+function store_pending_payment(int $storeId): ?array
+{
+    $stmt = db()->prepare(
+        "SELECT * FROM payments WHERE store_id = ? AND status = 'pending' ORDER BY id DESC LIMIT 1"
+    );
+    $stmt->execute([$storeId]);
+    $row = $stmt->fetch();
+    return $row ?: null;
+}
+
+function pagseguro_expire_pending(int $storeId): void
+{
+    $stmt = db()->prepare("SELECT * FROM payments WHERE store_id = ? AND status = 'pending'");
+    $stmt->execute([$storeId]);
+    foreach ($stmt->fetchAll() ?: [] as $row) {
+        $cid = (string) ($row['checkout_id'] ?? '');
+        if ($cid !== '') {
+            pagseguro_request('POST', '/checkouts/' . rawurlencode($cid) . '/inactivate');
+        }
+        db()->prepare("UPDATE payments SET status = 'expired' WHERE id = ?")->execute([(int) $row['id']]);
+    }
+}
+
+function pagseguro_expire_stale_pending(): void
+{
+    $stmt = db()->query(
+        "SELECT * FROM payments WHERE status = 'pending' AND created_at < datetime('now', '-8 days')"
+    );
+    foreach ($stmt ? ($stmt->fetchAll() ?: []) : [] as $row) {
+        $cid = (string) ($row['checkout_id'] ?? '');
+        if ($cid !== '') {
+            pagseguro_request('POST', '/checkouts/' . rawurlencode($cid) . '/inactivate');
+        }
+        db()->prepare("UPDATE payments SET status = 'expired' WHERE id = ?")->execute([(int) $row['id']]);
+    }
+}
+
+function store_due_for_auto_charge(array $store): bool
+{
+    if ((int) ($store['active'] ?? 1) !== 1) {
+        return false;
+    }
+    if ((int) ($store['auto_billing'] ?? 1) !== 1) {
+        return false;
+    }
+    $bill = (string) ($store['billing_status'] ?? 'em_dia');
+    if (in_array($bill, ['cortesia', 'cancelado'], true)) {
+        return false;
+    }
+    if (money_to_cents((string) ($store['monthly_fee'] ?? '')) < 100) {
+        return false;
+    }
+    if (store_pending_payment((int) $store['id'])) {
+        return false;
+    }
+    $until = trim((string) ($store['paid_until'] ?? ''));
+    if ($until === '') {
+        return true;
+    }
+    $t = strtotime($until . ' 23:59:59');
+    if ($t === false) {
+        return true;
+    }
+    return $t <= time() + pagseguro_advance_days() * 86400;
+}
+
+function pagseguro_mark_overdue(): int
+{
+    $n = 0;
+    $today = date('Y-m-d');
+    foreach (all_stores() as $store) {
+        $bill = (string) ($store['billing_status'] ?? 'em_dia');
+        if (!in_array($bill, ['em_dia', 'atrasado'], true)) {
+            continue;
+        }
+        if ((int) ($store['active'] ?? 1) !== 1) {
+            continue;
+        }
+        $until = trim((string) ($store['paid_until'] ?? ''));
+        if ($until === '' || $until >= $today) {
+            continue;
+        }
+        if ($bill !== 'atrasado') {
+            db()->prepare("UPDATE stores SET billing_status = 'atrasado' WHERE id = ?")->execute([(int) $store['id']]);
+            $n++;
+        }
+    }
+    return $n;
+}
+
+function pagseguro_create_charge(int $storeId, bool $force = false): array
 {
     $store = find_store($storeId);
     if (!$store) {
@@ -244,22 +368,25 @@ function pagseguro_create_charge(int $storeId): array
     if ($cents < 100) {
         throw new RuntimeException('Informe o valor do plano (mínimo R$ 1,00) na ficha do cliente.');
     }
+    if ($force) {
+        pagseguro_expire_pending($storeId);
+    } elseif (store_pending_payment($storeId)) {
+        throw new RuntimeException('Já existe uma cobrança aguardando pagamento para este cliente.');
+    }
+
     $plan = (string) ($store['plan'] ?? 'mensal');
-    $planLabel = match ($plan) {
-        'trimestral' => 'Trimestral',
-        'anual' => 'Anual',
-        default => 'Mensal',
-    };
+    $meta = plan_meta($plan);
+    $recurring = (int) ($store['auto_billing'] ?? 1) === 1;
     $reference = 'wl-' . $storeId . '-' . bin2hex(random_bytes(6));
     $notify = pagseguro_webhook_url();
     $return = rtrim(guess_panel_url(), '/') . '/admin?tab=clientes&id=' . $storeId;
     $exp = (new DateTimeImmutable('now', new DateTimeZone('America/Sao_Paulo')))->modify('+7 days');
-    $itemName = 'Wi-Fi da loja ' . $planLabel . ' — ' . (string) $store['name'];
+    $itemName = 'Wi-Fi da loja ' . $meta['label'] . ' — ' . (string) $store['name'];
     if (strlen($itemName) > 100) {
         $itemName = substr($itemName, 0, 100);
     }
 
-    $res = pagseguro_request('POST', '/checkouts', [
+    $payload = [
         'reference_id' => $reference,
         'expiration_date' => $exp->format('c'),
         'customer_modifiable' => true,
@@ -269,17 +396,43 @@ function pagseguro_create_charge(int $storeId): array
             'quantity' => 1,
             'unit_amount' => $cents,
         ]],
-        'payment_methods' => [
-            ['type' => 'PIX'],
-            ['type' => 'CREDIT_CARD'],
-            ['type' => 'BOLETO'],
-        ],
         'payment_notification_urls' => [$notify],
         'notification_urls' => [$notify],
         'return_url' => $return,
         'soft_descriptor' => 'WIFIDALOJA',
-    ]);
-    if (!$res['ok']) {
+    ];
+    if ($recurring) {
+        $payload['shipping'] = ['type' => 'FREE'];
+        $payload['payment_methods'] = [['type' => 'CREDIT_CARD']];
+        $payload['recurrence_plan'] = [
+            'name' => 'Wi-Fi da loja ' . $meta['label'],
+            'interval' => [
+                'unit' => $meta['unit'],
+                'length' => $meta['length'],
+            ],
+        ];
+    } else {
+        $payload['payment_methods'] = [
+            ['type' => 'PIX'],
+            ['type' => 'CREDIT_CARD'],
+            ['type' => 'BOLETO'],
+        ];
+    }
+
+    $res = pagseguro_request('POST', '/checkouts', $payload);
+    if (!$res['ok'] && $recurring) {
+        unset($payload['recurrence_plan'], $payload['shipping']);
+        $payload['payment_methods'] = [
+            ['type' => 'PIX'],
+            ['type' => 'CREDIT_CARD'],
+            ['type' => 'BOLETO'],
+        ];
+        $res = pagseguro_request('POST', '/checkouts', $payload);
+        $recurring = false;
+        if (!$res['ok']) {
+            throw new RuntimeException(pagseguro_error_message($res));
+        }
+    } elseif (!$res['ok']) {
         throw new RuntimeException(pagseguro_error_message($res));
     }
     $data = $res['data'];
@@ -303,7 +456,83 @@ function pagseguro_create_charge(int $storeId): array
         'checkout_id' => $checkoutId,
         'reference_id' => $reference,
         'amount_cents' => $cents,
+        'recurring' => $recurring,
     ];
+}
+
+function pagseguro_run_billing(): array
+{
+    pagseguro_expire_stale_pending();
+    $overdue = pagseguro_mark_overdue();
+    $created = 0;
+    $errors = [];
+    if (!pagseguro_configured() || !pagseguro_auto_enabled()) {
+        set_setting('pagseguro_last_run', date('c'));
+        return ['created' => 0, 'overdue' => $overdue, 'errors' => $errors];
+    }
+    foreach (all_stores() as $store) {
+        if (!store_due_for_auto_charge($store)) {
+            continue;
+        }
+        try {
+            pagseguro_create_charge((int) $store['id'], false);
+            $created++;
+        } catch (Throwable $e) {
+            $errors[] = (string) $store['name'] . ': ' . $e->getMessage();
+        }
+    }
+    set_setting('pagseguro_last_run', date('c'));
+    return ['created' => $created, 'overdue' => $overdue, 'errors' => $errors];
+}
+
+function pagseguro_maybe_run_billing(): void
+{
+    if (!pagseguro_configured() || !pagseguro_auto_enabled()) {
+        return;
+    }
+    $last = strtotime((string) setting('pagseguro_last_run', '')) ?: 0;
+    if (time() - $last < 4 * 3600) {
+        return;
+    }
+    try {
+        pagseguro_run_billing();
+    } catch (Throwable $e) {
+        // o cron e o webhook tentam de novo
+    }
+}
+
+function pagseguro_record_paid_store(int $storeId, string $reference, array $raw): void
+{
+    $existing = find_payment_by_reference($reference);
+    if ($existing) {
+        mark_payment_paid($existing, $raw);
+        return;
+    }
+    $cents = (int) ($raw['charges'][0]['amount']['value'] ?? 0);
+    if ($cents <= 0) {
+        $store = find_store($storeId);
+        $cents = $store ? money_to_cents((string) ($store['monthly_fee'] ?? '')) : 0;
+    }
+    db()->prepare(
+        'INSERT INTO payments (store_id, reference_id, checkout_id, pay_url, amount_cents, status, raw, created_at, paid_at)
+         VALUES (?,?,?,?,?,?,?,?,?)'
+    )->execute([
+        $storeId,
+        $reference !== '' ? $reference : 'wl-' . $storeId . '-auto-' . bin2hex(random_bytes(4)),
+        (string) ($raw['id'] ?? ''),
+        '',
+        $cents,
+        'paid',
+        json_encode($raw, JSON_UNESCAPED_UNICODE),
+        date('Y-m-d H:i:s'),
+        date('Y-m-d H:i:s'),
+    ]);
+    $store = find_store($storeId);
+    if ($store) {
+        db()->prepare(
+            'UPDATE stores SET billing_status = ?, paid_until = ? WHERE id = ?'
+        )->execute(['em_dia', next_paid_until($store), $storeId]);
+    }
 }
 
 function pagseguro_handle_notification(array $payload): void
@@ -325,18 +554,26 @@ function pagseguro_handle_notification(array $payload): void
             }
         }
     }
-    if (!$payment) {
-        return;
-    }
     $paid = pagseguro_payload_paid($payload);
-    if (!$paid && !empty($payment['checkout_id'])) {
+    if ($payment && !$paid && !empty($payment['checkout_id'])) {
         $check = pagseguro_request('GET', '/checkouts/' . rawurlencode((string) $payment['checkout_id']));
         if ($check['ok']) {
             $paid = pagseguro_payload_paid($check['data']);
             $payload = $check['data'];
         }
     }
-    if ($paid) {
+    if (!$paid) {
+        return;
+    }
+    if ($payment) {
         mark_payment_paid($payment, $payload);
+        return;
+    }
+    $storeId = store_id_from_reference($reference);
+    if ($storeId < 1 && $payment) {
+        $storeId = (int) $payment['store_id'];
+    }
+    if ($storeId > 0 && find_store($storeId)) {
+        pagseguro_record_paid_store($storeId, $reference, $payload);
     }
 }

@@ -63,6 +63,7 @@ if ($do === 'save' && $id > 0) {
         'paid_until' => trim((string) ($_POST['paid_until'] ?? '')),
         'contact' => trim((string) ($_POST['contact'] ?? '')),
         'notes' => trim((string) ($_POST['notes'] ?? '')),
+        'auto_billing' => (string) ($_POST['auto_billing'] ?? '0') === '1',
     ]);
     $_SESSION['flash_ok'] = 'Gestão do cliente salva.';
     header('Location: /admin?tab=clientes&id=' . $id);

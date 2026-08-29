@@ -134,6 +134,7 @@ th, td { text-align: left; padding: 10px 8px; border-bottom: 1px solid var(--lin
 .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px 28px; }
 .form-grid fieldset { border: 1px solid var(--line); border-radius: 14px; padding: 16px; display: grid; gap: 12px; margin: 0; }
 .form-grid legend { padding: 0 6px; color: var(--gold); font-size: 12px; letter-spacing: .12em; text-transform: uppercase; }
+.form-grid .check input[type="checkbox"] { width: auto; }
 .form-inline {
   display: grid;
   grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) minmax(0, 1fr) auto;

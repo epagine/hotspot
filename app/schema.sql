@@ -19,6 +19,7 @@ CREATE TABLE IF NOT EXISTS stores (
   paid_until TEXT NOT NULL DEFAULT '',
   contact TEXT NOT NULL DEFAULT '',
   notes TEXT NOT NULL DEFAULT '',
+  auto_billing INTEGER NOT NULL DEFAULT 1,
   created_at TEXT NOT NULL
 );
 

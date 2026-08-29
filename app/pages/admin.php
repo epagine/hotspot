@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 require_admin();
 
+pagseguro_maybe_run_billing();
+
 $tab = preg_replace('/[^a-z]/', '', (string) ($_GET['tab'] ?? 'clientes')) ?: 'clientes';
 if ($tab === 'conta') {
     $tab = 'config';
@@ -147,6 +149,12 @@ function saas_nav(string $tab): void
                             </select>
                         </label>
                         <label>Valor (R$)<input name="monthly_fee" value="<?= h((string) ($ficha['monthly_fee'] ?? '')) ?>" placeholder="0,00"></label>
+                        <p class="hint"><?php
+                            $pm = plan_meta((string) ($ficha['plan'] ?? 'mensal'));
+                            echo 'Plano ' . h($pm['label']) . ': cobrança a cada ' . (int) $pm['months'] . ' ' . ((int) $pm['months'] === 1 ? 'mês' : 'meses') . '.';
+                        ?></p>
+                        <label class="check"><input type="checkbox" name="auto_billing" value="1" <?= ((int) ($ficha['auto_billing'] ?? 1) === 1) ? 'checked' : '' ?>> Cobrança automática neste plano</label>
+                        <p class="hint">O painel gera o link perto do vencimento. No PagSeguro, o primeiro pagamento com cartão cria a assinatura no intervalo do plano.</p>
                         <label>Pago até<input name="paid_until" type="date" value="<?= h((string) ($ficha['paid_until'] ?? '')) ?>"></label>
                         <label>Cobrança
                             <select name="billing_status">
@@ -182,8 +190,10 @@ function saas_nav(string $tab): void
                     <form method="post" action="/admin/pagseguro" class="form">
                         <input type="hidden" name="do" value="charge">
                         <input type="hidden" name="id" value="<?= (int) $ficha['id'] ?>">
-                        <p class="hint">Cria um checkout no valor do plano. O cliente paga no PagSeguro; o painel marca em dia quando o pagamento confirmar.</p>
-                        <button class="btn ghost" type="submit">Gerar cobrança</button>
+                        <p class="hint"><?= ((int) ($ficha['auto_billing'] ?? 1) === 1)
+                            ? 'Checkout recorrente no intervalo do plano (cartão). Depois o PagSeguro cobra sozinho; o webhook atualiza Pago até.'
+                            : 'Cobrança avulsa (Pix, cartão ou boleto). Ative a cobrança automática no plano para recorrência.' ?></p>
+                        <button class="btn ghost" type="submit">Gerar cobrança agora</button>
                     </form>
                 <?php endif; ?>
                 <?php if ($fichaPayments): ?>
@@ -315,15 +325,27 @@ function saas_nav(string $tab): void
                 <input name="pagseguro_token" type="password" autocomplete="off" placeholder="<?= pagseguro_configured() ? h(pagseguro_mask_token()) : 'Cole o token Bearer' ?>">
             </label>
             <p class="hint"><?= pagseguro_configured() ? 'Token salvo (' . h(pagseguro_mask_token()) . '). Deixe em branco para manter.' : 'O token não aparece inteiro depois de salvar.' ?></p>
+            <label class="check"><input type="hidden" name="pagseguro_auto" value="0"><input type="checkbox" name="pagseguro_auto" value="1" <?= pagseguro_auto_enabled() ? 'checked' : '' ?>> Gerar cobrança automática pelos planos</label>
+            <label>Antecedência (dias)
+                <input name="pagseguro_advance_days" type="number" min="0" max="30" value="<?= (int) pagseguro_advance_days() ?>">
+            </label>
+            <p class="hint">Mensal, trimestral e anual definem o intervalo no PagSeguro. O agendamento do hosting deve chamar o cron abaixo todo dia.</p>
             <div class="actions row">
                 <button class="btn" type="submit">Salvar integração</button>
             </div>
         </form>
         <?php if (pagseguro_configured()): ?>
-            <form method="post" action="/admin/pagseguro" class="form">
-                <input type="hidden" name="do" value="test">
-                <button class="btn ghost" type="submit">Testar token</button>
-            </form>
+            <p class="hint">Cron diário:<br><code><?= h(pagseguro_cron_url()) ?></code></p>
+            <div class="actions row">
+                <form method="post" action="/admin/pagseguro">
+                    <input type="hidden" name="do" value="test">
+                    <button class="btn ghost" type="submit">Testar token</button>
+                </form>
+                <form method="post" action="/admin/pagseguro">
+                    <input type="hidden" name="do" value="run">
+                    <button class="btn ghost" type="submit">Gerar cobranças agora</button>
+                </form>
+            </div>
         <?php endif; ?>
         <p class="hint">Webhook: <code><?= h(pagseguro_webhook_url()) ?></code> — precisa ser HTTPS público para o PagSeguro avisar o pagamento.</p>
     </section>

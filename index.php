@@ -95,6 +95,9 @@ switch (true) {
     case $path === '/webhooks/pagbank':
         require __DIR__ . '/app/pages/webhook-pagbank.php';
         break;
+    case $path === '/cron/pagseguro':
+        require __DIR__ . '/app/pages/cron-pagseguro.php';
+        break;
     case in_array($path, [
         '/generate_204',
         '/gen_204',
