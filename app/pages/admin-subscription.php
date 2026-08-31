@@ -13,16 +13,17 @@ $id = (int) ($_POST['id'] ?? $GLOBALS['route_id'] ?? 0);
 $do = (string) ($_POST['do'] ?? 'save');
 
 if ($do === 'save' && $id > 0) {
-    $status = normalize_subscription_status((string) ($_POST['billing_status'] ?? 'ativa'));
-    if (!array_key_exists($status, subscription_statuses())) {
-        $status = 'ativa';
+    $override = (string) ($_POST['billing_override'] ?? 'auto');
+    $allowed = array_merge(['auto'], subscription_locked_statuses());
+    if (!in_array($override, $allowed, true)) {
+        $override = 'auto';
     }
     subscription_update($id, [
         'plan' => (string) ($_POST['plan'] ?? 'mensal'),
         'monthly_fee' => trim((string) ($_POST['monthly_fee'] ?? '')),
         'paid_until' => trim((string) ($_POST['paid_until'] ?? '')),
         'auto_billing' => (string) ($_POST['auto_billing'] ?? '0') === '1',
-        'billing_status' => $status,
+        'billing_override' => $override,
         'notes' => trim((string) ($_POST['notes'] ?? '')),
     ], 'admin');
     try {
@@ -66,7 +67,8 @@ if ($id > 0 && in_array($do, ['cortesia', 'cancel', 'reactivate', 'extend'], tru
         subscription_transition($id, 'cancelada', 'Cancelada manualmente', 'admin');
         $_SESSION['flash_ok'] = 'Assinatura cancelada. O serviço foi suspenso.';
     } elseif ($do === 'reactivate') {
-        subscription_transition($id, 'ativa', 'Reativada manualmente', 'admin');
+        db()->prepare('UPDATE stores SET billing_status = ?, cancelled_at = ?, suspended_at = ? WHERE id = ?')->execute(['ativa', '', '', $id]);
+        subscription_reconcile($id, 'Reativada manualmente', 'admin');
         $_SESSION['flash_ok'] = 'Assinatura reativada.';
     } elseif ($do === 'extend') {
         $store = find_store($id);
@@ -78,9 +80,7 @@ if ($id > 0 && in_array($do, ['cortesia', 'cancel', 'reactivate', 'extend'], tru
             $newUntil = date('Y-m-d', strtotime('+7 days', $base) ?: $base);
             db()->prepare('UPDATE stores SET paid_until = ? WHERE id = ?')->execute([$newUntil, $id]);
             subscription_log_event($id, 'extend', (string) ($store['billing_status'] ?? ''), (string) ($store['billing_status'] ?? ''), '+7 dias', 'admin');
-            if (normalize_subscription_status((string) ($store['billing_status'] ?? '')) === 'atrasada') {
-                subscription_transition($id, 'ativa', 'Prorrogação de 7 dias', 'admin');
-            }
+            subscription_reconcile($id, 'Prorrogação de 7 dias', 'admin');
             $_SESSION['flash_ok'] = 'Vigência estendida em 7 dias.';
         }
     }

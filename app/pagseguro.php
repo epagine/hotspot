@@ -343,10 +343,12 @@ function pagseguro_expire_pending(int $storeId): void
         }
         db()->prepare("UPDATE payments SET status = 'expired' WHERE id = ?")->execute([(int) $row['id']]);
     }
+    subscription_reconcile($storeId, 'Cobrança expirada', 'system');
 }
 
 function pagseguro_expire_stale_pending(): void
 {
+    $storeIds = [];
     $stmt = db()->query(
         "SELECT * FROM payments WHERE status = 'pending' AND created_at < datetime('now', '-8 days')"
     );
@@ -356,6 +358,10 @@ function pagseguro_expire_stale_pending(): void
             pagseguro_request('POST', '/checkouts/' . rawurlencode($cid) . '/inactivate');
         }
         db()->prepare("UPDATE payments SET status = 'expired' WHERE id = ?")->execute([(int) $row['id']]);
+        $storeIds[(int) $row['store_id']] = true;
+    }
+    foreach (array_keys($storeIds) as $storeId) {
+        subscription_reconcile($storeId, 'Cobrança expirada', 'system');
     }
 }
 

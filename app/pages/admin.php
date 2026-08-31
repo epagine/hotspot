@@ -284,10 +284,17 @@ function app_nav_item(string $tab, string $key, string $label): void
         <article><span>MRR</span><strong><?= h(cents_label((int) $sk['mrr_cents'])) ?></strong></article>
     </div>
     <?php if ($subStore): ?>
-        <?php $sr = subscription_row($subStore); ?>
+        <?php
+        $sr = subscription_row($subStore);
+        $derivedStatus = subscription_derive_status($subStore);
+        $billingOverride = subscription_is_locked_status($sr['billing_status']) ? $sr['billing_status'] : 'auto';
+        ?>
         <section class="card">
             <p>
                 <span class="tag <?= h($sr['tag_class']) ?>"><?= h($sr['billing_label']) ?></span>
+                <?php if ($derivedStatus !== $sr['billing_status'] && !subscription_is_locked_status($sr['billing_status'])): ?>
+                    <span class="tag pending">Calculada: <?= h(subscription_label($derivedStatus)) ?></span>
+                <?php endif; ?>
                 <span class="tag <?= $sr['active'] ? 'online' : 'blocked' ?>"><?= $sr['active'] ? 'Serviço ligado' : 'Serviço suspenso' ?></span>
             </p>
             <form method="post" action="<?= h(admin_url('assinaturas', $subId)) ?>" class="form">
@@ -307,13 +314,15 @@ function app_nav_item(string $tab, string $key, string $label): void
                         <?php if ($sr['trial_ends_at'] !== ''): ?>
                             <p class="hint">Trial até <?= h(date('d/m/Y', strtotime($sr['trial_ends_at']) ?: time())) ?></p>
                         <?php endif; ?>
-                        <label>Situação
-                            <select name="billing_status">
-                                <?php foreach (subscription_statuses() as $val => $lab): ?>
-                                    <option value="<?= h($val) ?>" <?= $sr['billing_status'] === $val ? 'selected' : '' ?>><?= h($lab) ?></option>
+                        <label>Situação especial
+                            <select name="billing_override">
+                                <option value="auto" <?= $billingOverride === 'auto' ? 'selected' : '' ?>>Automática (financeiro)</option>
+                                <?php foreach (subscription_locked_statuses() as $val): ?>
+                                    <option value="<?= h($val) ?>" <?= $billingOverride === $val ? 'selected' : '' ?>><?= h(subscription_label($val)) ?></option>
                                 <?php endforeach; ?>
                             </select>
                         </label>
+                        <p class="hint">Trial, ativa, pendente, atrasada e suspensa são calculadas pelos pagamentos e pela vigência.</p>
                         <label class="check"><input type="checkbox" name="auto_billing" value="1" <?= $sr['auto_billing'] ? 'checked' : '' ?>> Cobrança automática</label>
                         <label>Observações<textarea name="notes" rows="3"><?= h($sr['notes']) ?></textarea></label>
                     </fieldset>

@@ -62,6 +62,134 @@ function subscription_service_allowed(string $status): bool
     return in_array(normalize_subscription_status($status), ['trial', 'ativa', 'pendente', 'cortesia'], true);
 }
 
+function subscription_locked_statuses(): array
+{
+    return ['cortesia', 'cancelada', 'encerrada'];
+}
+
+function subscription_is_locked_status(string $status): bool
+{
+    return in_array(normalize_subscription_status($status), subscription_locked_statuses(), true);
+}
+
+function subscription_last_paid_payment(int $storeId): ?array
+{
+    $stmt = db()->prepare(
+        "SELECT * FROM payments WHERE store_id = ? AND status = 'paid'
+         AND paid_at IS NOT NULL AND paid_at != '' ORDER BY paid_at DESC LIMIT 1"
+    );
+    $stmt->execute([$storeId]);
+    $row = $stmt->fetch();
+    return $row ?: null;
+}
+
+function subscription_store_has_paid_payments(int $storeId): bool
+{
+    return subscription_last_paid_payment($storeId) !== null;
+}
+
+function subscription_paid_until_from_history(array $store): string
+{
+    $storeId = (int) $store['id'];
+    $last = subscription_last_paid_payment($storeId);
+    $manual = trim((string) ($store['paid_until'] ?? ''));
+    $trial = trim((string) ($store['trial_ends_at'] ?? ''));
+
+    if (!$last) {
+        if ($manual !== '') {
+            return $manual;
+        }
+        return $trial;
+    }
+
+    $paidDay = date('Y-m-d', strtotime((string) $last['paid_at']) ?: time());
+    $sim = $store;
+    $sim['paid_until'] = $paidDay;
+    $fromHistory = next_paid_until($sim);
+    if ($manual !== '' && $manual > $fromHistory) {
+        return $manual;
+    }
+    return $fromHistory;
+}
+
+function subscription_derive_status(array $store): string
+{
+    $current = normalize_subscription_status((string) ($store['billing_status'] ?? 'ativa'));
+    if (subscription_is_locked_status($current)) {
+        return $current;
+    }
+
+    $today = date('Y-m-d');
+    $storeId = (int) $store['id'];
+    $trialEnds = trim((string) ($store['trial_ends_at'] ?? ''));
+    $until = subscription_paid_until_from_history($store);
+
+    if ($current === 'trial' || ($trialEnds !== '' && !subscription_store_has_paid_payments($storeId) && $trialEnds >= $today)) {
+        if ($trialEnds >= $today) {
+            return store_pending_payment($storeId) ? 'pendente' : 'trial';
+        }
+    }
+
+    if (store_pending_payment($storeId)) {
+        return 'pendente';
+    }
+
+    if ($until === '' || $until >= $today) {
+        return 'ativa';
+    }
+
+    $grace = saas_grace_days();
+    $deadline = date('Y-m-d', strtotime($until . ' +' . $grace . ' days') ?: time());
+    if ($deadline >= $today) {
+        return 'atrasada';
+    }
+    if (saas_auto_suspend_enabled()) {
+        return 'suspensa';
+    }
+    return 'atrasada';
+}
+
+function subscription_reconcile(int $storeId, string $note = 'Reconciliação financeira', string $actor = 'system'): bool
+{
+    $store = find_store($storeId);
+    if (!$store) {
+        return false;
+    }
+
+    if (subscription_is_locked_status((string) ($store['billing_status'] ?? ''))) {
+        subscription_sync_contract($storeId);
+        return false;
+    }
+
+    $until = subscription_paid_until_from_history($store);
+    $currentUntil = trim((string) ($store['paid_until'] ?? ''));
+    if ($until !== '' && $until !== $currentUntil) {
+        db()->prepare('UPDATE stores SET paid_until = ?, next_billing_at = ? WHERE id = ?')->execute([$until, $until, $storeId]);
+        $store = find_store($storeId) ?? $store;
+    }
+
+    $derived = subscription_derive_status($store);
+    $current = normalize_subscription_status((string) ($store['billing_status'] ?? 'ativa'));
+    if ($derived !== $current) {
+        subscription_transition($storeId, $derived, $note, $actor);
+        return true;
+    }
+
+    subscription_sync_contract($storeId);
+    return false;
+}
+
+function subscription_reconcile_all(): int
+{
+    $n = 0;
+    foreach (all_stores() as $store) {
+        if (subscription_reconcile((int) $store['id'])) {
+            $n++;
+        }
+    }
+    return $n;
+}
+
 function ensure_subscription_schema(PDO $pdo): void
 {
     $pdo->exec(
@@ -190,14 +318,7 @@ function subscription_init_trial(int $storeId): void
 
 function subscription_on_charge_created(int $storeId): void
 {
-    $store = find_store($storeId);
-    if (!$store) {
-        return;
-    }
-    $status = normalize_subscription_status((string) ($store['billing_status'] ?? 'ativa'));
-    if (in_array($status, ['ativa', 'atrasada', 'trial', 'pendente'], true)) {
-        subscription_transition($storeId, 'pendente', 'Cobrança gerada', 'system');
-    }
+    subscription_reconcile($storeId, 'Cobrança gerada', 'system');
 }
 
 function subscription_on_payment_paid(int $storeId, string $note = 'Pagamento confirmado'): void
@@ -210,7 +331,7 @@ function subscription_on_payment_paid(int $storeId, string $note = 'Pagamento co
     db()->prepare(
         'UPDATE stores SET paid_until = ?, trial_ends_at = ?, next_billing_at = ? WHERE id = ?'
     )->execute([$until, '', $until, $storeId]);
-    subscription_transition($storeId, 'ativa', $note, 'system');
+    subscription_reconcile($storeId, $note, 'system');
 }
 
 function subscription_mrr_cents(array $stores): int
@@ -290,77 +411,30 @@ function subscriptions_overview(?string $filter = null): array
 
 function subscription_expire_trials(): int
 {
-    $n = 0;
-    $today = date('Y-m-d');
-    foreach (all_stores() as $store) {
-        if (normalize_subscription_status((string) ($store['billing_status'] ?? '')) !== 'trial') {
-            continue;
-        }
-        $ends = trim((string) ($store['trial_ends_at'] ?? ''));
-        if ($ends === '' || $ends >= $today) {
-            continue;
-        }
-        subscription_transition((int) $store['id'], 'atrasada', 'Trial encerrado', 'system');
-        $n++;
-    }
-    return $n;
+    return subscription_reconcile_all();
 }
 
 function subscription_apply_grace_suspensions(): int
 {
-    if (!saas_auto_suspend_enabled()) {
-        return 0;
-    }
-    $n = 0;
-    $grace = saas_grace_days();
-    $today = date('Y-m-d');
-    foreach (all_stores() as $store) {
-        if (normalize_subscription_status((string) ($store['billing_status'] ?? '')) !== 'atrasada') {
-            continue;
-        }
-        $until = trim((string) ($store['paid_until'] ?? ''));
-        if ($until === '') {
-            continue;
-        }
-        $deadline = date('Y-m-d', strtotime($until . ' +' . $grace . ' days') ?: time());
-        if ($deadline >= $today) {
-            continue;
-        }
-        subscription_transition((int) $store['id'], 'suspensa', 'Grace de ' . $grace . ' dia(s) esgotado', 'system');
-        $n++;
-    }
-    return $n;
+    return 0;
 }
 
 function subscription_mark_overdue(): int
 {
-    $n = 0;
-    $today = date('Y-m-d');
-    foreach (all_stores() as $store) {
-        $status = normalize_subscription_status((string) ($store['billing_status'] ?? ''));
-        if (!in_array($status, ['ativa', 'pendente', 'trial'], true)) {
-            continue;
-        }
-        $until = trim((string) ($store['paid_until'] ?? ''));
-        if ($until === '' || $until >= $today) {
-            continue;
-        }
-        subscription_transition((int) $store['id'], 'atrasada', 'Vigência vencida', 'system');
-        $n++;
-    }
-    return $n;
+    return subscription_reconcile_all();
 }
 
 function subscription_run_daily(): array
 {
-    $trials = subscription_expire_trials();
-    $overdue = subscription_mark_overdue();
-    $suspended = subscription_apply_grace_suspensions();
+    pagseguro_expire_stale_pending();
+    $reconciled = subscription_reconcile_all();
     $billing = pagseguro_run_billing();
+    $afterBilling = subscription_reconcile_all();
     return [
-        'trials_ended' => $trials,
-        'overdue' => $overdue,
-        'suspended' => $suspended,
+        'trials_ended' => $reconciled,
+        'overdue' => $afterBilling,
+        'suspended' => 0,
+        'reconciled' => $reconciled + $afterBilling,
         'created' => (int) ($billing['created'] ?? 0),
         'errors' => $billing['errors'] ?? [],
     ];
@@ -376,7 +450,6 @@ function subscription_update(int $id, array $fields, string $actor = 'admin'): v
     if (!in_array($plan, ['mensal', 'trimestral', 'anual'], true)) {
         $plan = 'mensal';
     }
-    $status = normalize_subscription_status((string) ($fields['billing_status'] ?? $store['billing_status'] ?? 'ativa'));
     db()->prepare(
         'UPDATE stores SET plan = ?, monthly_fee = ?, paid_until = ?, auto_billing = ?, notes = ? WHERE id = ?'
     )->execute([
@@ -387,8 +460,20 @@ function subscription_update(int $id, array $fields, string $actor = 'admin'): v
         (string) ($fields['notes'] ?? ''),
         $id,
     ]);
-    $oldStatus = normalize_subscription_status((string) ($store['billing_status'] ?? 'ativa'));
-    if ($oldStatus !== $status) {
-        subscription_transition($id, $status, 'Alteração manual no painel', $actor);
+
+    $overrideRaw = (string) ($fields['billing_override'] ?? 'auto');
+    if ($overrideRaw !== 'auto') {
+        $override = normalize_subscription_status($overrideRaw);
+        if (subscription_is_locked_status($override)) {
+            subscription_transition($id, $override, 'Situação especial definida no painel', $actor);
+            return;
+        }
     }
+
+    $current = normalize_subscription_status((string) ($store['billing_status'] ?? 'ativa'));
+    if ($overrideRaw === 'auto' && subscription_is_locked_status($current)) {
+        db()->prepare('UPDATE stores SET billing_status = ? WHERE id = ?')->execute(['ativa', $id]);
+    }
+
+    subscription_reconcile($id, 'Dados da assinatura atualizados', $actor);
 }
