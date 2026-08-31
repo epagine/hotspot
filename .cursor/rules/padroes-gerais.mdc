@@ -13,6 +13,8 @@ Stack: PHP 8.1+ procedural, SQLite, sem framework. Documentação completa: `doc
 - **Assinaturas** (`subscription.php`) — plano, vigência, trial, grace, suspensão
 - **Financeiro** (`pagseguro.php`) — cobranças e pagamentos
 - **Configurações** — conta, PagSeguro, políticas SaaS
+- **Portal do cliente** (`/cliente`) — assinatura e pagamentos da loja
+- **Bandeja Windows** — status da licença, cliente, links do painel e hotspot
 
 ## Ao implementar
 

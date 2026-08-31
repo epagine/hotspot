@@ -35,9 +35,15 @@ if (!empty($body['ack_command_id'])) {
 }
 
 $command = peek_store_command($sid);
+$sr = subscription_row($store);
+$panelBase = rtrim(guess_panel_url(), '/');
 $cfg = [
-    'store_name' => setting('store_name'),
-    'store_city' => setting('store_city'),
+    'store_name' => trim((string) ($store['name'] ?? '')) !== ''
+        ? (string) $store['name']
+        : setting('store_name'),
+    'store_city' => trim((string) ($store['city'] ?? '')) !== ''
+        ? (string) $store['city']
+        : setting('store_city'),
     'wifi_ssid' => setting('wifi_ssid', 'WifiDaLoja'),
     'wifi_pass' => setting('wifi_pass', ''),
     'portal_ip' => setting('portal_ip', '192.168.137.1'),
@@ -60,8 +66,24 @@ foreach ($stmt as $row) {
 json_out([
     'ok' => true,
     'store_id' => $sid,
-    'store' => $store['name'],
+    'store' => (string) $store['name'],
     'config' => $cfg,
+    'subscription' => [
+        'billing_status' => $sr['billing_status'],
+        'billing_label' => $sr['billing_label'],
+        'plan' => $sr['plan'],
+        'plan_label' => $sr['plan_label'],
+        'paid_until' => $sr['paid_until'],
+        'trial_ends_at' => $sr['trial_ends_at'],
+        'cycle_amount' => $sr['cycle_amount'],
+        'active' => $sr['active'],
+        'service_allowed' => subscription_service_allowed($sr['billing_status']),
+    ],
+    'links' => [
+        'panel' => $panelBase,
+        'admin' => $panelBase . '/admin/clientes/' . $sid,
+        'client' => $panelBase . client_url(),
+    ],
     'command' => $command,
     'authorized' => array_values(array_unique($authorized)),
     'patches' => pending_client_patches($sid),

@@ -391,6 +391,32 @@ function Sync-Cloud {
             }
             [System.IO.File]::WriteAllText($AuthFile, ($auth | ConvertTo-Json -Depth 5), [System.Text.UTF8Encoding]::new($false))
         }
+        $sub = $resp.subscription
+        $links = $resp.links
+        $info = [ordered]@{
+            store_id         = [int]($resp.store_id)
+            store_name       = [string]($(if ($resp.store) { $resp.store } elseif ($resp.config.store_name) { $resp.config.store_name } else { "" }))
+            store_city       = [string]($(if ($resp.config.store_city) { $resp.config.store_city } else { "" }))
+            billing_status   = [string]($(if ($sub.billing_status) { $sub.billing_status } else { "" }))
+            billing_label    = [string]($(if ($sub.billing_label) { $sub.billing_label } else { "" }))
+            plan             = [string]($(if ($sub.plan) { $sub.plan } else { "" }))
+            plan_label       = [string]($(if ($sub.plan_label) { $sub.plan_label } else { "" }))
+            paid_until       = [string]($(if ($sub.paid_until) { $sub.paid_until } else { "" }))
+            trial_ends_at    = [string]($(if ($sub.trial_ends_at) { $sub.trial_ends_at } else { "" }))
+            cycle_amount     = [string]($(if ($sub.cycle_amount) { $sub.cycle_amount } else { "" }))
+            active           = [bool]($(if ($null -ne $sub.active) { [bool]$sub.active } else { $true }))
+            service_allowed  = [bool]($(if ($null -ne $sub.service_allowed) { [bool]$sub.service_allowed } else { $true }))
+            wifi_ssid        = [string]($(if ($resp.config.wifi_ssid) { $resp.config.wifi_ssid } else { "" }))
+            wifi_pass        = [string]($(if ($resp.config.wifi_pass) { $resp.config.wifi_pass } else { "" }))
+            portal_ip        = [string]($(if ($resp.config.portal_ip) { $resp.config.portal_ip } else { "192.168.137.1" }))
+            max_clients      = [string]($(if ($resp.config.max_clients) { $resp.config.max_clients } else { "8" }))
+            panel_url        = [string]($(if ($links.panel) { $links.panel } else { ([string]$cfg.panel_url).TrimEnd("/") }))
+            admin_url        = [string]($(if ($links.admin) { $links.admin } else { ([string]$cfg.panel_url).TrimEnd("/") + "/admin/clientes" }))
+            client_url       = [string]($(if ($links.client) { $links.client } else { ([string]$cfg.panel_url).TrimEnd("/") + "/cliente" }))
+            updated_at       = (Get-Date).ToString("s")
+        }
+        $infoFile = Join-Path $Storage "store-info.json"
+        [System.IO.File]::WriteAllText($infoFile, ($info | ConvertTo-Json -Depth 4), [System.Text.UTF8Encoding]::new($false))
         if ($resp.command -and $resp.command.id) {
             $cmd = @{
                 id     = [string]$resp.command.id
