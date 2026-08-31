@@ -77,6 +77,31 @@ switch (true) {
         require __DIR__ . '/app/pages/story.php';
         render_story($m[1]);
         break;
+    case $path === '/cliente/login':
+        client_redirect(client_url('entrar'), 301);
+        break;
+    case $path === '/cliente/entrar':
+        require __DIR__ . '/app/pages/client-login.php';
+        break;
+    case $path === '/cliente/sair':
+        unset($_SESSION['client_store_id']);
+        client_redirect(client_url('entrar'));
+        break;
+    case $path === '/cliente/conta':
+        if (is_http_post()) {
+            require __DIR__ . '/app/pages/client-action.php';
+            break;
+        }
+        $_GET['sec'] = 'conta';
+        require __DIR__ . '/app/pages/client.php';
+        break;
+    case $path === '/cliente':
+        if (is_http_post()) {
+            require __DIR__ . '/app/pages/client-action.php';
+            break;
+        }
+        require __DIR__ . '/app/pages/client.php';
+        break;
     case $path === '/admin' || $path === '/admin/':
         $legacy = admin_legacy_url();
         admin_redirect($legacy ?? admin_url(), $legacy ? 301 : 302);

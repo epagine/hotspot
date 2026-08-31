@@ -25,6 +25,17 @@ if ($do === 'save' && $id > 0) {
         'billing_status' => $status,
         'notes' => trim((string) ($_POST['notes'] ?? '')),
     ], 'admin');
+    try {
+        portal_update($id, [
+            'enabled' => (string) ($_POST['portal_enabled'] ?? '0') === '1',
+            'email' => trim((string) ($_POST['portal_email'] ?? '')),
+            'password' => trim((string) ($_POST['portal_pass'] ?? '')),
+        ]);
+    } catch (Throwable $e) {
+        $_SESSION['flash_error'] = $e->getMessage();
+        header('Location: ' . admin_url('assinaturas', $id));
+        exit;
+    }
     $_SESSION['flash_ok'] = 'Assinatura salva.';
     header('Location: ' . admin_url('assinaturas', $id));
     exit;

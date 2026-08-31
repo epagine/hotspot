@@ -417,7 +417,7 @@ function pagseguro_create_charge(int $storeId, bool $force = false): array
     $recurring = (int) ($store['auto_billing'] ?? 1) === 1;
     $reference = 'wl-' . $storeId . '-' . bin2hex(random_bytes(6));
     $notify = pagseguro_webhook_url();
-    $return = rtrim(guess_panel_url(), '/') . admin_url('clientes', $storeId);
+    $return = rtrim(guess_panel_url(), '/') . client_url();
     $exp = (new DateTimeImmutable('now', new DateTimeZone('America/Sao_Paulo')))->modify('+7 days');
     $itemName = 'Wi-Fi da loja ' . $meta['label'] . ' — ' . (string) $store['name'];
     if (strlen($itemName) > 100) {

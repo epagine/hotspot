@@ -317,6 +317,17 @@ function app_nav_item(string $tab, string $key, string $label): void
                         <label class="check"><input type="checkbox" name="auto_billing" value="1" <?= $sr['auto_billing'] ? 'checked' : '' ?>> Cobrança automática</label>
                         <label>Observações<textarea name="notes" rows="3"><?= h($sr['notes']) ?></textarea></label>
                     </fieldset>
+                    <fieldset>
+                        <legend>Portal do cliente</legend>
+                        <label class="check"><input type="checkbox" name="portal_enabled" value="1" <?= (int) ($subStore['portal_enabled'] ?? 0) === 1 ? 'checked' : '' ?>> Habilitar acesso</label>
+                        <label>E-mail de login<input type="email" name="portal_email" value="<?= h((string) ($subStore['portal_email'] ?? '')) ?>" autocomplete="off"></label>
+                        <label>Nova senha (opcional)<input type="password" name="portal_pass" autocomplete="new-password" placeholder="Mínimo 8 caracteres"></label>
+                        <?php if (portal_credentials_ready($subStore)): ?>
+                            <p class="hint">Portal ativo · <a href="<?= h(client_url()) ?>" target="_blank" rel="noopener">Abrir portal</a></p>
+                        <?php else: ?>
+                            <p class="hint">Defina e-mail e senha para o cliente acessar <?= h(rtrim(guess_panel_url(), '/') . client_url()) ?></p>
+                        <?php endif; ?>
+                    </fieldset>
                 </div>
                 <div class="actions row">
                     <button class="btn" type="submit" name="do" value="save">Salvar assinatura</button>

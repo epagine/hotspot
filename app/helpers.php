@@ -657,4 +657,5 @@ function installer_setup_path(): ?string
 
 require_once __DIR__ . '/stores.php';
 require_once __DIR__ . '/subscription.php';
+require_once __DIR__ . '/client-portal.php';
 require_once __DIR__ . '/pagseguro.php';

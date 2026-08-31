@@ -73,6 +73,7 @@ function migrate_multi_store(PDO $pdo): void
     ensure_store_saas_columns($pdo);
     ensure_payments_table($pdo);
     ensure_subscription_schema($pdo);
+    ensure_portal_schema($pdo);
 
     $cols = $pdo->query('PRAGMA table_info(clients)')->fetchAll();
     $names = array_column($cols, 'name');
