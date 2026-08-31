@@ -8,6 +8,7 @@ function owner_setting_keys(): array
         'admin_user', 'admin_pass_hash',
         'pagseguro_env', 'pagseguro_token',
         'pagseguro_cron_key', 'pagseguro_last_run', 'pagseguro_advance_days', 'pagseguro_auto',
+        'saas_grace_days', 'saas_trial_days', 'saas_auto_suspend',
     ];
 }
 
@@ -71,6 +72,7 @@ function migrate_multi_store(PDO $pdo): void
     );
     ensure_store_saas_columns($pdo);
     ensure_payments_table($pdo);
+    ensure_subscription_schema($pdo);
 
     $cols = $pdo->query('PRAGMA table_info(clients)')->fetchAll();
     $names = array_column($cols, 'name');
@@ -244,13 +246,7 @@ function store_connection_health(array $store): array
 
 function billing_label(string $status): string
 {
-    return match ($status) {
-        'em_dia' => 'Em dia',
-        'atrasado' => 'Atrasado',
-        'cortesia' => 'Cortesia',
-        'cancelado' => 'Cancelado',
-        default => $status,
-    };
+    return subscription_label($status);
 }
 
 function saas_overview(): array
@@ -267,7 +263,7 @@ function saas_overview(): array
     foreach (all_stores() as $store) {
         $health = store_connection_health($store);
         $active = (int) ($store['active'] ?? 1) === 1;
-        $bill = (string) ($store['billing_status'] ?? 'em_dia');
+        $bill = normalize_subscription_status((string) ($store['billing_status'] ?? 'ativa'));
         $st = store_status_payload($store);
         $kpi['total']++;
         if ($active) {
@@ -280,7 +276,7 @@ function saas_overview(): array
         } else {
             $kpi['offline']++;
         }
-        if ($bill === 'atrasado') {
+        if ($bill === 'atrasada') {
             $kpi['atrasados']++;
         }
         $seen = parse_time_any((string) ($store['last_seen_at'] ?? ''));
@@ -295,6 +291,7 @@ function saas_overview(): array
             'paid_until' => (string) ($store['paid_until'] ?? ''),
             'billing_status' => $bill,
             'billing_label' => billing_label($bill),
+            'auto_billing' => (int) ($store['auto_billing'] ?? 1) === 1,
             'health' => $health,
             'hotspot_on' => !empty($st['hotspot_on']),
             'ssid' => (string) ($st['ssid'] ?? ''),
@@ -314,18 +311,12 @@ function update_store_saas(int $id, array $fields): void
     }
     $wasActive = (int) ($store['active'] ?? 1) === 1;
     db()->prepare(
-        'UPDATE stores SET name = ?, city = ?, active = ?, billing_status = ?, plan = ?, monthly_fee = ?, paid_until = ?, contact = ?, notes = ?, auto_billing = ? WHERE id = ?'
+        'UPDATE stores SET name = ?, city = ?, active = ?, contact = ? WHERE id = ?'
     )->execute([
         (string) $fields['name'],
         (string) $fields['city'],
         !empty($fields['active']) ? 1 : 0,
-        (string) $fields['billing_status'],
-        (string) $fields['plan'],
-        (string) $fields['monthly_fee'],
-        (string) $fields['paid_until'],
-        (string) $fields['contact'],
-        (string) $fields['notes'],
-        !empty($fields['auto_billing']) ? 1 : 0,
+        (string) ($fields['contact'] ?? ''),
         $id,
     ]);
     $ins = db()->prepare(
@@ -336,6 +327,8 @@ function update_store_saas(int $id, array $fields): void
     $nowActive = !empty($fields['active']);
     if ($wasActive && !$nowActive) {
         queue_store_command($id, 'stop');
+    } elseif (!$wasActive && $nowActive && subscription_service_allowed((string) ($store['billing_status'] ?? 'ativa'))) {
+        queue_store_command($id, 'start');
     }
 }
 
@@ -461,6 +454,13 @@ function create_store(string $name, string $city = '', ?array $settings = null, 
         $ins->execute([$id, $k, (string) $v]);
     }
     return find_store($id) ?? ['id' => $id, 'token' => $token, 'name' => $name];
+}
+
+function create_store_with_trial(string $name, string $city = '', ?array $settings = null): array
+{
+    $store = create_store($name, $city, $settings);
+    subscription_init_trial((int) $store['id']);
+    return find_store((int) $store['id']) ?? $store;
 }
 
 function rotate_store_token(int $id): string

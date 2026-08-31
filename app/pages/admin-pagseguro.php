@@ -5,7 +5,7 @@ declare(strict_types=1);
 require_admin();
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-    header('Location: /admin?tab=config');
+    header('Location: ' . admin_url('configuracoes', 0, 'integracao'));
     exit;
 }
 
@@ -14,7 +14,7 @@ $do = (string) ($_POST['do'] ?? 'save');
 if ($do === 'save') {
     $env = (string) ($_POST['pagseguro_env'] ?? 'sandbox');
     set_setting('pagseguro_env', $env === 'production' ? 'production' : 'sandbox');
-    $token = trim((string) ($_POST['pagseguro_token'] ?? ''));
+    $token = pagseguro_normalize_token((string) ($_POST['pagseguro_token'] ?? ''));
     if ($token !== '') {
         set_setting('pagseguro_token', $token);
     }
@@ -24,11 +24,11 @@ if ($do === 'save') {
     pagseguro_cron_key();
     if (!pagseguro_configured()) {
         $_SESSION['flash_error'] = 'Cole o token gerado no PagSeguro (Vendas → Integrações).';
-        header('Location: /admin?tab=config');
+        header('Location: ' . admin_url('configuracoes', 0, 'integracao'));
         exit;
     }
     $_SESSION['flash_ok'] = 'Integração PagSeguro salva.';
-    header('Location: /admin?tab=config');
+    header('Location: ' . admin_url('configuracoes', 0, 'integracao'));
     exit;
 }
 
@@ -39,12 +39,12 @@ if ($do === 'test') {
     } else {
         $_SESSION['flash_error'] = $r['message'];
     }
-    header('Location: /admin?tab=config');
+    header('Location: ' . admin_url('configuracoes', 0, 'integracao'));
     exit;
 }
 
 if ($do === 'charge') {
-    $id = (int) ($_POST['id'] ?? 0);
+    $id = (int) ($_POST['id'] ?? $GLOBALS['route_id'] ?? 0);
     try {
         $created = pagseguro_create_charge($id, true);
         $url = $created['pay_url'];
@@ -57,7 +57,7 @@ if ($do === 'charge') {
     } catch (Throwable $e) {
         $_SESSION['flash_error'] = $e->getMessage();
     }
-    header('Location: /admin?tab=clientes&id=' . $id);
+    header('Location: ' . admin_url('financeiro', $id));
     exit;
 }
 
@@ -73,8 +73,8 @@ if ($do === 'run') {
     } else {
         $_SESSION['flash_ok'] = $msg;
     }
-    header('Location: /admin?tab=config');
+    header('Location: ' . admin_url('configuracoes', 0, 'integracao'));
     exit;
 }
 
-header('Location: /admin?tab=config');
+header('Location: ' . admin_url('financeiro'));

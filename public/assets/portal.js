@@ -5,7 +5,7 @@ const refreshBtn = document.getElementById('refresh');
 async function shareStatus() {
   const text = shareBtn.dataset.text;
   const code = shareBtn.dataset.code;
-  const imageUrl = `/story/${code}.png`;
+  const imageUrl = `/arte/${code}.png`;
   try {
     const res = await fetch(imageUrl);
     const blob = await res.blob();
@@ -29,7 +29,7 @@ async function shareStatus() {
 async function confirmPosted() {
   confirmBtn.disabled = true;
   const phone = (document.getElementById('phone') || {}).value || '';
-  const res = await fetch('/api/confirm', {
+  const res = await fetch('/confirmar', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ phone }),

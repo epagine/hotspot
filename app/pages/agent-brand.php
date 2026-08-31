@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-$token = trim((string) ($_GET['token'] ?? ''));
+$token = trim((string) ($GLOBALS['agent_token'] ?? $_GET['token'] ?? ''));
 $store = find_store_by_token($token);
 if (!$store) {
     http_response_code(401);

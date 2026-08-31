@@ -143,7 +143,7 @@ internal sealed class TrayApp : ApplicationContext
         else
         {
             string cfg = Path.Combine(root, "app", "config.php");
-            url = File.Exists(cfg) ? "http://127.0.0.1:8080/admin" : "http://127.0.0.1:8080/install";
+            url = File.Exists(cfg) ? "http://127.0.0.1:8080/admin" : "http://127.0.0.1:8080/instalar";
         }
         try { Process.Start(url); } catch { Process.Start(new ProcessStartInfo { FileName = url, UseShellExecute = true }); }
     }

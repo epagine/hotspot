@@ -1,0 +1,29 @@
+---
+description: Padrões de UI do painel admin
+globs: "{app/pages/admin.php,public/assets/admin.js,public/assets/app.css}"
+alwaysApply: false
+---
+
+# Admin UI
+
+## Shell
+
+Tudo passa por `admin.php` exceto login e install. Nav principal: Clientes, Assinaturas, Financeiro, Instalador, Configurações.
+
+## Formulários
+
+- `method="post"` + `action="<?= h(admin_url(...)) ?>"`
+- Hidden `id` + botão/input `name="do" value="acao"`
+- Classes: `.form`, `.form-grid`, `.card`, `.btn`, `.btn.ghost`, `.saas-table`
+
+## Status
+
+Tags via `subscription_tag_class()` + `subscription_label()` — não comparar strings legadas (`em_dia`) no template.
+
+## Metadados
+
+Definir `$pageTitle` e `$pageLead` com `match` no topo de `admin.php`.
+
+## JS
+
+`admin.js` poll em `/admin/estado` — manter IDs KPI estáveis ao alterar stats.

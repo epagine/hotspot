@@ -15,9 +15,25 @@ function pagseguro_api_base(): string
         : 'https://sandbox.api.pagseguro.com';
 }
 
+function pagseguro_normalize_token(string $token): string
+{
+    $token = preg_replace('/^\xEF\xBB\xBF/', '', $token) ?? $token;
+    $token = trim($token);
+    $token = trim($token, "\"'");
+    if (preg_match('/^bearer\s+/i', $token)) {
+        $token = (string) preg_replace('/^bearer\s+/i', '', $token);
+    }
+    return preg_replace('/\s+/', '', $token) ?? $token;
+}
+
 function pagseguro_token(): string
 {
-    return trim(setting('pagseguro_token', ''));
+    $raw = (string) setting('pagseguro_token', '');
+    $clean = pagseguro_normalize_token($raw);
+    if ($clean !== '' && $clean !== $raw) {
+        set_setting('pagseguro_token', $clean);
+    }
+    return $clean;
 }
 
 function pagseguro_configured(): bool
@@ -37,7 +53,7 @@ function pagseguro_mask_token(?string $token = null): string
 
 function pagseguro_webhook_url(): string
 {
-    return rtrim(guess_panel_url(), '/') . '/webhooks/pagbank';
+    return rtrim(guess_panel_url(), '/') . '/notificacoes/pagbank';
 }
 
 function http_json(string $method, string $url, array $headers = [], ?array $payload = null): array
@@ -112,22 +128,47 @@ function pagseguro_request(string $method, string $path, ?array $payload = null)
     ], $payload);
 }
 
+function pagseguro_request_base(string $base, string $method, string $path, ?array $payload = null): array
+{
+    $token = pagseguro_token();
+    if ($token === '') {
+        return ['ok' => false, 'code' => 0, 'error' => 'Informe o token PagSeguro.', 'data' => [], 'raw' => ''];
+    }
+    return http_json($method, rtrim($base, '/') . $path, [
+        'Authorization: Bearer ' . $token,
+        'Accept: application/json',
+    ], $payload);
+}
+
 function pagseguro_error_message(array $res): string
 {
     if (($res['error'] ?? '') !== '') {
         return (string) $res['error'];
     }
     $data = $res['data'] ?? [];
-    if (!empty($data['error_messages'][0]['description'])) {
-        return (string) $data['error_messages'][0]['description'];
+    $detail = '';
+    $errCode = '';
+    if (!empty($data['error_messages'][0]) && is_array($data['error_messages'][0])) {
+        $row = $data['error_messages'][0];
+        $detail = (string) ($row['description'] ?? $row['message'] ?? '');
+        $errCode = (string) ($row['code'] ?? $row['error'] ?? '');
     }
-    if (!empty($data['message'])) {
-        return (string) $data['message'];
+    if ($detail === '' && !empty($data['message'])) {
+        $detail = (string) $data['message'];
+    }
+    $authFail = str_contains(strtolower($detail), 'authorization')
+        || str_contains(strtolower($errCode), 'authorization')
+        || (int) ($res['code'] ?? 0) === 401;
+    if ($authFail) {
+        $env = pagseguro_env() === 'production' ? 'produção' : 'sandbox';
+        return 'O PagBank recusou o token neste ambiente (' . $env . '). '
+            . 'Use o token do mesmo ambiente: sandbox no Portal do Desenvolvedor (Tokens), '
+            . 'produção em Vendas → Integrações. Cole só o token, sem a palavra Bearer.';
+    }
+    if ($detail !== '') {
+        return $detail;
     }
     $code = (int) ($res['code'] ?? 0);
-    if ($code === 401) {
-        return 'Token recusado. Confira o ambiente (sandbox ou produção) e gere um token novo.';
-    }
     if ($code === 0) {
         return 'Não foi possível falar com o PagSeguro.';
     }
@@ -136,15 +177,33 @@ function pagseguro_error_message(array $res): string
 
 function pagseguro_test_token(): array
 {
-    $res = pagseguro_request('GET', '/checkouts/CHEC_00000000-0000-0000-0000-000000000000');
+    $path = '/checkouts/CHEC_00000000-0000-0000-0000-000000000000';
+    $current = pagseguro_env();
+    $res = pagseguro_request('GET', $path);
     $code = (int) ($res['code'] ?? 0);
-    if ($code === 401 || $code === 403) {
+    $authFail = $code === 401 || $code === 403
+        || str_contains(strtolower(json_encode($res['data'] ?? []) ?: ''), 'authorization');
+    if ($authFail) {
+        $otherBase = $current === 'production'
+            ? 'https://sandbox.api.pagseguro.com'
+            : 'https://api.pagseguro.com';
+        $other = pagseguro_request_base($otherBase, 'GET', $path);
+        $otherCode = (int) ($other['code'] ?? 0);
+        $otherAuth = $otherCode === 401 || $otherCode === 403
+            || str_contains(strtolower(json_encode($other['data'] ?? []) ?: ''), 'authorization');
+        if (!$otherAuth && $otherCode !== 0) {
+            $hint = $current === 'production' ? 'sandbox' : 'produção';
+            return [
+                'ok' => false,
+                'message' => 'Este token não vale no ambiente atual. Troque para ' . $hint . ' e salve de novo.',
+            ];
+        }
         return ['ok' => false, 'message' => pagseguro_error_message($res)];
     }
     if ($code === 0 && ($res['error'] ?? '') !== '') {
         return ['ok' => false, 'message' => pagseguro_error_message($res)];
     }
-    $env = pagseguro_env() === 'production' ? 'produção' : 'sandbox';
+    $env = $current === 'production' ? 'produção' : 'sandbox';
     return ['ok' => true, 'message' => 'Token aceito no ambiente ' . $env . '.'];
 }
 
@@ -226,9 +285,7 @@ function mark_payment_paid(array $payment, array $raw = []): void
     db()->prepare(
         'UPDATE payments SET status = ?, paid_at = ?, raw = ? WHERE id = ?'
     )->execute(['paid', date('Y-m-d H:i:s'), json_encode($raw, JSON_UNESCAPED_UNICODE), $id]);
-    db()->prepare(
-        'UPDATE stores SET billing_status = ?, paid_until = ? WHERE id = ?'
-    )->execute(['em_dia', $until, $storeId]);
+    subscription_on_payment_paid($storeId);
 }
 
 function pagseguro_cron_key(): string
@@ -243,7 +300,7 @@ function pagseguro_cron_key(): string
 
 function pagseguro_cron_url(): string
 {
-    return rtrim(guess_panel_url(), '/') . '/cron/pagseguro?key=' . rawurlencode(pagseguro_cron_key());
+    return rtrim(guess_panel_url(), '/') . '/cron/pagseguro/' . rawurlencode(pagseguro_cron_key());
 }
 
 function pagseguro_auto_enabled(): bool
@@ -310,8 +367,8 @@ function store_due_for_auto_charge(array $store): bool
     if ((int) ($store['auto_billing'] ?? 1) !== 1) {
         return false;
     }
-    $bill = (string) ($store['billing_status'] ?? 'em_dia');
-    if (in_array($bill, ['cortesia', 'cancelado'], true)) {
+    $bill = normalize_subscription_status((string) ($store['billing_status'] ?? 'ativa'));
+    if (in_array($bill, ['cortesia', 'cancelada', 'suspensa', 'encerrada'], true)) {
         return false;
     }
     if (money_to_cents((string) ($store['monthly_fee'] ?? '')) < 100) {
@@ -333,26 +390,7 @@ function store_due_for_auto_charge(array $store): bool
 
 function pagseguro_mark_overdue(): int
 {
-    $n = 0;
-    $today = date('Y-m-d');
-    foreach (all_stores() as $store) {
-        $bill = (string) ($store['billing_status'] ?? 'em_dia');
-        if (!in_array($bill, ['em_dia', 'atrasado'], true)) {
-            continue;
-        }
-        if ((int) ($store['active'] ?? 1) !== 1) {
-            continue;
-        }
-        $until = trim((string) ($store['paid_until'] ?? ''));
-        if ($until === '' || $until >= $today) {
-            continue;
-        }
-        if ($bill !== 'atrasado') {
-            db()->prepare("UPDATE stores SET billing_status = 'atrasado' WHERE id = ?")->execute([(int) $store['id']]);
-            $n++;
-        }
-    }
-    return $n;
+    return subscription_mark_overdue();
 }
 
 function pagseguro_create_charge(int $storeId, bool $force = false): array
@@ -379,7 +417,7 @@ function pagseguro_create_charge(int $storeId, bool $force = false): array
     $recurring = (int) ($store['auto_billing'] ?? 1) === 1;
     $reference = 'wl-' . $storeId . '-' . bin2hex(random_bytes(6));
     $notify = pagseguro_webhook_url();
-    $return = rtrim(guess_panel_url(), '/') . '/admin?tab=clientes&id=' . $storeId;
+    $return = rtrim(guess_panel_url(), '/') . admin_url('clientes', $storeId);
     $exp = (new DateTimeImmutable('now', new DateTimeZone('America/Sao_Paulo')))->modify('+7 days');
     $itemName = 'Wi-Fi da loja ' . $meta['label'] . ' — ' . (string) $store['name'];
     if (strlen($itemName) > 100) {
@@ -451,6 +489,7 @@ function pagseguro_create_charge(int $storeId, bool $force = false): array
         json_encode($data, JSON_UNESCAPED_UNICODE),
         date('Y-m-d H:i:s'),
     ]);
+    subscription_on_charge_created($storeId);
     return [
         'pay_url' => $payUrl,
         'checkout_id' => $checkoutId,
@@ -463,12 +502,11 @@ function pagseguro_create_charge(int $storeId, bool $force = false): array
 function pagseguro_run_billing(): array
 {
     pagseguro_expire_stale_pending();
-    $overdue = pagseguro_mark_overdue();
     $created = 0;
     $errors = [];
     if (!pagseguro_configured() || !pagseguro_auto_enabled()) {
         set_setting('pagseguro_last_run', date('c'));
-        return ['created' => 0, 'overdue' => $overdue, 'errors' => $errors];
+        return ['created' => 0, 'overdue' => 0, 'errors' => $errors];
     }
     foreach (all_stores() as $store) {
         if (!store_due_for_auto_charge($store)) {
@@ -482,7 +520,7 @@ function pagseguro_run_billing(): array
         }
     }
     set_setting('pagseguro_last_run', date('c'));
-    return ['created' => $created, 'overdue' => $overdue, 'errors' => $errors];
+    return ['created' => $created, 'overdue' => 0, 'errors' => $errors];
 }
 
 function pagseguro_maybe_run_billing(): void
@@ -495,7 +533,7 @@ function pagseguro_maybe_run_billing(): void
         return;
     }
     try {
-        pagseguro_run_billing();
+        subscription_run_daily();
     } catch (Throwable $e) {
         // o cron e o webhook tentam de novo
     }
@@ -529,9 +567,7 @@ function pagseguro_record_paid_store(int $storeId, string $reference, array $raw
     ]);
     $store = find_store($storeId);
     if ($store) {
-        db()->prepare(
-            'UPDATE stores SET billing_status = ?, paid_until = ? WHERE id = ?'
-        )->execute(['em_dia', next_paid_until($store), $storeId]);
+        subscription_on_payment_paid($storeId);
     }
 }
 

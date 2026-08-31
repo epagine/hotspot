@@ -3,7 +3,7 @@
 declare(strict_types=1);
 
 if (is_installed() && $_SERVER['REQUEST_METHOD'] !== 'POST') {
-    header('Location: /admin/login');
+    header('Location: ' . admin_url('entrar'));
     exit;
 }
 
@@ -50,35 +50,29 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <title>Criar painel · Wi-Fi da loja</title>
     <link rel="stylesheet" href="/assets/app.css">
 </head>
-<body class="saas">
-<header class="saas-bar">
-    <div class="saas-bar-inner">
-        <div class="saas-brand">
-            <span class="saas-mark">WL</span>
-            <div>
-                <p class="eyebrow">Wi-Fi da loja</p>
-                <strong>Gestão</strong>
-            </div>
+<body class="app-auth">
+<section class="card">
+    <div class="app-brand">
+        <span class="app-mark">WL</span>
+        <div>
+            <strong>Wi-Fi da loja</strong>
+            <small>Painel de gestão</small>
         </div>
     </div>
-</header>
-<main class="saas-main">
-<section class="card card-narrow">
     <?php if ($ok): ?>
         <h1>Painel pronto</h1>
-        <p class="lead">Cadastre as lojas, acompanhe o PC e o financeiro. O hotspot em si roda no Windows da loja.</p>
-        <a class="btn" href="/admin/login">Entrar</a>
+        <p class="lead">Cadastre as lojas e acompanhe o PC e o financeiro.</p>
+        <a class="btn" href="<?= h(admin_url('entrar')) ?>">Entrar</a>
     <?php else: ?>
         <h1>Criar painel</h1>
-        <p class="lead">Somente a conta de gestão. SSID, senha do Wi-Fi e portal ficam no instalador da loja.</p>
+        <p class="lead">Somente a conta de gestão. O hotspot fica no PC da loja.</p>
         <?php if ($error): ?><p class="alert"><?= h($error) ?></p><?php endif; ?>
-        <form method="post" class="form">
+        <form method="post" action="/instalar" class="form">
             <label>Usuário<input name="admin_user" value="admin" required></label>
             <label>Senha<input name="admin_pass" type="password" required></label>
             <button class="btn" type="submit">Criar painel</button>
         </form>
     <?php endif; ?>
 </section>
-</main>
 </body>
 </html>

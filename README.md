@@ -6,6 +6,8 @@ O **painel** pode ficar na internet (várias lojas). O **ponto de acesso** conti
 
 Repositório: [github.com/epagine/hotspot](https://github.com/epagine/hotspot)
 
+**Padrões de código:** [docs/PADROES-PROGRAMACAO.md](docs/PADROES-PROGRAMACAO.md)
+
 ## Como funciona
 
 ```

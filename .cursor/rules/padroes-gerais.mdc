@@ -1,0 +1,30 @@
+---
+description: Princípios e arquitetura do Wi-Fi da loja
+alwaysApply: true
+---
+
+# Wi-Fi da loja — regras gerais
+
+Stack: PHP 8.1+ procedural, SQLite, sem framework. Documentação completa: `docs/PADROES-PROGRAMACAO.md`.
+
+## Domínios do painel (não misturar)
+
+- **Clientes** (`stores.php`) — loja, PC, token, `active`, conexão
+- **Assinaturas** (`subscription.php`) — plano, vigência, trial, grace, suspensão
+- **Financeiro** (`pagseguro.php`) — cobranças e pagamentos
+- **Configurações** — conta, PagSeguro, políticas SaaS
+
+## Ao implementar
+
+- Escopo mínimo; sem refatoração não solicitada
+- `declare(strict_types=1);` em todo PHP
+- Texto ao usuário em PT-BR; código em inglês
+- Mutations: POST handler → `flash_*` → redirect (nunca render HTML no POST)
+- Links admin: sempre `admin_url()`, nunca `?tab=`
+- HTML dinâmico: `h()`; JSON: `json_out()`
+- Nova coluna DB: `schema.sql` + `ensure_*` migration
+- Nova seção admin: `index.php` + `admin_url()` + handler `admin-{x}.php` + nav em `admin.php`
+
+## Não versionar
+
+`app/config.php`, `storage/hotspot.sqlite`, tokens e credenciais reais.

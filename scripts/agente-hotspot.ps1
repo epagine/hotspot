@@ -366,7 +366,7 @@ function Sync-Cloud {
     if (Test-Path $StatusFile) {
         try { $statusObj = Get-Content $StatusFile -Raw | ConvertFrom-Json } catch {}
     }
-    $url = ([string]$cfg.panel_url).TrimEnd("/") + "/agent/sync"
+    $url = ([string]$cfg.panel_url).TrimEnd("/") + "/agente/sincronizar"
     $payload = @{
         token          = [string]$cfg.token
         ack_command_id = $script:LastAck
@@ -406,7 +406,7 @@ function Sync-Cloud {
         if ($resp.has_brand) {
             $brandDir = Join-Path $Storage "brand"
             New-Item -ItemType Directory -Path $brandDir -Force | Out-Null
-            $brandUrl = ([string]$cfg.panel_url).TrimEnd("/") + "/agent/brand?token=" + [uri]::EscapeDataString([string]$cfg.token)
+            $brandUrl = ([string]$cfg.panel_url).TrimEnd("/") + "/agente/marca/" + [uri]::EscapeDataString([string]$cfg.token)
             try {
                 Invoke-WebRequest -Uri $brandUrl -OutFile (Join-Path $brandDir "1.png") -TimeoutSec 8 -UseBasicParsing | Out-Null
             } catch {}

@@ -58,7 +58,7 @@ $brand = brand_image_url();
         <p class="lead">Publique um status no WhatsApp dizendo que está aqui. Use o texto e a arte abaixo — o código prova que foi nesta visita.</p>
         <p class="code-big"><?= h($client['status_code']) ?></p>
         <blockquote class="status-preview"><?= h($client['status_text']) ?></blockquote>
-        <img class="story-img" src="/story/<?= h($client['status_code']) ?>.png" alt="Arte para o status">
+        <img class="story-img" src="/arte/<?= h($client['status_code']) ?>.png" alt="Arte para o status">
         <ol class="steps">
             <li>Toque em <strong>Publicar no WhatsApp</strong></li>
             <li>Escolha <strong>Status</strong> (não um contato)</li>

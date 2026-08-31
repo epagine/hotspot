@@ -1,0 +1,31 @@
+---
+description: Roteamento e URLs amigáveis
+globs: "{index.php,app/helpers.php,app/pages/admin*.php}"
+alwaysApply: false
+---
+
+# Rotas e URLs
+
+## Canônicas (PT)
+
+`/admin/clientes/{id}`, `/admin/assinaturas/{id}`, `/admin/financeiro/{id}`,
+`/admin/configuracoes/{conta|integracao|politicas}`, `/admin/entrar`, `/agente/sincronizar`
+
+## Ao adicionar rota
+
+1. `case` em `index.php` — GET define `$_GET['tab']` + `require admin.php`; POST define `$GLOBALS['route_id']` + handler
+2. Entrada em `admin_url()` e `admin_legacy_url()` se houver query legada
+3. POST-only sem GET → redirect 301 para página equivalente
+
+## Builder
+
+```php
+admin_url('assinaturas', $id);
+admin_url('configuracoes', 0, 'politicas');
+```
+
+Nunca hardcodar `/admin?tab=` em PHP, JS ou forms.
+
+## Legacy
+
+Rotas EN (`/admin/login`, `/agent/sync`) → redirect 301 para PT.

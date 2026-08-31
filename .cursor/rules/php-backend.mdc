@@ -1,0 +1,43 @@
+---
+description: Padrões PHP para app/ e index.php
+globs: "{app/**/*.php,index.php}"
+alwaysApply: false
+---
+
+# PHP backend
+
+## Arquivos
+
+| Onde | Conteúdo |
+|------|----------|
+| `app/{modulo}.php` | Funções de domínio reutilizáveis |
+| `app/pages/admin.php` | Shell + HTML do painel |
+| `app/pages/admin-*.php` | Handlers POST (sem template) |
+| `app/api/*.php` | JSON endpoints |
+| `index.php` | Roteamento apenas |
+
+## Handlers POST — esqueleto
+
+```php
+require_admin();
+if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+    header('Location: ' . admin_url('recurso'));
+    exit;
+}
+$id = (int) ($_POST['id'] ?? $GLOBALS['route_id'] ?? 0);
+// validar → chamar função do módulo → $_SESSION['flash_ok'] ou flash_error
+header('Location: ' . admin_url('recurso', $id));
+exit;
+```
+
+## SQL
+
+- `db()` singleton; prepared statements; `FETCH_ASSOC`
+- Settings: `setting()` / `set_setting()` — owner vs store via `is_owner_key()`
+- Status assinatura: `normalize_subscription_status()` antes de comparar
+
+## Erros
+
+- Domínio: `throw new RuntimeException('msg')`
+- Handler: catch → `flash_error` → redirect
+- API: `json_out(['ok' => false, 'error' => 'codigo'], 4xx)`

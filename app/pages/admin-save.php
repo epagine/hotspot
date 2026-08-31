@@ -5,7 +5,7 @@ declare(strict_types=1);
 require_admin();
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-    header('Location: /admin?tab=config');
+    header('Location: ' . admin_url('conta'));
     exit;
 }
 
@@ -22,4 +22,4 @@ try {
 } catch (Throwable $e) {
     $_SESSION['flash_error'] = $e->getMessage();
 }
-header('Location: /admin?tab=config');
+header('Location: ' . admin_url('conta'));

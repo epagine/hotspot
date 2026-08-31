@@ -109,7 +109,27 @@ function brand_image_url(): string
     if (!is_file($path)) {
         return '';
     }
-    return '/brand.png?v=' . filemtime($path);
+    return '/marca/' . filemtime($path) . '.png';
+}
+
+function output_brand_png(?int $storeId = null): void
+{
+    if ($storeId !== null && $storeId > 0) {
+        $GLOBALS['force_store_id'] = $storeId;
+    }
+    $brand = brand_image_path();
+    if (!is_file($brand)) {
+        http_response_code(404);
+        return;
+    }
+    header('Content-Type: image/png');
+    header('Cache-Control: private, max-age=3600');
+    readfile($brand);
+}
+
+function is_http_post(): bool
+{
+    return ($_SERVER['REQUEST_METHOD'] ?? '') === 'POST';
 }
 
 function save_brand_upload(?array $file): void
@@ -531,9 +551,78 @@ function default_dns_allowlist(): string
 function require_admin(): void
 {
     if (empty($_SESSION['admin'])) {
-        header('Location: /admin/login');
+        header('Location: /admin/entrar');
         exit;
     }
+}
+
+function admin_url(string $section = 'clientes', int $id = 0, string $sub = ''): string
+{
+    return match ($section) {
+        'entrar', 'login' => '/admin/entrar',
+        'sair', 'logout' => '/admin/sair',
+        'conta' => '/admin/configuracoes/conta',
+        'configuracoes' => match ($sub) {
+            'integracao', 'pagseguro' => '/admin/configuracoes/integracao',
+            'politicas' => '/admin/configuracoes/politicas',
+            default => '/admin/configuracoes/conta',
+        },
+        'assinaturas' => $id > 0 ? '/admin/assinaturas/' . $id : '/admin/assinaturas',
+        'instalador' => $sub === 'baixar' ? '/admin/instalador/baixar' : '/admin/instalador',
+        'financeiro' => match ($sub) {
+            'pagseguro' => '/admin/configuracoes/integracao',
+            default => $id > 0 ? '/admin/financeiro/' . $id : '/admin/financeiro',
+        },
+        default => $id > 0 ? '/admin/clientes/' . $id : '/admin/clientes',
+    };
+}
+
+function admin_legacy_url(): ?string
+{
+    $tab = preg_replace('/[^a-z]/', '', (string) ($_GET['tab'] ?? ''));
+    $id = (int) ($_GET['id'] ?? 0);
+    $sec = preg_replace('/[^a-z]/', '', (string) ($_GET['sec'] ?? ''));
+    $loja = (int) ($_GET['loja'] ?? 0);
+    if ($tab === '' && $id === 0 && $sec === '' && $loja === 0) {
+        return null;
+    }
+    if (in_array($tab, ['pagamentos'], true)) {
+        $tab = 'financeiro';
+    }
+    if (in_array($tab, ['config', 'configuracoes'], true)) {
+        if ($sec === 'pagseguro') {
+            return admin_url('configuracoes', 0, 'integracao');
+        }
+        if ($sec === 'politicas') {
+            return admin_url('configuracoes', 0, 'politicas');
+        }
+        return admin_url('configuracoes', 0, $sec === 'integracao' ? 'integracao' : 'conta');
+    }
+    if ($tab === 'clientes' || ($tab === '' && $id > 0)) {
+        return admin_url('clientes', $id);
+    }
+    if ($tab === 'financeiro' || ($tab === '' && ($loja > 0 || $sec === 'pagseguro'))) {
+        if ($sec === 'pagseguro') {
+            return admin_url('configuracoes', 0, 'integracao');
+        }
+        return admin_url('financeiro', $loja > 0 ? $loja : 0);
+    }
+    if ($tab === 'instalador') {
+        return admin_url('instalador');
+    }
+    if ($tab === 'assinaturas') {
+        return admin_url('assinaturas', $id);
+    }
+    if ($tab === 'conta') {
+        return admin_url('conta');
+    }
+    return admin_url();
+}
+
+function admin_redirect(string $url, int $code = 302): void
+{
+    header('Location: ' . $url, true, $code);
+    exit;
 }
 
 function h(?string $value): string
@@ -567,4 +656,5 @@ function installer_setup_path(): ?string
 }
 
 require_once __DIR__ . '/stores.php';
+require_once __DIR__ . '/subscription.php';
 require_once __DIR__ . '/pagseguro.php';

@@ -30,14 +30,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     } catch (Throwable $e) {
         $_SESSION['flash_error'] = $e->getMessage();
     }
-    header('Location: /admin?tab=instalador');
+    header('Location: ' . admin_url('instalador'));
     exit;
 }
 
 $path = installer_setup_path();
 if ($path === null) {
     $_SESSION['flash_error'] = 'Ainda não há instalador neste painel. Envie o WiFiDaLoja-Setup.exe em Instalador.';
-    header('Location: /admin?tab=instalador');
+    header('Location: ' . admin_url('instalador'));
     exit;
 }
 

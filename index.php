@@ -12,8 +12,8 @@ if ($path === '/') {
     $path = '/';
 }
 
-if (!is_installed() && !str_starts_with($path, '/install') && !str_starts_with($path, '/assets')) {
-    header('Location: /install');
+if (!is_installed() && !str_starts_with($path, '/instalar') && !str_starts_with($path, '/install') && !str_starts_with($path, '/assets')) {
+    header('Location: /instalar');
     exit;
 }
 
@@ -23,6 +23,12 @@ if (is_installed()) {
 
 switch (true) {
     case $path === '/install':
+        if (!is_http_post()) {
+            admin_redirect('/instalar', 301);
+        }
+        require __DIR__ . '/app/pages/install.php';
+        break;
+    case $path === '/instalar':
         require __DIR__ . '/app/pages/install.php';
         break;
     case $path === '/assets/app.css':
@@ -37,65 +43,218 @@ switch (true) {
         header('Content-Type: application/javascript; charset=utf-8');
         readfile(__DIR__ . '/public/assets/admin.js');
         break;
+    case $path === '/sessao':
     case $path === '/api/session':
         require __DIR__ . '/app/api/session.php';
         break;
+    case $path === '/confirmar':
     case $path === '/api/confirm':
         require __DIR__ . '/app/api/confirm.php';
         break;
+    case $path === '/agente/sincronizar':
     case $path === '/agent/sync':
         require __DIR__ . '/app/api/agent-sync.php';
+        break;
+    case preg_match('#^/agente/marca/([a-fA-F0-9]+)$#', $path, $m) === 1:
+        $GLOBALS['agent_token'] = $m[1];
+        require __DIR__ . '/app/pages/agent-brand.php';
         break;
     case $path === '/agent/brand':
         require __DIR__ . '/app/pages/agent-brand.php';
         break;
+    case preg_match('#^/marca(?:/\d+)?\.png$#', $path) === 1:
     case $path === '/brand.png':
-        if (!empty($_SESSION['admin']) && (int) ($_GET['store'] ?? 0) > 0) {
-            $GLOBALS['force_store_id'] = (int) $_GET['store'];
-        }
-        $brand = brand_image_path();
-        if (!is_file($brand)) {
-            http_response_code(404);
-            break;
-        }
-        header('Content-Type: image/png');
-        header('Cache-Control: private, max-age=3600');
-        readfile($brand);
+        $storeId = !empty($_SESSION['admin']) ? (int) ($_GET['store'] ?? 0) : 0;
+        output_brand_png($storeId > 0 ? $storeId : null);
         break;
-    case preg_match('#^/story/([A-Z0-9]+)\.png$#', $path, $m) === 1:
+    case preg_match('#^/admin/clientes/(\d+)/marca\.png$#', $path, $m) === 1:
+        if (empty($_SESSION['admin'])) {
+            admin_redirect(admin_url('entrar'));
+        }
+        output_brand_png((int) $m[1]);
+        break;
+    case preg_match('#^/(?:arte|story)/([A-Z0-9]+)\.png$#', $path, $m) === 1:
         require __DIR__ . '/app/pages/story.php';
         render_story($m[1]);
         break;
     case $path === '/admin' || $path === '/admin/':
-        require __DIR__ . '/app/pages/admin.php';
+        $legacy = admin_legacy_url();
+        admin_redirect($legacy ?? admin_url(), $legacy ? 301 : 302);
         break;
     case $path === '/admin/login':
+        admin_redirect(admin_url('entrar'), 301);
+        break;
+    case $path === '/admin/entrar':
         require __DIR__ . '/app/pages/admin-login.php';
         break;
     case $path === '/admin/logout':
+        admin_redirect(admin_url('sair'), 301);
+        break;
+    case $path === '/admin/sair':
         $_SESSION = [];
         session_destroy();
-        header('Location: /admin/login');
+        admin_redirect(admin_url('entrar'));
         break;
     case $path === '/admin/save':
+        if (!is_http_post()) {
+            admin_redirect(admin_url('conta'), 301);
+        }
         require __DIR__ . '/app/pages/admin-save.php';
         break;
+    case $path === '/admin/estado':
     case $path === '/admin/status':
         require __DIR__ . '/app/api/admin-status.php';
         break;
     case $path === '/admin/stores':
+        if (!is_http_post()) {
+            admin_redirect(admin_url(), 301);
+        }
         require __DIR__ . '/app/pages/admin-stores.php';
         break;
-    case $path === '/admin/instalador':
-        require __DIR__ . '/app/pages/admin-instalador.php';
-        break;
     case $path === '/admin/pagseguro':
+        if (!is_http_post()) {
+            admin_redirect(admin_url('configuracoes', 0, 'integracao'), 301);
+        }
         require __DIR__ . '/app/pages/admin-pagseguro.php';
         break;
+    case $path === '/admin/instalador/baixar':
+        require __DIR__ . '/app/pages/admin-instalador.php';
+        break;
+    case $path === '/admin/instalador':
+        if (is_http_post()) {
+            require __DIR__ . '/app/pages/admin-instalador.php';
+            break;
+        }
+        $_GET['tab'] = 'instalador';
+        require __DIR__ . '/app/pages/admin.php';
+        break;
+    case $path === '/admin/conta':
+        if (is_http_post()) {
+            require __DIR__ . '/app/pages/admin-save.php';
+            break;
+        }
+        admin_redirect(admin_url('conta'), 301);
+        break;
+    case $path === '/admin/configuracoes':
+        admin_redirect(admin_url('configuracoes', 0, 'conta'));
+        break;
+    case $path === '/admin/configuracoes/conta':
+        if (is_http_post()) {
+            require __DIR__ . '/app/pages/admin-save.php';
+            break;
+        }
+        $_GET['tab'] = 'configuracoes';
+        $_GET['sec'] = 'conta';
+        require __DIR__ . '/app/pages/admin.php';
+        break;
+    case $path === '/admin/configuracoes/pagseguro':
+        admin_redirect(admin_url('configuracoes', 0, 'integracao'), 301);
+        break;
+    case $path === '/admin/configuracoes/integracao':
+        if (is_http_post()) {
+            require __DIR__ . '/app/pages/admin-pagseguro.php';
+            break;
+        }
+        $_GET['tab'] = 'configuracoes';
+        $_GET['sec'] = 'integracao';
+        unset($_GET['loja'], $_GET['id']);
+        require __DIR__ . '/app/pages/admin.php';
+        break;
+    case $path === '/admin/financeiro/pagseguro':
+        if (is_http_post()) {
+            require __DIR__ . '/app/pages/admin-pagseguro.php';
+            break;
+        }
+        admin_redirect(admin_url('configuracoes', 0, 'integracao'), 301);
+        break;
+    case preg_match('#^/admin/financeiro(?:/(\d+))?$#', $path, $m) === 1:
+        $loja = (int) ($m[1] ?? 0);
+        if (is_http_post() && (string) ($_POST['do'] ?? '') === 'charge') {
+            $GLOBALS['route_id'] = $loja;
+            if ($loja > 0 && (int) ($_POST['id'] ?? 0) === 0) {
+                $_POST['id'] = (string) $loja;
+            }
+            require __DIR__ . '/app/pages/admin-pagseguro.php';
+            break;
+        }
+        if (($_GET['sec'] ?? '') === 'pagseguro') {
+            admin_redirect(admin_url('configuracoes', 0, 'integracao'), 301);
+        }
+        $loja = (int) ($m[1] ?? $_GET['loja'] ?? 0);
+        if ($loja > 0 && empty($m[1])) {
+            admin_redirect(admin_url('financeiro', $loja), 301);
+        }
+        $_GET['tab'] = 'financeiro';
+        $_GET['sec'] = 'cobrancas';
+        if ($loja > 0) {
+            $_GET['loja'] = (string) $loja;
+        } else {
+            unset($_GET['loja']);
+        }
+        unset($_GET['id']);
+        require __DIR__ . '/app/pages/admin.php';
+        break;
+    case preg_match('#^/admin/assinaturas(?:/(\d+))?$#', $path, $m) === 1:
+        $id = (int) ($m[1] ?? 0);
+        if (is_http_post()) {
+            $GLOBALS['route_id'] = $id;
+            if ($id > 0 && (int) ($_POST['id'] ?? 0) === 0) {
+                $_POST['id'] = (string) $id;
+            }
+            require __DIR__ . '/app/pages/admin-subscription.php';
+            break;
+        }
+        $id = (int) ($m[1] ?? $_GET['id'] ?? 0);
+        if ($id > 0 && empty($m[1])) {
+            admin_redirect(admin_url('assinaturas', $id), 301);
+        }
+        $_GET['tab'] = 'assinaturas';
+        if ($id > 0) {
+            $_GET['id'] = (string) $id;
+        } else {
+            unset($_GET['id']);
+        }
+        require __DIR__ . '/app/pages/admin.php';
+        break;
+    case $path === '/admin/configuracoes/politicas':
+        if (is_http_post()) {
+            require __DIR__ . '/app/pages/admin-policies.php';
+            break;
+        }
+        $_GET['tab'] = 'configuracoes';
+        $_GET['sec'] = 'politicas';
+        require __DIR__ . '/app/pages/admin.php';
+        break;
+    case preg_match('#^/admin/clientes(?:/(\d+))?$#', $path, $m) === 1:
+        $id = (int) ($m[1] ?? 0);
+        if (is_http_post()) {
+            $GLOBALS['route_id'] = $id;
+            if ($id > 0 && (int) ($_POST['id'] ?? 0) === 0) {
+                $_POST['id'] = (string) $id;
+            }
+            require __DIR__ . '/app/pages/admin-stores.php';
+            break;
+        }
+        $id = (int) ($m[1] ?? $_GET['id'] ?? 0);
+        if ($id > 0 && empty($m[1])) {
+            admin_redirect(admin_url('clientes', $id), 301);
+        }
+        $_GET['tab'] = 'clientes';
+        if ($id > 0) {
+            $_GET['id'] = (string) $id;
+        } else {
+            unset($_GET['id']);
+        }
+        require __DIR__ . '/app/pages/admin.php';
+        break;
+    case $path === '/notificacoes/pagbank':
     case $path === '/webhooks/pagbank':
         require __DIR__ . '/app/pages/webhook-pagbank.php';
         break;
-    case $path === '/cron/pagseguro':
+    case preg_match('#^/cron/pagseguro(?:/([a-fA-F0-9]+))?$#', $path, $m) === 1:
+        if (!empty($m[1])) {
+            $GLOBALS['cron_key'] = $m[1];
+        }
         require __DIR__ . '/app/pages/cron-pagseguro.php';
         break;
     case in_array($path, [
@@ -110,9 +269,17 @@ switch (true) {
     ], true):
         require __DIR__ . '/app/pages/captive.php';
         break;
+    case $path === '/wifi':
+    case $path === '/portal':
+        if (!is_hotspot_lan()) {
+            header('Location: ' . admin_url());
+            exit;
+        }
+        require __DIR__ . '/app/pages/portal.php';
+        break;
     default:
         if (!is_hotspot_lan()) {
-            header('Location: /admin');
+            header('Location: ' . admin_url());
             exit;
         }
         require __DIR__ . '/app/pages/portal.php';
