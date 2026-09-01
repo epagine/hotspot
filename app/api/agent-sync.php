@@ -35,8 +35,12 @@ if (!empty($body['ack_command_id'])) {
 }
 
 $command = peek_store_command($sid);
-$sr = subscription_row($store);
 $panelBase = rtrim(guess_panel_url(), '/');
+$subPayload = store_subscription_payload($store);
+$companyId = (int) ($store['company_id'] ?? 0);
+$appHotspotUrl = $companyId > 0
+    ? $panelBase . '/app?tab=hotspots&id=' . $sid
+    : $panelBase . '/admin/clientes/' . $sid;
 $cfg = [
     'store_name' => trim((string) ($store['name'] ?? '')) !== ''
         ? (string) $store['name']
@@ -67,22 +71,25 @@ json_out([
     'ok' => true,
     'store_id' => $sid,
     'store' => (string) $store['name'],
+    'company_id' => $companyId > 0 ? $companyId : null,
     'config' => $cfg,
     'subscription' => [
-        'billing_status' => $sr['billing_status'],
-        'billing_label' => $sr['billing_label'],
-        'plan' => $sr['plan'],
-        'plan_label' => $sr['plan_label'],
-        'paid_until' => $sr['paid_until'],
-        'trial_ends_at' => $sr['trial_ends_at'],
-        'cycle_amount' => $sr['cycle_amount'],
-        'active' => $sr['active'],
-        'service_allowed' => subscription_service_allowed($sr['billing_status']),
+        'scope' => $subPayload['scope'],
+        'billing_status' => $subPayload['billing_status'],
+        'billing_label' => $subPayload['billing_label'],
+        'plan' => $subPayload['plan'],
+        'plan_label' => $subPayload['plan_label'],
+        'paid_until' => $subPayload['paid_until'],
+        'trial_ends_at' => $subPayload['trial_ends_at'],
+        'cycle_amount' => $subPayload['cycle_amount'],
+        'active' => $subPayload['active'],
+        'service_allowed' => $subPayload['service_allowed'],
     ],
     'links' => [
         'panel' => $panelBase,
-        'admin' => $panelBase . '/admin/clientes/' . $sid,
+        'admin' => $appHotspotUrl,
         'client' => $panelBase . client_url(),
+        'portal' => $panelBase . '/portal/' . rawurlencode((string) $store['token']),
     ],
     'command' => $command,
     'authorized' => array_values(array_unique($authorized)),
