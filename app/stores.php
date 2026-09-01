@@ -368,6 +368,19 @@ function find_store_by_token(string $token): ?array
     return $row ?: null;
 }
 
+function local_store_portal_url(): ?string
+{
+    $token = trim((string) (cloud_config()['token'] ?? ''));
+    if ($token === '') {
+        $store = find_store(local_store_id());
+        $token = trim((string) ($store['token'] ?? ''));
+    }
+    if ($token === '') {
+        return null;
+    }
+    return '/portal/' . rawurlencode($token);
+}
+
 function local_store_id(): int
 {
     $cfg = cloud_config();

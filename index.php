@@ -247,6 +247,10 @@ switch (true) {
             require __DIR__ . '/app/pages/admin-save.php';
             break;
         }
+        if ($dest = saas_panel_url_for_user()) {
+            header('Location: ' . ($dest === '/super' ? '/super?tab=configuracoes' : '/app?tab=empresa'), true, 301);
+            exit;
+        }
         $_GET['tab'] = 'configuracoes';
         $_GET['sec'] = 'conta';
         require __DIR__ . '/app/pages/admin.php';
@@ -382,6 +386,11 @@ switch (true) {
     case $path === '/':
     case $path === '/inicio':
         if (is_hotspot_lan()) {
+            $portalUrl = local_store_portal_url();
+            if ($portalUrl !== null) {
+                header('Location: ' . $portalUrl);
+                exit;
+            }
             require __DIR__ . '/app/pages/portal.php';
             break;
         }
@@ -393,11 +402,21 @@ switch (true) {
             header('Location: /');
             exit;
         }
+        $portalUrl = local_store_portal_url();
+        if ($portalUrl !== null) {
+            header('Location: ' . $portalUrl);
+            exit;
+        }
         require __DIR__ . '/app/pages/portal.php';
         break;
     default:
         if (!is_hotspot_lan()) {
             header('Location: /');
+            exit;
+        }
+        $portalUrl = local_store_portal_url();
+        if ($portalUrl !== null) {
+            header('Location: ' . $portalUrl);
             exit;
         }
         require __DIR__ . '/app/pages/portal.php';
