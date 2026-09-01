@@ -1,3 +1,4 @@
+.env
 app/config.php
 storage/hotspot.sqlite
 storage/hotspot.sqlite-wal
