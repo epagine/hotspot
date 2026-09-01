@@ -246,6 +246,45 @@ function store_payments(int $storeId, int $limit = 8): array
     return $stmt->fetchAll() ?: [];
 }
 
+function company_payments(int $companyId, int $limit = 12): array
+{
+    $stmt = db()->prepare('SELECT * FROM payments WHERE company_id = ? ORDER BY id DESC LIMIT ' . max(1, $limit));
+    $stmt->execute([$companyId]);
+    return $stmt->fetchAll() ?: [];
+}
+
+function company_id_from_reference(string $reference): int
+{
+    if (preg_match('/^wlc-(\d+)-/', $reference, $m)) {
+        return (int) $m[1];
+    }
+    return 0;
+}
+
+function company_pending_payment(int $companyId): ?array
+{
+    $stmt = db()->prepare(
+        "SELECT * FROM payments WHERE company_id = ? AND status = 'pending' ORDER BY id DESC LIMIT 1"
+    );
+    $stmt->execute([$companyId]);
+    $row = $stmt->fetch();
+    return $row ?: null;
+}
+
+function pagseguro_expire_pending_company(int $companyId): void
+{
+    $stmt = db()->prepare("SELECT * FROM payments WHERE company_id = ? AND status = 'pending'");
+    $stmt->execute([$companyId]);
+    foreach ($stmt->fetchAll() ?: [] as $row) {
+        $cid = (string) ($row['checkout_id'] ?? '');
+        if ($cid !== '') {
+            pagseguro_request('POST', '/checkouts/' . rawurlencode($cid) . '/inactivate');
+        }
+        db()->prepare("UPDATE payments SET status = 'expired' WHERE id = ?")->execute([(int) $row['id']]);
+    }
+    company_reconcile_subscription($companyId);
+}
+
 function find_payment_by_reference(string $reference): ?array
 {
     $reference = trim($reference);
@@ -276,15 +315,21 @@ function mark_payment_paid(array $payment, array $raw = []): void
         return;
     }
     $id = (int) $payment['id'];
+    db()->prepare(
+        'UPDATE payments SET status = ?, paid_at = ?, raw = ? WHERE id = ?'
+    )->execute(['paid', date('Y-m-d H:i:s'), json_encode($raw, JSON_UNESCAPED_UNICODE), $id]);
+
+    $companyId = (int) ($payment['company_id'] ?? 0);
+    if ($companyId > 0) {
+        company_on_payment_paid($companyId, (int) ($payment['plan_id'] ?? 0) ?: null);
+        return;
+    }
+
     $storeId = (int) $payment['store_id'];
     $store = find_store($storeId);
     if (!$store) {
         return;
     }
-    $until = next_paid_until($store);
-    db()->prepare(
-        'UPDATE payments SET status = ?, paid_at = ?, raw = ? WHERE id = ?'
-    )->execute(['paid', date('Y-m-d H:i:s'), json_encode($raw, JSON_UNESCAPED_UNICODE), $id]);
     subscription_on_payment_paid($storeId);
 }
 
@@ -322,6 +367,15 @@ function store_id_from_reference(string $reference): int
     return 0;
 }
 
+function billing_id_from_reference(string $reference): array
+{
+    $companyId = company_id_from_reference($reference);
+    if ($companyId > 0) {
+        return ['company_id' => $companyId, 'store_id' => 0];
+    }
+    return ['company_id' => 0, 'store_id' => store_id_from_reference($reference)];
+}
+
 function store_pending_payment(int $storeId): ?array
 {
     $stmt = db()->prepare(
@@ -349,6 +403,7 @@ function pagseguro_expire_pending(int $storeId): void
 function pagseguro_expire_stale_pending(): void
 {
     $storeIds = [];
+    $companyIds = [];
     $stmt = db()->query(
         "SELECT * FROM payments WHERE status = 'pending' AND created_at < datetime('now', '-8 days')"
     );
@@ -358,10 +413,20 @@ function pagseguro_expire_stale_pending(): void
             pagseguro_request('POST', '/checkouts/' . rawurlencode($cid) . '/inactivate');
         }
         db()->prepare("UPDATE payments SET status = 'expired' WHERE id = ?")->execute([(int) $row['id']]);
-        $storeIds[(int) $row['store_id']] = true;
+        $companyId = (int) ($row['company_id'] ?? 0);
+        if ($companyId > 0) {
+            $companyIds[$companyId] = true;
+        } else {
+            $storeIds[(int) $row['store_id']] = true;
+        }
     }
     foreach (array_keys($storeIds) as $storeId) {
-        subscription_reconcile($storeId, 'Cobrança expirada', 'system');
+        if ($storeId > 0) {
+            subscription_reconcile($storeId, 'Cobrança expirada', 'system');
+        }
+    }
+    foreach (array_keys($companyIds) as $companyId) {
+        company_reconcile_subscription($companyId);
     }
 }
 
@@ -505,6 +570,162 @@ function pagseguro_create_charge(int $storeId, bool $force = false): array
     ];
 }
 
+function company_due_for_auto_charge(array $sub, array $company): bool
+{
+    if (($company['status'] ?? '') !== 'active') {
+        return false;
+    }
+    $effective = company_subscription_effective((int) $company['id']) ?? $sub;
+    $status = normalize_subscription_status((string) ($effective['billing_status'] ?? $effective['status'] ?? ''));
+    if (in_array($status, ['cortesia', 'cancelada', 'suspensa', 'encerrada'], true)) {
+        return false;
+    }
+    $cents = (int) ($sub['price_cents'] ?? 0);
+    if ($cents < 100) {
+        return false;
+    }
+    if (company_pending_payment((int) $company['id'])) {
+        return false;
+    }
+    $until = trim((string) ($sub['ends_at'] ?? ''));
+    if ($status === 'trial') {
+        $trialEnds = trim((string) ($sub['trial_ends_at'] ?? ''));
+        if ($trialEnds === '') {
+            return false;
+        }
+        $until = $trialEnds;
+    }
+    if ($until === '') {
+        return $status === 'pendente';
+    }
+    $t = strtotime($until . ' 23:59:59');
+    if ($t === false) {
+        return true;
+    }
+    return $t <= time() + pagseguro_advance_days() * 86400;
+}
+
+function pagseguro_create_company_charge(int $companyId, bool $force = false, ?int $planId = null): array
+{
+    $company = find_company($companyId);
+    if (!$company) {
+        throw new RuntimeException('Empresa não encontrada.');
+    }
+    if (!pagseguro_configured()) {
+        throw new RuntimeException('PagSeguro não configurado. Peça ao administrador da plataforma.');
+    }
+    $sub = company_subscription($companyId);
+    if (!$sub) {
+        throw new RuntimeException('Assinatura não encontrada.');
+    }
+    if ($planId !== null && $planId > 0) {
+        company_change_plan($companyId, $planId);
+        $sub = company_subscription($companyId) ?? $sub;
+    }
+    $cents = (int) ($sub['price_cents'] ?? 0);
+    if ($cents < 100) {
+        throw new RuntimeException('Este plano é gratuito. Escolha um plano pago para gerar cobrança.');
+    }
+    if ($force) {
+        pagseguro_expire_pending_company($companyId);
+    } elseif (company_pending_payment($companyId)) {
+        throw new RuntimeException('Já existe uma cobrança aguardando pagamento.');
+    }
+
+    $planId = (int) ($sub['plan_id'] ?? 0);
+    $reference = 'wlc-' . $companyId . '-' . bin2hex(random_bytes(6));
+    $notify = pagseguro_webhook_url();
+    $return = rtrim(guess_panel_url(), '/') . '/cliente';
+    $exp = (new DateTimeImmutable('now', new DateTimeZone('America/Sao_Paulo')))->modify('+7 days');
+    $itemName = 'Wi-Fi da loja — ' . (string) ($sub['plan_name'] ?? 'Plano') . ' — ' . (string) $company['trade_name'];
+    if (strlen($itemName) > 100) {
+        $itemName = substr($itemName, 0, 100);
+    }
+
+    $payload = [
+        'reference_id' => $reference,
+        'expiration_date' => $exp->format('c'),
+        'customer_modifiable' => true,
+        'items' => [[
+            'reference_id' => 'plano-empresa-' . $companyId,
+            'name' => $itemName,
+            'quantity' => 1,
+            'unit_amount' => $cents,
+        ]],
+        'payment_notification_urls' => [$notify],
+        'notification_urls' => [$notify],
+        'return_url' => $return,
+        'soft_descriptor' => 'WIFIDALOJA',
+        'payment_methods' => [
+            ['type' => 'PIX'],
+            ['type' => 'CREDIT_CARD'],
+            ['type' => 'BOLETO'],
+        ],
+    ];
+
+    $res = pagseguro_request('POST', '/checkouts', $payload);
+    if (!$res['ok']) {
+        throw new RuntimeException(pagseguro_error_message($res));
+    }
+    $data = $res['data'];
+    $payUrl = pagseguro_pay_url($data);
+    $checkoutId = (string) ($data['id'] ?? '');
+    db()->prepare(
+        'INSERT INTO payments (store_id, company_id, plan_id, reference_id, checkout_id, pay_url, amount_cents, status, raw, created_at)
+         VALUES (?,?,?,?,?,?,?,?,?,?)'
+    )->execute([
+        0,
+        $companyId,
+        $planId,
+        $reference,
+        $checkoutId,
+        $payUrl,
+        $cents,
+        'pending',
+        json_encode($data, JSON_UNESCAPED_UNICODE),
+        date('Y-m-d H:i:s'),
+    ]);
+    company_on_charge_created($companyId);
+    return [
+        'pay_url' => $payUrl,
+        'checkout_id' => $checkoutId,
+        'reference_id' => $reference,
+        'amount_cents' => $cents,
+        'recurring' => false,
+    ];
+}
+
+function pagseguro_record_paid_company(int $companyId, string $reference, array $raw, int $planId = 0): void
+{
+    $existing = find_payment_by_reference($reference);
+    if ($existing) {
+        mark_payment_paid($existing, $raw);
+        return;
+    }
+    $cents = (int) ($raw['charges'][0]['amount']['value'] ?? 0);
+    if ($cents <= 0) {
+        $sub = company_subscription($companyId);
+        $cents = (int) ($sub['price_cents'] ?? 0);
+    }
+    db()->prepare(
+        'INSERT INTO payments (store_id, company_id, plan_id, reference_id, checkout_id, pay_url, amount_cents, status, raw, created_at, paid_at)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?)'
+    )->execute([
+        0,
+        $companyId,
+        $planId,
+        $reference !== '' ? $reference : 'wlc-' . $companyId . '-auto-' . bin2hex(random_bytes(4)),
+        (string) ($raw['id'] ?? ''),
+        '',
+        $cents,
+        'paid',
+        json_encode($raw, JSON_UNESCAPED_UNICODE),
+        date('Y-m-d H:i:s'),
+        date('Y-m-d H:i:s'),
+    ]);
+    company_on_payment_paid($companyId, $planId > 0 ? $planId : null);
+}
+
 function pagseguro_run_billing(): array
 {
     pagseguro_expire_stale_pending();
@@ -515,6 +736,9 @@ function pagseguro_run_billing(): array
         return ['created' => 0, 'overdue' => 0, 'errors' => $errors];
     }
     foreach (all_stores() as $store) {
+        if ((int) ($store['company_id'] ?? 0) > 0) {
+            continue;
+        }
         if (!store_due_for_auto_charge($store)) {
             continue;
         }
@@ -523,6 +747,19 @@ function pagseguro_run_billing(): array
             $created++;
         } catch (Throwable $e) {
             $errors[] = (string) $store['name'] . ': ' . $e->getMessage();
+        }
+    }
+    foreach (all_companies() as $company) {
+        $companyId = (int) $company['id'];
+        $sub = company_subscription($companyId);
+        if (!$sub || !company_due_for_auto_charge($sub, $company)) {
+            continue;
+        }
+        try {
+            pagseguro_create_company_charge($companyId, false);
+            $created++;
+        } catch (Throwable $e) {
+            $errors[] = (string) $company['trade_name'] . ': ' . $e->getMessage();
         }
     }
     set_setting('pagseguro_last_run', date('c'));
@@ -609,6 +846,11 @@ function pagseguro_handle_notification(array $payload): void
     }
     if ($payment) {
         mark_payment_paid($payment, $payload);
+        return;
+    }
+    $companyId = company_id_from_reference($reference);
+    if ($companyId > 0 && find_company($companyId)) {
+        pagseguro_record_paid_company($companyId, $reference, $payload);
         return;
     }
     $storeId = store_id_from_reference($reference);

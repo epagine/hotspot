@@ -61,12 +61,72 @@ function current_client_store(): ?array
     return $store;
 }
 
+/** @return 'company'|'store'|null */
+function client_portal_mode(): ?string
+{
+    $user = current_user();
+    if ($user && ($user['role'] ?? '') !== 'super_admin' && current_company_id() > 0 && user_can('billing', $user)) {
+        return 'company';
+    }
+    if (current_client_store() !== null) {
+        return 'store';
+    }
+    return null;
+}
+
+function current_client_company(): ?array
+{
+    if (client_portal_mode() !== 'company') {
+        return null;
+    }
+    return current_company();
+}
+
 function require_client_login(): void
 {
-    if (current_client_store() === null) {
-        unset($_SESSION['client_store_id']);
-        client_redirect(client_url('entrar'));
+    if (client_portal_mode() !== null) {
+        return;
     }
+    unset($_SESSION['client_store_id']);
+    client_redirect(client_url('entrar'));
+}
+
+function portal_try_company_login(string $email, string $password): bool
+{
+    $user = auth_attempt($email, $password);
+    if (!$user || ($user['role'] ?? '') === 'super_admin') {
+        return false;
+    }
+    auth_login($user);
+    if (current_company_id() <= 0 || !user_can('billing', $user)) {
+        unset($_SESSION['user_id'], $_SESSION['company_id']);
+        return false;
+    }
+    unset($_SESSION['client_store_id']);
+    return true;
+}
+
+function portal_can_request_company_charge(?array $sub = null): bool
+{
+    if (!pagseguro_configured()) {
+        return false;
+    }
+    $companyId = current_company_id();
+    if ($companyId <= 0) {
+        return false;
+    }
+    $sub = $sub ?? company_subscription_effective($companyId);
+    if (!$sub) {
+        return false;
+    }
+    $status = normalize_subscription_status((string) ($sub['billing_status'] ?? $sub['status'] ?? ''));
+    if (in_array($status, ['cancelada', 'encerrada', 'cortesia'], true)) {
+        return false;
+    }
+    if (company_pending_payment($companyId)) {
+        return false;
+    }
+    return (int) ($sub['price_cents'] ?? 0) >= 100;
 }
 
 function find_store_by_portal_email(string $email): ?array
