@@ -4,6 +4,11 @@ declare(strict_types=1);
 
 require_admin();
 
+if ($dest = saas_panel_url_for_user()) {
+    header('Location: ' . $dest);
+    exit;
+}
+
 pagseguro_maybe_run_billing();
 
 $tab = preg_replace('/[^a-z]/', '', (string) ($_GET['tab'] ?? 'clientes')) ?: 'clientes';

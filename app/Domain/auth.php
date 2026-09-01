@@ -255,3 +255,16 @@ function bootstrap_default_company_for_legacy(int $userId): void
     db()->prepare('UPDATE stores SET company_id = ? WHERE company_id IS NULL OR company_id = 0')->execute([$companyId]);
     $_SESSION['company_id'] = $companyId;
 }
+
+function saas_panel_url_for_user(?array $user = null): ?string
+{
+    $user = $user ?? current_user();
+    if (!$user) {
+        return null;
+    }
+    return match ((string) ($user['role'] ?? '')) {
+        'super_admin' => '/super',
+        'company_admin', 'operator' => current_company_id() > 0 ? '/app' : null,
+        default => null,
+    };
+}
