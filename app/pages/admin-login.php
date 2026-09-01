@@ -23,12 +23,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 </head>
 <body class="app-auth">
 <section class="card">
-    <div class="app-brand">
-        <span class="app-mark">WL</span>
-        <div>
-            <strong>Wi-Fi da loja</strong>
-            <small>Painel de gestão</small>
-        </div>
+    <div class="app-brand app-brand-logo">
+        <img class="app-logo" src="<?= h(platform_logo_url()) ?>" alt="WiFi da Loja">
     </div>
     <h1>Entrar</h1>
     <p class="lead">Clientes, conexão do PC e financeiro.</p>

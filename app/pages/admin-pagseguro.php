@@ -9,6 +9,12 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     exit;
 }
 
+$returnTo = trim((string) ($_POST['return_to'] ?? ''));
+$redirect = static function () use ($returnTo): void {
+    header('Location: ' . ($returnTo !== '' ? $returnTo : admin_url('configuracoes', 0, 'integracao')));
+    exit;
+};
+
 $do = (string) ($_POST['do'] ?? 'save');
 
 if ($do === 'save') {
@@ -24,12 +30,10 @@ if ($do === 'save') {
     pagseguro_cron_key();
     if (!pagseguro_configured()) {
         $_SESSION['flash_error'] = 'Cole o token gerado no PagSeguro (Vendas → Integrações).';
-        header('Location: ' . admin_url('configuracoes', 0, 'integracao'));
-        exit;
+        $redirect();
     }
     $_SESSION['flash_ok'] = 'Integração PagSeguro salva.';
-    header('Location: ' . admin_url('configuracoes', 0, 'integracao'));
-    exit;
+    $redirect();
 }
 
 if ($do === 'test') {
@@ -39,8 +43,7 @@ if ($do === 'test') {
     } else {
         $_SESSION['flash_error'] = $r['message'];
     }
-    header('Location: ' . admin_url('configuracoes', 0, 'integracao'));
-    exit;
+    $redirect();
 }
 
 if ($do === 'charge') {
@@ -64,7 +67,7 @@ if ($do === 'charge') {
 if ($do === 'run') {
     $r = pagseguro_run_billing();
     $msg = 'Rotina: ' . (int) $r['created'] . ' cobrança(s) gerada(s)';
-    if ((int) $r['overdue'] > 0) {
+    if ((int) ($r['overdue'] ?? 0) > 0) {
         $msg .= ', ' . (int) $r['overdue'] . ' marcado(s) atrasado(s)';
     }
     $msg .= '.';
@@ -73,8 +76,8 @@ if ($do === 'run') {
     } else {
         $_SESSION['flash_ok'] = $msg;
     }
-    header('Location: ' . admin_url('configuracoes', 0, 'integracao'));
-    exit;
+    $redirect();
 }
 
 header('Location: ' . admin_url('financeiro'));
+exit;

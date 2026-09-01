@@ -87,7 +87,7 @@ function app_nav_item(string $tab, string $key, string $label): void
 <body class="app" data-tab="<?= h($tab) ?>">
 <aside class="app-side">
     <a class="app-brand" href="<?= h(admin_url()) ?>">
-        <span class="app-mark">WL</span>
+        <img class="app-logo app-logo-side" src="<?= h(platform_logo_url()) ?>" alt="WiFi da Loja">
         <div>
             <strong>Wi-Fi da loja</strong>
             <small>Painel de gestão</small>

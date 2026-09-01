@@ -438,21 +438,19 @@ function create_store(string $name, string $city = '', ?array $settings = null, 
     $name = trim($name) ?: 'Nova loja';
     $city = trim($city);
     $token = $forcedToken ?: new_store_token();
+    $companyId = current_company_id();
     db()->prepare(
-        'INSERT INTO stores (name, city, token, created_at) VALUES (?,?,?,?)'
-    )->execute([$name, $city, $token, date('Y-m-d H:i:s')]);
+        'INSERT INTO stores (name, city, token, company_id, provider, hotspot_status, created_at) VALUES (?,?,?,?,?,?,?)'
+    )->execute([$name, $city, $token, $companyId > 0 ? $companyId : null, 'windows', 'ativo', date('Y-m-d H:i:s')]);
     $id = (int) db()->lastInsertId();
     $vals = array_merge(store_defaults(), $settings ?? []);
     $vals['store_name'] = $name;
     $vals['store_city'] = $city;
-    $ins = db()->prepare(
-        'INSERT INTO store_settings (store_id, k, v) VALUES (?,?,?) ON CONFLICT(store_id, k) DO UPDATE SET v = excluded.v'
-    );
     foreach ($vals as $k => $v) {
         if (is_owner_key($k)) {
             continue;
         }
-        $ins->execute([$id, $k, (string) $v]);
+        set_setting_for_store($id, $k, (string) $v);
     }
     return find_store($id) ?? ['id' => $id, 'token' => $token, 'name' => $name];
 }
@@ -552,13 +550,15 @@ function upsert_synced_clients(int $storeId, array $clients): void
     if ($clients !== [] && isset($clients['status_code'])) {
         $clients = [$clients];
     }
+    $store = find_store($storeId);
+    $companyId = (int) ($store['company_id'] ?? 0);
     $sel = db()->prepare('SELECT id FROM clients WHERE store_id = ? AND status_code = ? ORDER BY id DESC LIMIT 1');
     $upd = db()->prepare(
-        'UPDATE clients SET ip = ?, mac = ?, phone = ?, status_text = ?, state = ?, user_agent = ?, created_at = ?, authorized_at = ?, expires_at = ? WHERE id = ?'
+        'UPDATE clients SET ip = ?, mac = ?, phone = ?, status_text = ?, state = ?, user_agent = ?, created_at = ?, authorized_at = ?, expires_at = ?, company_id = COALESCE(company_id, ?) WHERE id = ?'
     );
     $ins = db()->prepare(
-        'INSERT INTO clients (store_id, ip, mac, phone, status_code, status_text, state, user_agent, created_at, authorized_at, expires_at)
-         VALUES (?,?,?,?,?,?,?,?,?,?,?)'
+        'INSERT INTO clients (store_id, company_id, ip, mac, phone, status_code, status_text, state, user_agent, created_at, authorized_at, expires_at)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?)'
     );
     foreach ($clients as $c) {
         if (!is_array($c)) {
@@ -580,9 +580,22 @@ function upsert_synced_clients(int $storeId, array $clients): void
         $auth = $c['authorized_at'] ?? null;
         $exp = $c['expires_at'] ?? null;
         if ($id) {
-            $upd->execute([$ip, $mac, $phone, $text, $state, $ua, $created, $auth, $exp, $id]);
-        } else {
-            $ins->execute([$storeId, $ip, $mac, $phone, $code, $text, $state, $ua, $created, $auth, $exp]);
+            $upd->execute([$ip, $mac, $phone, $text, $state, $ua, $created, $auth, $exp, $companyId > 0 ? $companyId : null, $id]);
+        } elseif ($companyId <= 0 || company_within_client_limit($companyId)) {
+            $ins->execute([
+                $storeId,
+                $companyId > 0 ? $companyId : null,
+                $ip,
+                $mac,
+                $phone,
+                $code,
+                $text,
+                $state,
+                $ua,
+                $created,
+                $auth,
+                $exp,
+            ]);
         }
     }
 }

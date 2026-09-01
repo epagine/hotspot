@@ -31,6 +31,10 @@ switch (true) {
     case $path === '/instalar':
         require __DIR__ . '/app/pages/install.php';
         break;
+    case $path === '/assets/landing.css':
+        header('Content-Type: text/css; charset=utf-8');
+        readfile(__DIR__ . '/public/assets/landing.css');
+        break;
     case $path === '/assets/app.css':
         header('Content-Type: text/css; charset=utf-8');
         readfile(__DIR__ . '/public/assets/app.css');
@@ -42,6 +46,81 @@ switch (true) {
     case $path === '/assets/admin.js':
         header('Content-Type: application/javascript; charset=utf-8');
         readfile(__DIR__ . '/public/assets/admin.js');
+        break;
+    case $path === '/assets/logo-wifidaloja.jpg':
+        $logo = __DIR__ . '/public/assets/logo-wifidaloja.jpg';
+        if (!is_file($logo)) {
+            http_response_code(404);
+            break;
+        }
+        header('Content-Type: image/jpeg');
+        header('Cache-Control: public, max-age=86400');
+        readfile($logo);
+        break;
+    case $path === '/entrar':
+        require __DIR__ . '/app/pages/auth-login.php';
+        break;
+    case $path === '/comecar':
+        require __DIR__ . '/app/pages/auth-register.php';
+        break;
+    case $path === '/sair':
+        auth_logout();
+        header('Location: /entrar');
+        exit;
+    case $path === '/app':
+        require __DIR__ . '/app/pages/app-shell.php';
+        break;
+    case $path === '/app/empresa':
+        require __DIR__ . '/app/pages/app-company-save.php';
+        break;
+    case $path === '/app/hotspots':
+        require __DIR__ . '/app/pages/app-hotspots-save.php';
+        break;
+    case $path === '/app/usuarios':
+        require __DIR__ . '/app/pages/app-users-save.php';
+        break;
+    case $path === '/app/campanhas':
+        require __DIR__ . '/app/pages/app-campaigns-save.php';
+        break;
+    case $path === '/app/cupons':
+        require __DIR__ . '/app/pages/app-coupons-save.php';
+        break;
+    case $path === '/app/assinatura':
+        require __DIR__ . '/app/pages/app-billing-save.php';
+        break;
+    case $path === '/app/relatorios':
+        require __DIR__ . '/app/pages/app-reports.php';
+        break;
+    case $path === '/super':
+        require __DIR__ . '/app/pages/super.php';
+        break;
+    case $path === '/super/empresas':
+        require __DIR__ . '/app/pages/super-companies.php';
+        break;
+    case $path === '/super/planos':
+        require __DIR__ . '/app/pages/super-plans.php';
+        break;
+    case $path === '/super/instalador/baixar':
+        require __DIR__ . '/app/pages/admin-instalador.php';
+        break;
+    case $path === '/super/instalador':
+        if (is_http_post()) {
+            require __DIR__ . '/app/pages/admin-instalador.php';
+            break;
+        }
+        $_GET['tab'] = 'instalador';
+        require __DIR__ . '/app/pages/super.php';
+        break;
+    case preg_match('#^/portal/([a-fA-F0-9]+)$#', $path, $m) === 1:
+        $GLOBALS['portal_token'] = $m[1];
+        require __DIR__ . '/app/pages/portal-v2.php';
+        break;
+    case preg_match('#^/api/v1(/.*)?$#', $path, $m) === 1:
+        $GLOBALS['api_path'] = $m[1] ?? '';
+        if ($GLOBALS['api_path'] === '') {
+            $GLOBALS['api_path'] = '/';
+        }
+        require __DIR__ . '/app/api/v1.php';
         break;
     case $path === '/sessao':
     case $path === '/api/session':
@@ -85,6 +164,7 @@ switch (true) {
         break;
     case $path === '/cliente/sair':
         unset($_SESSION['client_store_id']);
+        auth_logout();
         client_redirect(client_url('entrar'));
         break;
     case $path === '/cliente/conta':
@@ -110,8 +190,8 @@ switch (true) {
         admin_redirect(admin_url('entrar'), 301);
         break;
     case $path === '/admin/entrar':
-        require __DIR__ . '/app/pages/admin-login.php';
-        break;
+        header('Location: /entrar');
+        exit;
     case $path === '/admin/logout':
         admin_redirect(admin_url('sair'), 301);
         break;
@@ -150,9 +230,8 @@ switch (true) {
             require __DIR__ . '/app/pages/admin-instalador.php';
             break;
         }
-        $_GET['tab'] = 'instalador';
-        require __DIR__ . '/app/pages/admin.php';
-        break;
+        header('Location: /super?tab=instalador', true, 301);
+        exit;
     case $path === '/admin/conta':
         if (is_http_post()) {
             require __DIR__ . '/app/pages/admin-save.php';
@@ -180,11 +259,8 @@ switch (true) {
             require __DIR__ . '/app/pages/admin-pagseguro.php';
             break;
         }
-        $_GET['tab'] = 'configuracoes';
-        $_GET['sec'] = 'integracao';
-        unset($_GET['loja'], $_GET['id']);
-        require __DIR__ . '/app/pages/admin.php';
-        break;
+        header('Location: /super?tab=configuracoes&sec=integracao', true, 301);
+        exit;
     case $path === '/admin/financeiro/pagseguro':
         if (is_http_post()) {
             require __DIR__ . '/app/pages/admin-pagseguro.php';
@@ -201,6 +277,17 @@ switch (true) {
             }
             require __DIR__ . '/app/pages/admin-pagseguro.php';
             break;
+        }
+        if (!is_http_post()) {
+            if ($loja === 0) {
+                header('Location: /super?tab=assinaturas', true, 301);
+                exit;
+            }
+            $store = find_store($loja);
+            if ($store && (int) ($store['company_id'] ?? 0) > 0) {
+                header('Location: /cliente', true, 301);
+                exit;
+            }
         }
         if (($_GET['sec'] ?? '') === 'pagseguro') {
             admin_redirect(admin_url('configuracoes', 0, 'integracao'), 301);
@@ -229,6 +316,15 @@ switch (true) {
             require __DIR__ . '/app/pages/admin-subscription.php';
             break;
         }
+        if ($id === 0) {
+            header('Location: /super?tab=assinaturas', true, 301);
+            exit;
+        }
+        $store = find_store($id);
+        if ($store && (int) ($store['company_id'] ?? 0) > 0) {
+            header('Location: /app?tab=assinatura', true, 301);
+            exit;
+        }
         $id = (int) ($m[1] ?? $_GET['id'] ?? 0);
         if ($id > 0 && empty($m[1])) {
             admin_redirect(admin_url('assinaturas', $id), 301);
@@ -246,10 +342,8 @@ switch (true) {
             require __DIR__ . '/app/pages/admin-policies.php';
             break;
         }
-        $_GET['tab'] = 'configuracoes';
-        $_GET['sec'] = 'politicas';
-        require __DIR__ . '/app/pages/admin.php';
-        break;
+        header('Location: /super?tab=configuracoes&sec=politicas', true, 301);
+        exit;
     case preg_match('#^/admin/clientes(?:/(\d+))?$#', $path, $m) === 1:
         $id = (int) ($m[1] ?? 0);
         if (is_http_post()) {
@@ -260,18 +354,9 @@ switch (true) {
             require __DIR__ . '/app/pages/admin-stores.php';
             break;
         }
-        $id = (int) ($m[1] ?? $_GET['id'] ?? 0);
-        if ($id > 0 && empty($m[1])) {
-            admin_redirect(admin_url('clientes', $id), 301);
-        }
-        $_GET['tab'] = 'clientes';
-        if ($id > 0) {
-            $_GET['id'] = (string) $id;
-        } else {
-            unset($_GET['id']);
-        }
-        require __DIR__ . '/app/pages/admin.php';
-        break;
+        $dest = $id > 0 ? '/app?tab=hotspots&id=' . $id : '/app?tab=hotspots';
+        header('Location: ' . $dest, true, 301);
+        exit;
     case $path === '/notificacoes/pagbank':
     case $path === '/webhooks/pagbank':
         require __DIR__ . '/app/pages/webhook-pagbank.php';
@@ -294,17 +379,25 @@ switch (true) {
     ], true):
         require __DIR__ . '/app/pages/captive.php';
         break;
+    case $path === '/':
+    case $path === '/inicio':
+        if (is_hotspot_lan()) {
+            require __DIR__ . '/app/pages/portal.php';
+            break;
+        }
+        require __DIR__ . '/app/pages/landing.php';
+        break;
     case $path === '/wifi':
     case $path === '/portal':
         if (!is_hotspot_lan()) {
-            header('Location: ' . admin_url());
+            header('Location: /');
             exit;
         }
         require __DIR__ . '/app/pages/portal.php';
         break;
     default:
         if (!is_hotspot_lan()) {
-            header('Location: ' . admin_url());
+            header('Location: /');
             exit;
         }
         require __DIR__ . '/app/pages/portal.php';
