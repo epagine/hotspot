@@ -2,25 +2,51 @@
 
 declare(strict_types=1);
 
+require_once __DIR__ . '/Support/env.php';
+require_once __DIR__ . '/Support/migrations.php';
+require_once __DIR__ . '/Support/csrf.php';
+require_once __DIR__ . '/Support/audit.php';
+
 function db(): PDO
 {
     static $pdo = null;
     if ($pdo instanceof PDO) {
         return $pdo;
     }
-    $configPath = __DIR__ . '/config.php';
-    if (!is_file($configPath)) {
-        throw new RuntimeException('not_installed');
+    $config = app_config();
+    $driver = db_driver();
+    if ($driver === 'mysql') {
+        $host = (string) ($config['mysql_host'] ?? env('DB_HOST', '127.0.0.1'));
+        $port = (string) ($config['mysql_port'] ?? env('DB_PORT', '3306'));
+        $name = (string) ($config['mysql_database'] ?? env('DB_DATABASE', 'wifidaloja'));
+        $user = (string) ($config['mysql_user'] ?? env('DB_USERNAME', 'root'));
+        $pass = (string) ($config['mysql_pass'] ?? env('DB_PASSWORD', ''));
+        $dsn = "mysql:host={$host};port={$port};dbname={$name};charset=utf8mb4";
+        $pdo = new PDO($dsn, $user, $pass, [
+            PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+            PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+        ]);
+    } else {
+        $sqlite = (string) ($config['sqlite'] ?? (storage_dir_path() . DIRECTORY_SEPARATOR . 'hotspot.sqlite'));
+        $pdo = new PDO('sqlite:' . $sqlite, null, null, [
+            PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+            PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+        ]);
+        $pdo->exec('PRAGMA foreign_keys = ON');
+        $pdo->exec('PRAGMA journal_mode = WAL');
     }
-    $config = require $configPath;
-    $pdo = new PDO('sqlite:' . $config['sqlite'], null, null, [
-        PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
-        PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
-    ]);
-    $pdo->exec('PRAGMA foreign_keys = ON');
-    $pdo->exec('PRAGMA journal_mode = WAL');
     migrate_multi_store($pdo);
+    run_migrations($pdo);
     return $pdo;
+}
+
+function storage_dir_path(): string
+{
+    $dir = dirname(__DIR__) . DIRECTORY_SEPARATOR . 'storage';
+    if (!is_dir($dir)) {
+        mkdir($dir, 0777, true);
+    }
+    return $dir;
 }
 
 function setting(string $key, ?string $default = null): string
@@ -60,10 +86,8 @@ function &setting_cache()
 function set_setting(string $key, string $value): void
 {
     if (is_owner_key($key)) {
-        $stmt = db()->prepare(
-            'INSERT INTO settings (k, v) VALUES (?, ?) ON CONFLICT(k) DO UPDATE SET v = excluded.v'
-        );
-        $stmt->execute([$key, $value]);
+        $sql = db_upsert_sql('settings', ['k', 'v'], 'k');
+        db()->prepare($sql)->execute([$key, $value]);
         $cache =& setting_cache();
         if (is_array($cache)) {
             $cache[$key] = $value;
@@ -71,10 +95,8 @@ function set_setting(string $key, string $value): void
         return;
     }
     $sid = current_store_id();
-    $stmt = db()->prepare(
-        'INSERT INTO store_settings (store_id, k, v) VALUES (?, ?, ?) ON CONFLICT(store_id, k) DO UPDATE SET v = excluded.v'
-    );
-    $stmt->execute([$sid, $key, $value]);
+    $sql = db_upsert_sql('store_settings', ['store_id', 'k', 'v'], 'store_id, k');
+    db()->prepare($sql)->execute([$sid, $key, $value]);
     $bag =& store_setting_cache();
     if (!is_array($bag)) {
         $bag = [];
@@ -91,11 +113,7 @@ function set_setting(string $key, string $value): void
 
 function storage_dir(): string
 {
-    $dir = dirname(__DIR__) . DIRECTORY_SEPARATOR . 'storage';
-    if (!is_dir($dir)) {
-        mkdir($dir, 0777, true);
-    }
-    return $dir;
+    return storage_dir_path();
 }
 
 function brand_image_path(): string
@@ -110,6 +128,21 @@ function brand_image_url(): string
         return '';
     }
     return '/marca/' . filemtime($path) . '.png';
+}
+
+/** Official SaaS platform logo (not per-store portal art). */
+function platform_logo_path(): string
+{
+    return __DIR__ . '/../public/assets/logo-wifidaloja.jpg';
+}
+
+function platform_logo_url(): string
+{
+    $path = platform_logo_path();
+    if (!is_file($path)) {
+        return '';
+    }
+    return '/assets/logo-wifidaloja.jpg?v=' . filemtime($path);
 }
 
 function output_brand_png(?int $storeId = null): void
@@ -550,10 +583,14 @@ function default_dns_allowlist(): string
 
 function require_admin(): void
 {
-    if (empty($_SESSION['admin'])) {
-        header('Location: /admin/entrar');
-        exit;
+    if (!empty($_SESSION['admin']) || current_user()) {
+        ensure_legacy_admin_user();
+        if (current_user()) {
+            return;
+        }
     }
+    header('Location: /entrar');
+    exit;
 }
 
 function admin_url(string $section = 'clientes', int $id = 0, string $sub = ''): string
@@ -659,3 +696,12 @@ require_once __DIR__ . '/stores.php';
 require_once __DIR__ . '/subscription.php';
 require_once __DIR__ . '/client-portal.php';
 require_once __DIR__ . '/pagseguro.php';
+require_once __DIR__ . '/Domain/auth.php';
+require_once __DIR__ . '/Domain/companies.php';
+require_once __DIR__ . '/Domain/plans.php';
+require_once __DIR__ . '/Domain/users.php';
+require_once __DIR__ . '/Domain/dashboard.php';
+require_once __DIR__ . '/Domain/marketing.php';
+require_once __DIR__ . '/Domain/hotspots.php';
+require_once __DIR__ . '/Domain/subscriptions.php';
+require_once __DIR__ . '/Integrations/NetworkProviders/providers.php';

@@ -428,13 +428,16 @@ function subscription_run_daily(): array
 {
     pagseguro_expire_stale_pending();
     $reconciled = subscription_reconcile_all();
+    $company = company_subscription_run_daily();
     $billing = pagseguro_run_billing();
     $afterBilling = subscription_reconcile_all();
+    $afterCompany = company_reconcile_all();
     return [
         'trials_ended' => $reconciled,
         'overdue' => $afterBilling,
         'suspended' => 0,
         'reconciled' => $reconciled + $afterBilling,
+        'company_reconciled' => (int) ($company['reconciled'] ?? 0) + $afterCompany,
         'created' => (int) ($billing['created'] ?? 0),
         'errors' => $billing['errors'] ?? [],
     ];
