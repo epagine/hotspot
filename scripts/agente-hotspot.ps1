@@ -411,8 +411,9 @@ function Sync-Cloud {
             portal_ip        = [string]($(if ($resp.config.portal_ip) { $resp.config.portal_ip } else { "192.168.137.1" }))
             max_clients      = [string]($(if ($resp.config.max_clients) { $resp.config.max_clients } else { "8" }))
             panel_url        = [string]($(if ($links.panel) { $links.panel } else { ([string]$cfg.panel_url).TrimEnd("/") }))
-            admin_url        = [string]($(if ($links.admin) { $links.admin } else { ([string]$cfg.panel_url).TrimEnd("/") + "/admin/clientes" }))
+            admin_url        = [string]($(if ($links.admin) { $links.admin } else { ([string]$cfg.panel_url).TrimEnd("/") + "/app" }))
             client_url       = [string]($(if ($links.client) { $links.client } else { ([string]$cfg.panel_url).TrimEnd("/") + "/cliente" }))
+            portal_url       = [string]($(if ($links.portal) { $links.portal } else { ([string]$cfg.panel_url).TrimEnd("/") + "/portal/" + [uri]::EscapeDataString([string]$cfg.token) }))
             updated_at       = (Get-Date).ToString("s")
         }
         $infoFile = Join-Path $Storage "store-info.json"

@@ -66,7 +66,13 @@ Features em `plans.features_json`:
 
 Validação via `company_has_feature()` no `/app` e nos handlers POST.
 
+## Instalador Windows
+
+- Gerar: `powershell -ExecutionPolicy Bypass -File installer\Empacotar.ps1`
+- Saída: `dist/WiFiDaLoja-Setup.exe` (cópia em `storage/downloads/` para download pelo Super Admin)
+- Inclui PHP embarcado, portal v2 (`/portal/{token}`) e sync com painel SaaS
+
 ## Próximas etapas
 
-1. Reempacotar `WiFiDaLoja-Setup.exe` com código SaaS atual
-2. Desativar `/admin` por completo quando não houver lojas legadas
+1. Desativar `/admin` por completo quando não houver lojas legadas
+2. Publicar commits (`git push`)

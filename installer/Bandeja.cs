@@ -35,7 +35,7 @@ internal sealed class TrayApp : ApplicationContext
         {
             new MenuItem("Abrir status", delegate { ShowStatus(); }),
             new MenuItem("Abrir painel do cliente", delegate { OpenUrl(ClientPanelUrl()); }),
-            new MenuItem("Abrir painel admin", delegate { OpenUrl(AdminPanelUrl()); }),
+            new MenuItem("Abrir painel da loja", delegate { OpenUrl(AdminPanelUrl()); }),
             new MenuItem("-"),
             new MenuItem("Ligar rede", delegate { WriteCommand("start"); }),
             new MenuItem("Desligar rede", delegate { WriteCommand("stop"); }),
@@ -277,9 +277,9 @@ internal sealed class TrayApp : ApplicationContext
         string fromInfo = ReadInfo("admin_url");
         if (fromInfo.Length > 8) return fromInfo;
         string url = ReadCloud("panel_url");
-        if (url.Length > 8) return url.TrimEnd('/') + "/admin/clientes";
+        if (url.Length > 8) return url.TrimEnd('/') + "/app";
         string cfg = Path.Combine(root, "app", "config.php");
-        return File.Exists(cfg) ? "http://127.0.0.1:8080/admin/clientes" : "http://127.0.0.1:8080/instalar";
+        return File.Exists(cfg) ? "http://127.0.0.1:8080/app" : "http://127.0.0.1:8080/instalar";
     }
 
     internal string ClientPanelUrl()
@@ -446,8 +446,8 @@ internal sealed class TrayApp : ApplicationContext
             Field(links, "Gestão da assinatura e pagamentos", 16, 34, 300, 20, new Font("Segoe UI", 8.5f), Muted);
             clientLink = MakeLink(links, "Abrir portal do cliente", 16, 56, 280, 22);
             clientLink.LinkClicked += delegate { app.OpenUrl(app.ClientPanelUrl()); };
-            Field(links, "Administração (dono do sistema)", 16, 78, 300, 18, new Font("Segoe UI", 8.5f), Muted);
-            adminLink = MakeLink(links, "Abrir painel admin", 300, 56, 180, 22);
+            Field(links, "Painel da empresa (hotspots)", 16, 78, 300, 18, new Font("Segoe UI", 8.5f), Muted);
+            adminLink = MakeLink(links, "Abrir painel da loja", 300, 56, 180, 22);
             adminLink.LinkClicked += delegate { app.OpenUrl(app.AdminPanelUrl()); };
 
             var hot = Section("Hotspot", 16, 388, 512, 150);
