@@ -170,6 +170,32 @@ body.app-auth {
   text-decoration: none;
   color: inherit;
 }
+.app-logo {
+  display: block;
+  object-fit: contain;
+  background: #000;
+  border-radius: 10px;
+}
+.app-brand-logo {
+  flex-direction: column;
+  align-items: center;
+  gap: 0;
+  padding: 0;
+}
+.app-brand-logo .app-logo {
+  width: min(280px, 100%);
+  height: auto;
+  border-radius: 14px;
+  box-shadow: 0 10px 28px rgba(15, 40, 80, 0.16);
+}
+.app-logo-side {
+  width: 44px;
+  height: 44px;
+  flex-shrink: 0;
+  border-radius: 10px;
+  object-fit: cover;
+  object-position: left center;
+}
 .app-mark {
   width: 38px;
   height: 38px;
