@@ -11,7 +11,8 @@ Evolução do monólito procedural para multi-tenant.
 | `/entrar` | Login unificado |
 | `/app` | Painel da empresa (RBAC) |
 | `/super` | Super Admin da plataforma |
-| `/portal/{token}` | Captive portal personalizado |
+| `/portal/{token}` | Captive portal personalizado (v2) |
+| `/wifi`, `/` (LAN) | Redirecionam para `/portal/{token}` |
 | `/api/v1/*` | API para equipamentos |
 | `/admin/financeiro`, `/admin/assinaturas` | Legado (somente lojas sem empresa) |
 | `/cliente` | Portal de assinatura (empresa ou loja legada) |
@@ -50,9 +51,22 @@ Evolução do monólito procedural para multi-tenant.
 - Uso visível no `/app` (dashboard, abas e assinatura)
 - `0` no plano = ilimitado
 
+## Recursos por plano
+
+Features em `plans.features_json`:
+
+| Feature | Gratuito | Essencial | Profissional | Empresa |
+|---------|----------|-----------|--------------|---------|
+| `stats_basic` | ✓ | | | |
+| `stats` | | ✓ | ✓ | ✓ |
+| `portal` | | ✓ | ✓ | ✓ |
+| `campaigns` | | | ✓ | ✓ |
+| `coupons` | | | ✓ | ✓ |
+| `reports` | | | | ✓ |
+
+Validação via `company_has_feature()` no `/app` e nos handlers POST.
+
 ## Próximas etapas
 
-1. Desativar abas legadas restantes em `/admin` (configurações/conta)
-2. Reempacotar `WiFiDaLoja-Setup.exe` com código SaaS atual
-3. Portal cativo legado `/wifi` → `/portal/{token}` universal
-4. Bloquear marketing avançado por `plan_has_feature()` (opcional)
+1. Reempacotar `WiFiDaLoja-Setup.exe` com código SaaS atual
+2. Desativar `/admin` por completo quando não houver lojas legadas

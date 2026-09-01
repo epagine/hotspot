@@ -52,9 +52,12 @@ $pageTitle = match ($tab) {
     default => 'Dashboard',
 };
 
-function app_nav(string $tab, string $key, string $label, string $perm): void
+function app_nav(string $tab, string $key, string $label, string $perm, ?string $feature = null): void
 {
     if (!user_can($perm)) {
+        return;
+    }
+    if ($feature !== null && !company_has_feature(current_company_id(), $feature)) {
         return;
     }
     $active = $tab === $key ? ' active' : '';
@@ -84,9 +87,9 @@ function app_nav(string $tab, string $key, string $label, string $perm): void
         <?php app_nav($tab, 'clientes', 'Clientes', 'clients'); ?>
         <?php app_nav($tab, 'acessos', 'Acessos', 'access'); ?>
         <div class="app-nav-label">Marketing</div>
-        <?php app_nav($tab, 'campanhas', 'Campanhas', 'campaigns'); ?>
-        <?php app_nav($tab, 'cupons', 'Cupons', 'coupons'); ?>
-        <?php app_nav($tab, 'relatorios', 'Relatórios', 'reports'); ?>
+        <?php app_nav($tab, 'campanhas', 'Campanhas', 'campaigns', 'campaigns'); ?>
+        <?php app_nav($tab, 'cupons', 'Cupons', 'coupons', 'coupons'); ?>
+        <?php app_nav($tab, 'relatorios', 'Relatórios', 'reports', 'reports'); ?>
         <div class="app-nav-label">Conta</div>
         <?php app_nav($tab, 'empresa', 'Empresa', 'company'); ?>
         <?php app_nav($tab, 'usuarios', 'Usuários', 'users'); ?>
@@ -362,6 +365,12 @@ function app_nav(string $tab, string $key, string $label, string $perm): void
             </section>
 
         <?php elseif ($tab === 'campanhas'): ?>
+            <?php if (!company_has_feature($companyId, 'campaigns')): ?>
+                <section class="card card-narrow">
+                    <p class="alert"><?= h(company_feature_error('campaigns')) ?></p>
+                    <a class="btn" href="/app?tab=assinatura">Ver planos</a>
+                </section>
+            <?php else: ?>
             <?php $camps = company_campaigns($companyId); ?>
             <section class="card">
                 <h2>Nova campanha</h2>
@@ -403,8 +412,15 @@ function app_nav(string $tab, string $key, string $label, string $perm): void
                     </table>
                 </div>
             </section>
+            <?php endif; ?>
 
         <?php elseif ($tab === 'cupons'): ?>
+            <?php if (!company_has_feature($companyId, 'coupons')): ?>
+                <section class="card card-narrow">
+                    <p class="alert"><?= h(company_feature_error('coupons')) ?></p>
+                    <a class="btn" href="/app?tab=assinatura">Ver planos</a>
+                </section>
+            <?php else: ?>
             <?php $coupons = company_coupons($companyId); ?>
             <section class="card card-narrow">
                 <form method="post" action="/app/cupons" class="form">
@@ -434,8 +450,15 @@ function app_nav(string $tab, string $key, string $label, string $perm): void
                     </table>
                 </div>
             </section>
+            <?php endif; ?>
 
         <?php elseif ($tab === 'relatorios'): ?>
+            <?php if (!company_has_feature($companyId, 'reports')): ?>
+                <section class="card card-narrow">
+                    <p class="alert"><?= h(company_feature_error('reports')) ?></p>
+                    <a class="btn" href="/app?tab=assinatura">Ver planos</a>
+                </section>
+            <?php else: ?>
             <section class="card">
                 <h2>Exportações</h2>
                 <p class="hint">Baixe os acessos recentes em CSV (separador ;).</p>
@@ -450,6 +473,7 @@ function app_nav(string $tab, string $key, string $label, string $perm): void
                     <li>Recorrentes: <?= (int) $kpis['recurring_clients'] ?></li>
                 </ul>
             </section>
+            <?php endif; ?>
 
         <?php elseif ($tab === 'usuarios'): ?>
             <?php $users = company_users($companyId); ?>

@@ -6,6 +6,9 @@ require_company_access('campaigns');
 require_post_csrf();
 $companyId = current_company_id();
 try {
+    if (!company_has_feature($companyId, 'campaigns')) {
+        throw new RuntimeException(company_feature_error('campaigns'));
+    }
     save_campaign($companyId, [
         'name' => $_POST['name'] ?? '',
         'type' => $_POST['type'] ?? 'banner',

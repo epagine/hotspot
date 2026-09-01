@@ -70,6 +70,31 @@ function plan_has_feature(?array $plan, string $feature): bool
     return is_array($features) && in_array($feature, $features, true);
 }
 
+function company_current_plan(int $companyId): ?array
+{
+    $sub = company_subscription($companyId);
+    if (!$sub) {
+        return null;
+    }
+    $planId = (int) ($sub['plan_id'] ?? 0);
+    return $planId > 0 ? find_plan($planId) : null;
+}
+
+function company_has_feature(int $companyId, string $feature): bool
+{
+    return plan_has_feature(company_current_plan($companyId), $feature);
+}
+
+function company_feature_error(string $feature): string
+{
+    return match ($feature) {
+        'campaigns' => 'Campanhas não estão incluídas no seu plano. Faça upgrade em Assinatura.',
+        'coupons' => 'Cupons não estão incluídos no seu plano. Faça upgrade em Assinatura.',
+        'reports' => 'Relatórios avançados não estão incluídos no seu plano. Faça upgrade em Assinatura.',
+        default => 'Recurso não disponível no seu plano.',
+    };
+}
+
 function company_count_hotspots(int $companyId): int
 {
     $stmt = db()->prepare('SELECT COUNT(*) FROM stores WHERE company_id = ?');
