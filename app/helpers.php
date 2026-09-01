@@ -596,21 +596,21 @@ function require_admin(): void
 function admin_url(string $section = 'clientes', int $id = 0, string $sub = ''): string
 {
     return match ($section) {
-        'entrar', 'login' => '/admin/entrar',
-        'sair', 'logout' => '/admin/sair',
-        'conta' => '/admin/configuracoes/conta',
+        'entrar', 'login' => '/entrar',
+        'sair', 'logout' => '/sair',
+        'conta' => '/super?tab=configuracoes',
         'configuracoes' => match ($sub) {
-            'integracao', 'pagseguro' => '/admin/configuracoes/integracao',
-            'politicas' => '/admin/configuracoes/politicas',
-            default => '/admin/configuracoes/conta',
+            'integracao', 'pagseguro' => '/super?tab=configuracoes&sec=integracao',
+            'politicas' => '/super?tab=configuracoes&sec=politicas',
+            default => '/super?tab=configuracoes',
         },
-        'assinaturas' => $id > 0 ? '/admin/assinaturas/' . $id : '/admin/assinaturas',
-        'instalador' => $sub === 'baixar' ? '/admin/instalador/baixar' : '/admin/instalador',
+        'assinaturas' => '/super?tab=assinaturas',
+        'instalador' => $sub === 'baixar' ? '/super/instalador/baixar' : '/super?tab=instalador',
         'financeiro' => match ($sub) {
-            'pagseguro' => '/admin/configuracoes/integracao',
-            default => $id > 0 ? '/admin/financeiro/' . $id : '/admin/financeiro',
+            'pagseguro' => '/super?tab=configuracoes&sec=integracao',
+            default => '/cliente',
         },
-        default => $id > 0 ? '/admin/clientes/' . $id : '/admin/clientes',
+        default => $id > 0 ? '/app?tab=hotspots&id=' . $id : '/app?tab=hotspots',
     };
 }
 
@@ -623,26 +623,19 @@ function admin_legacy_url(): ?string
     if ($tab === '' && $id === 0 && $sec === '' && $loja === 0) {
         return null;
     }
-    if (in_array($tab, ['pagamentos'], true)) {
-        $tab = 'financeiro';
+    if (in_array($tab, ['pagamentos', 'financeiro'], true) || $loja > 0) {
+        return admin_url('financeiro', $loja > 0 ? $loja : 0);
     }
     if (in_array($tab, ['config', 'configuracoes'], true)) {
-        if ($sec === 'pagseguro') {
-            return admin_url('configuracoes', 0, 'integracao');
-        }
-        if ($sec === 'politicas') {
-            return admin_url('configuracoes', 0, 'politicas');
-        }
-        return admin_url('configuracoes', 0, $sec === 'integracao' ? 'integracao' : 'conta');
+        return admin_url('configuracoes', 0, match ($sec) {
+            'pagseguro' => 'integracao',
+            'politicas' => 'politicas',
+            'integracao' => 'integracao',
+            default => '',
+        });
     }
     if ($tab === 'clientes' || ($tab === '' && $id > 0)) {
         return admin_url('clientes', $id);
-    }
-    if ($tab === 'financeiro' || ($tab === '' && ($loja > 0 || $sec === 'pagseguro'))) {
-        if ($sec === 'pagseguro') {
-            return admin_url('configuracoes', 0, 'integracao');
-        }
-        return admin_url('financeiro', $loja > 0 ? $loja : 0);
     }
     if ($tab === 'instalador') {
         return admin_url('instalador');
@@ -654,6 +647,57 @@ function admin_legacy_url(): ?string
         return admin_url('conta');
     }
     return admin_url();
+}
+
+function legacy_admin_route(string $path): void
+{
+    if ($path === '/admin/sair' || $path === '/admin/logout') {
+        auth_logout();
+        header('Location: /entrar');
+        exit;
+    }
+    if (in_array($path, ['/admin/entrar', '/admin/login'], true)) {
+        header('Location: /entrar', true, 301);
+        exit;
+    }
+    if ($path === '/admin' || $path === '/admin/') {
+        $dest = saas_panel_url_for_user() ?? '/entrar';
+        header('Location: ' . $dest, true, 301);
+        exit;
+    }
+    if (preg_match('#^/admin/clientes(?:/(\d+))?$#', $path, $m) === 1) {
+        $id = (int) ($m[1] ?? 0);
+        header('Location: ' . ($id > 0 ? '/app?tab=hotspots&id=' . $id : '/app?tab=hotspots'), true, 301);
+        exit;
+    }
+    if (preg_match('#^/admin/assinaturas(?:/(\d+))?$#', $path, $m) === 1) {
+        $id = (int) ($m[1] ?? 0);
+        if ($id > 0) {
+            $store = find_store($id);
+            if ($store && (int) ($store['company_id'] ?? 0) > 0) {
+                header('Location: /app?tab=assinatura', true, 301);
+                exit;
+            }
+        }
+        header('Location: /super?tab=assinaturas', true, 301);
+        exit;
+    }
+    if (preg_match('#^/admin/financeiro(?:/(\d+))?$#', $path, $m) === 1) {
+        header('Location: /cliente', true, 301);
+        exit;
+    }
+    if (str_starts_with($path, '/admin/configuracoes')) {
+        $sec = str_contains($path, 'politicas') ? 'politicas' : (str_contains($path, 'integracao') || str_contains($path, 'pagseguro') ? 'integracao' : '');
+        header('Location: ' . admin_url('configuracoes', 0, $sec), true, 301);
+        exit;
+    }
+    if (str_starts_with($path, '/admin/instalador')) {
+        header('Location: /super?tab=instalador', true, 301);
+        exit;
+    }
+    $dest = saas_panel_url_for_user() ?? '/entrar';
+    header('Location: ' . $dest, true, 301);
+    exit;
 }
 
 function admin_redirect(string $url, int $code = 302): void

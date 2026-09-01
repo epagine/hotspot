@@ -3,7 +3,7 @@
 declare(strict_types=1);
 
 if (is_installed() && $_SERVER['REQUEST_METHOD'] !== 'POST') {
-    header('Location: ' . admin_url('entrar'));
+    header('Location: /entrar');
     exit;
 }
 
@@ -58,7 +58,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <?php if ($ok): ?>
         <h1>Painel pronto</h1>
         <p class="lead">Cadastre as lojas e acompanhe o PC e o financeiro.</p>
-        <a class="btn" href="<?= h(admin_url('entrar')) ?>">Entrar</a>
+        <a class="btn" href="/entrar">Entrar</a>
     <?php else: ?>
         <h1>Criar painel</h1>
         <p class="lead">Somente a conta de gestão. O hotspot fica no PC da loja.</p>

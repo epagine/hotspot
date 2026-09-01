@@ -73,7 +73,7 @@ if (-not (Test-Listening $Port)) {
 
 $config = Join-Path $Root "app\config.php"
 if (Test-Path $config) {
-    $Url = "http://127.0.0.1:$Port/admin"
+    $Url = "http://127.0.0.1:$Port/entrar"
 } else {
     $Url = "http://127.0.0.1:$Port/instalar"
 }

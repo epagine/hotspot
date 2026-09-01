@@ -14,21 +14,28 @@ Evolução do monólito procedural para multi-tenant.
 | `/portal/{token}` | Captive portal personalizado (v2) |
 | `/wifi`, `/` (LAN) | Redirecionam para `/portal/{token}` |
 | `/api/v1/*` | API para equipamentos |
-| `/admin/financeiro`, `/admin/assinaturas` | Legado (somente lojas sem empresa) |
-| `/cliente` | Portal de assinatura (empresa ou loja legada) |
+| `/cliente` | Portal de assinatura (empresa ou loja) |
 
-## Redirecionamentos da migração
+## Rotas `/admin` (compatibilidade)
 
-| Legado | Novo destino |
-|--------|----------------|
-| `/admin/clientes` | `/app?tab=hotspots` |
+Todas redirecionam para os painéis SaaS. POSTs legados ainda aceitos onde necessário:
+
+| Legado | Destino |
+|--------|---------|
+| `/admin`, `/admin/clientes` | `/app?tab=hotspots` |
+| `/admin/entrar`, `/admin/login` | `/entrar` |
+| `/admin/sair` | `/sair` |
 | `/admin/instalador` | `/super?tab=instalador` |
-| `/admin/entrar` | `/entrar` |
+| `/admin/financeiro` | `/cliente` |
+| `/admin/assinaturas` | `/super?tab=assinaturas` ou `/app?tab=assinatura` |
+| `/admin/configuracoes/*` | `/super?tab=configuracoes` |
+
+Handlers canônicos: `/super/pagseguro`, `/super/politicas`, `/super/instalador`.
 
 ## Assinatura
 
 - **Empresa (SaaS):** tabela `subscriptions` + PagSeguro (`wlc-{id}-…`) em `/app?tab=assinatura`
-- **Loja (legado):** colunas `stores.billing_*` + PagSeguro (`wl-{id}-…`) em `/admin/financeiro`
+- **Loja (portal):** cobrança via `/cliente` (PagSeguro `wl-{id}-…` quando aplicável)
 - Configuração PagSeguro: `/super?tab=configuracoes&sec=integracao`
 
 ## Banco
@@ -71,8 +78,3 @@ Validação via `company_has_feature()` no `/app` e nos handlers POST.
 - Gerar: `powershell -ExecutionPolicy Bypass -File installer\Empacotar.ps1`
 - Saída: `dist/WiFiDaLoja-Setup.exe` (cópia em `storage/downloads/` para download pelo Super Admin)
 - Inclui PHP embarcado, portal v2 (`/portal/{token}`) e sync com painel SaaS
-
-## Próximas etapas
-
-1. Desativar `/admin` por completo quando não houver lojas legadas
-2. Publicar commits (`git push`)

@@ -49,7 +49,6 @@ $setupReady = $setupFile !== null && is_file($setupFile);
         <a class="<?= $tab === 'logs' ? 'active' : '' ?>" href="/super?tab=logs">Logs</a>
         <a class="<?= $tab === 'instalador' ? 'active' : '' ?>" href="/super?tab=instalador">Instalador</a>
         <a class="<?= $tab === 'configuracoes' ? 'active' : '' ?>" href="/super?tab=configuracoes">Configurações</a>
-        <a href="/admin/financeiro">Financeiro legado</a>
     </nav>
     <div class="app-side-foot">
         <a class="btn ghost btn-sm" href="/sair">Sair</a>
@@ -234,7 +233,7 @@ $setupReady = $setupFile !== null && is_file($setupFile);
                     <li>Webhook: <code><?= h(pagseguro_webhook_url()) ?></code></li>
                     <li>Cobranças SaaS usam referência <code>wlc-{empresa}-…</code></li>
                 </ol>
-                <form method="post" action="/admin/pagseguro" class="form">
+                <form method="post" action="/super/pagseguro" class="form">
                     <?= csrf_field() ?>
                     <input type="hidden" name="do" value="save">
                     <input type="hidden" name="return_to" value="/super?tab=configuracoes&sec=integracao">
@@ -257,13 +256,13 @@ $setupReady = $setupFile !== null && is_file($setupFile);
                 <?php if (pagseguro_configured()): ?>
                     <p class="hint">Cron diário:<br><code><?= h(pagseguro_cron_url()) ?></code></p>
                     <div class="actions row">
-                        <form method="post" action="/admin/pagseguro">
+                        <form method="post" action="/super/pagseguro">
                             <?= csrf_field() ?>
                             <input type="hidden" name="do" value="test">
                             <input type="hidden" name="return_to" value="/super?tab=configuracoes&sec=integracao">
                             <button class="btn ghost" type="submit">Testar token</button>
                         </form>
-                        <form method="post" action="/admin/pagseguro">
+                        <form method="post" action="/super/pagseguro">
                             <?= csrf_field() ?>
                             <input type="hidden" name="do" value="run">
                             <input type="hidden" name="return_to" value="/super?tab=configuracoes&sec=integracao">
@@ -271,12 +270,11 @@ $setupReady = $setupFile !== null && is_file($setupFile);
                         </form>
                     </div>
                 <?php endif; ?>
-                <p class="hint">Financeiro legado por loja: <a href="/admin/financeiro">/admin/financeiro</a></p>
             </section>
             <?php else: ?>
             <section class="card card-narrow">
                 <h2>Políticas SaaS</h2>
-                <form method="post" action="/admin/configuracoes/politicas" class="form">
+                <form method="post" action="/super/politicas" class="form">
                     <?= csrf_field() ?>
                     <input type="hidden" name="return_to" value="/super?tab=configuracoes&sec=politicas">
                     <label>Dias de trial por empresa
@@ -290,6 +288,7 @@ $setupReady = $setupFile !== null && is_file($setupFile);
                 </form>
             </section>
             <?php endif; ?>
+        <?php endif; ?>
     </main>
 </div>
 </body>

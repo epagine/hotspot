@@ -38,9 +38,7 @@ $command = peek_store_command($sid);
 $panelBase = rtrim(guess_panel_url(), '/');
 $subPayload = store_subscription_payload($store);
 $companyId = (int) ($store['company_id'] ?? 0);
-$appHotspotUrl = $companyId > 0
-    ? $panelBase . '/app?tab=hotspots&id=' . $sid
-    : $panelBase . '/admin/clientes/' . $sid;
+$appHotspotUrl = $panelBase . '/app?tab=hotspots&id=' . $sid;
 $cfg = [
     'store_name' => trim((string) ($store['name'] ?? '')) !== ''
         ? (string) $store['name']

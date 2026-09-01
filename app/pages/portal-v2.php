@@ -46,7 +46,7 @@ $brand = '';
 try {
     $path = brand_image_path_for($hotspotId);
     if (is_file($path)) {
-        $brand = '/admin/clientes/' . $hotspotId . '/marca.png';
+        $brand = '/hotspots/' . $hotspotId . '/marca.png';
     }
 } catch (Throwable $e) {
 }
