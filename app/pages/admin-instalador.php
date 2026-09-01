@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-require_admin();
+require_super_admin();
 
 $dest = installer_downloads_dir() . DIRECTORY_SEPARATOR . 'WiFiDaLoja-Setup.exe';
 

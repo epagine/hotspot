@@ -2,16 +2,16 @@
 
 declare(strict_types=1);
 
-require_admin();
+require_super_admin();
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-    header('Location: ' . admin_url('configuracoes', 0, 'integracao'));
+    header('Location: /super?tab=configuracoes&sec=integracao');
     exit;
 }
 
 $returnTo = trim((string) ($_POST['return_to'] ?? ''));
 $redirect = static function () use ($returnTo): void {
-    header('Location: ' . ($returnTo !== '' ? $returnTo : admin_url('configuracoes', 0, 'integracao')));
+    header('Location: ' . ($returnTo !== '' ? $returnTo : '/super?tab=configuracoes&sec=integracao'));
     exit;
 };
 
@@ -60,7 +60,7 @@ if ($do === 'charge') {
     } catch (Throwable $e) {
         $_SESSION['flash_error'] = $e->getMessage();
     }
-    header('Location: ' . admin_url('financeiro', $id));
+    header('Location: /cliente');
     exit;
 }
 
@@ -79,5 +79,5 @@ if ($do === 'run') {
     $redirect();
 }
 
-header('Location: ' . admin_url('financeiro'));
+header('Location: /super?tab=assinaturas');
 exit;
