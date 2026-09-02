@@ -23,7 +23,7 @@ if ($do === 'plan') {
 if ($do === 'charge') {
     $planId = (int) ($_POST['plan_id'] ?? 0);
     try {
-        $created = pagseguro_create_company_charge($companyId, true, $planId > 0 ? $planId : null);
+        $created = payment_create_company_charge($companyId, true, $planId > 0 ? $planId : null);
         $url = (string) ($created['pay_url'] ?? '');
         $_SESSION['flash_ok'] = $url !== ''
             ? 'Link de pagamento gerado. Conclua o pagamento para ativar sua assinatura.'

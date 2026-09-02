@@ -165,6 +165,13 @@ switch (true) {
         }
         require __DIR__ . '/app/pages/super-policies-save.php';
         break;
+    case $path === '/super/whatsapp':
+        if (!is_http_post()) {
+            header('Location: /super?tab=configuracoes&sec=whatsapp', true, 301);
+            exit;
+        }
+        require __DIR__ . '/app/pages/super-whatsapp-save.php';
+        break;
     case $path === '/admin/configuracoes/politicas':
         if (is_http_post()) {
             require __DIR__ . '/app/pages/super-policies-save.php';
@@ -250,6 +257,10 @@ switch (true) {
     case $path === '/notificacoes/pagbank':
     case $path === '/webhooks/pagbank':
         require __DIR__ . '/app/pages/webhook-pagbank.php';
+        break;
+    case $path === '/notificacoes/picpay':
+    case $path === '/webhooks/picpay':
+        require __DIR__ . '/app/pages/webhook-picpay.php';
         break;
     case preg_match('#^/cron/pagseguro(?:/([a-fA-F0-9]+))?$#', $path, $m) === 1:
         if (!empty($m[1])) {

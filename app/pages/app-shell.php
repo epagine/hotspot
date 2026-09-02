@@ -459,19 +459,199 @@ function app_nav(string $tab, string $key, string $label, string $perm, ?string 
                     <a class="btn" href="/app?tab=assinatura">Ver planos</a>
                 </section>
             <?php else: ?>
+            <?php
+            $reportDays = company_report_days((int) ($_GET['days'] ?? 30));
+            $report = company_report_summary($companyId, $reportDays);
+            $accessChart = company_report_access_by_day($companyId, $reportDays);
+            $hourChart = company_report_by_hour($companyId, $reportDays);
+            $byHotspot = company_report_by_hotspot($companyId, $reportDays);
+            $byDevice = company_report_breakdown($companyId, 'device', $reportDays);
+            $byOs = company_report_breakdown($companyId, 'os_name', $reportDays);
+            $topClients = company_report_top_clients($companyId, $reportDays);
+            $campaignStats = company_report_campaigns($companyId, $reportDays);
+            $couponStats = company_report_coupons($companyId, $reportDays);
+            $accessMax = report_chart_max($accessChart);
+            $hourMax = report_chart_max($hourChart);
+            $hotspotMax = report_chart_max($byHotspot);
+            ?>
+            <section class="card card-narrow">
+                <div class="report-toolbar">
+                    <div>
+                        <h2 style="margin:0">Período</h2>
+                        <p class="hint" style="margin:4px 0 0"><?= h((string) $report['range']['label']) ?> · <?= h(date('d/m/Y', strtotime((string) $report['range']['start']) ?: time())) ?> a <?= h(date('d/m/Y', strtotime((string) $report['range']['end']) ?: time())) ?></p>
+                    </div>
+                    <div class="report-periods">
+                        <?php foreach ([7 => '7 dias', 30 => '30 dias', 90 => '90 dias'] as $d => $lbl): ?>
+                            <a class="btn btn-sm <?= $reportDays === $d ? '' : 'ghost' ?>" href="/app?tab=relatorios&days=<?= $d ?>"><?= h($lbl) ?></a>
+                        <?php endforeach; ?>
+                    </div>
+                </div>
+            </section>
+
+            <div class="stats">
+                <article><span>Acessos</span><strong><?= (int) $report['accesses'] ?></strong></article>
+                <article><span>Média / dia</span><strong><?= h((string) $report['avg_per_day']) ?></strong></article>
+                <article><span>Clientes únicos</span><strong><?= (int) $report['unique_clients'] ?></strong></article>
+                <article><span>Novos cadastros</span><strong><?= (int) $report['new_clients'] ?></strong></article>
+                <article><span>Duração média</span><strong><?= h((string) $report['avg_duration_label']) ?></strong></article>
+                <article><span>CTR campanhas</span><strong><?= h((string) $report['campaign_ctr']) ?>%</strong></article>
+            </div>
+
+            <section class="card">
+                <h2>Acessos por dia</h2>
+                <div class="report-chart">
+                    <?php foreach ($accessChart as $bar): ?>
+                        <?php $hgt = (int) round(((int) $bar['total'] / $accessMax) * 140); ?>
+                        <div class="report-bar">
+                            <div class="report-bar-track">
+                                <div class="report-bar-fill" title="<?= (int) $bar['total'] ?>" style="height:<?= max(4, $hgt) ?>px"></div>
+                            </div>
+                            <strong><?= (int) $bar['total'] ?></strong>
+                            <small><?= h((string) $bar['label']) ?></small>
+                        </div>
+                    <?php endforeach; ?>
+                </div>
+            </section>
+
+            <section class="card">
+                <h2>Horários de pico</h2>
+                <p class="hint">Distribuição dos acessos por hora do dia.</p>
+                <div class="report-chart report-chart-hours">
+                    <?php foreach ($hourChart as $bar): ?>
+                        <?php $hgt = (int) round(((int) $bar['total'] / $hourMax) * 100); ?>
+                        <div class="report-bar">
+                            <div class="report-bar-track report-bar-track-sm">
+                                <div class="report-bar-fill" title="<?= (int) $bar['total'] ?>" style="height:<?= max(3, $hgt) ?>px"></div>
+                            </div>
+                            <small><?= h((string) $bar['label']) ?></small>
+                        </div>
+                    <?php endforeach; ?>
+                </div>
+            </section>
+
+            <div class="report-grid">
+                <section class="card">
+                    <h2>Por hotspot</h2>
+                    <?php if (!$byHotspot): ?>
+                        <p class="hint">Sem dados no período.</p>
+                    <?php else: ?>
+                        <ul class="report-list">
+                            <?php foreach ($byHotspot as $row): ?>
+                                <?php $pct = (int) round(((int) $row['total'] / $hotspotMax) * 100); ?>
+                                <li>
+                                    <div class="report-list-head">
+                                        <strong><?= h((string) $row['name']) ?></strong>
+                                        <span><?= (int) $row['total'] ?> acessos · <?= (int) $row['unique_clients'] ?> clientes</span>
+                                    </div>
+                                    <div class="report-meter"><span style="width:<?= max(2, $pct) ?>%"></span></div>
+                                </li>
+                            <?php endforeach; ?>
+                        </ul>
+                    <?php endif; ?>
+                </section>
+                <section class="card">
+                    <h2>Dispositivos</h2>
+                    <?php if (!$byDevice && !$byOs): ?>
+                        <p class="hint">Sem dados de dispositivo no período.</p>
+                    <?php else: ?>
+                        <?php if ($byDevice): ?>
+                            <h3 class="report-sub">Tipo</h3>
+                            <ul class="report-list">
+                                <?php $devMax = report_chart_max($byDevice); foreach ($byDevice as $row): ?>
+                                    <?php $pct = (int) round(((int) $row['total'] / $devMax) * 100); ?>
+                                    <li>
+                                        <div class="report-list-head"><strong><?= h((string) $row['label']) ?></strong><span><?= (int) $row['total'] ?></span></div>
+                                        <div class="report-meter"><span style="width:<?= max(2, $pct) ?>%"></span></div>
+                                    </li>
+                                <?php endforeach; ?>
+                            </ul>
+                        <?php endif; ?>
+                        <?php if ($byOs): ?>
+                            <h3 class="report-sub">Sistema</h3>
+                            <ul class="report-list">
+                                <?php $osMax = report_chart_max($byOs); foreach ($byOs as $row): ?>
+                                    <?php $pct = (int) round(((int) $row['total'] / $osMax) * 100); ?>
+                                    <li>
+                                        <div class="report-list-head"><strong><?= h((string) $row['label']) ?></strong><span><?= (int) $row['total'] ?></span></div>
+                                        <div class="report-meter"><span style="width:<?= max(2, $pct) ?>%"></span></div>
+                                    </li>
+                                <?php endforeach; ?>
+                            </ul>
+                        <?php endif; ?>
+                    <?php endif; ?>
+                </section>
+            </div>
+
+            <section class="card">
+                <h2>Campanhas</h2>
+                <p class="hint"><?= (int) $report['campaign_views'] ?> visualizações · <?= (int) $report['campaign_clicks'] ?> cliques · CTR <?= h((string) $report['campaign_ctr']) ?>%</p>
+                <div class="table-wrap">
+                    <table class="saas-table">
+                        <thead><tr><th>Campanha</th><th>Status</th><th>Views</th><th>Cliques</th><th>CTR</th></tr></thead>
+                        <tbody>
+                        <?php foreach ($campaignStats as $c): ?>
+                            <tr>
+                                <td><strong><?= h((string) $c['name']) ?></strong><?php if ($c['title'] !== ''): ?><br><small><?= h((string) $c['title']) ?></small><?php endif; ?></td>
+                                <td><?= h((string) $c['status']) ?></td>
+                                <td><?= (int) $c['views'] ?></td>
+                                <td><?= (int) $c['clicks'] ?></td>
+                                <td><?= h((string) $c['ctr']) ?>%</td>
+                            </tr>
+                        <?php endforeach; ?>
+                        <?php if (!$campaignStats): ?><tr class="empty"><td colspan="5">Nenhuma campanha no período.</td></tr><?php endif; ?>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <div class="report-grid">
+                <section class="card">
+                    <h2>Clientes mais frequentes</h2>
+                    <div class="table-wrap">
+                        <table class="saas-table">
+                            <thead><tr><th>Cliente</th><th>Visitas</th><th>Última</th></tr></thead>
+                            <tbody>
+                            <?php foreach ($topClients as $c): ?>
+                                <tr>
+                                    <td><strong><?= h((string) ($c['name'] ?: 'Sem nome')) ?></strong><br><small><?= h((string) $c['phone']) ?></small></td>
+                                    <td><?= (int) $c['visits'] ?></td>
+                                    <td><?= h($c['last_visit'] ? date('d/m/Y H:i', strtotime((string) $c['last_visit']) ?: time()) : '—') ?></td>
+                                </tr>
+                            <?php endforeach; ?>
+                            <?php if (!$topClients): ?><tr class="empty"><td colspan="3">Sem acessos no período.</td></tr><?php endif; ?>
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+                <section class="card">
+                    <h2>Cupons</h2>
+                    <p class="hint"><?= (int) $report['coupons_issued'] ?> emitidos no período.</p>
+                    <div class="table-wrap">
+                        <table class="saas-table">
+                            <thead><tr><th>Código</th><th>Emitidos</th><th>Usados</th></tr></thead>
+                            <tbody>
+                            <?php foreach ($couponStats as $c): ?>
+                                <tr>
+                                    <td><code><?= h((string) $c['code']) ?></code><br><small><?= h((string) $c['title']) ?></small></td>
+                                    <td><?= (int) $c['issued'] ?></td>
+                                    <td><?= (int) $c['used'] ?></td>
+                                </tr>
+                            <?php endforeach; ?>
+                            <?php if (!$couponStats): ?><tr class="empty"><td colspan="3">Nenhum cupom.</td></tr><?php endif; ?>
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+            </div>
+
             <section class="card">
                 <h2>Exportações</h2>
-                <p class="hint">Baixe os acessos recentes em CSV (separador ;).</p>
-                <a class="btn" href="/app/relatorios?export=access">Exportar acessos CSV</a>
-            </section>
-            <section class="card">
-                <h2>Resumo</h2>
-                <ul class="steps">
-                    <li>Clientes: <?= (int) $kpis['clients'] ?></li>
-                    <li>Acessos 30 dias: <?= (int) $kpis['access_30d'] ?></li>
-                    <li>Novos (7 dias): <?= (int) $kpis['new_clients_7d'] ?></li>
-                    <li>Recorrentes: <?= (int) $kpis['recurring_clients'] ?></li>
-                </ul>
+                <p class="hint">Arquivos CSV com separador ;</p>
+                <div class="actions row">
+                    <a class="btn" href="/app/relatorios?export=access&days=<?= $reportDays ?>">Acessos</a>
+                    <a class="btn ghost" href="/app/relatorios?export=clients&days=<?= $reportDays ?>">Clientes</a>
+                    <a class="btn ghost" href="/app/relatorios?export=campaigns&days=<?= $reportDays ?>">Campanhas</a>
+                </div>
             </section>
             <?php endif; ?>
 
@@ -527,7 +707,7 @@ function app_nav(string $tab, string $key, string $label, string $perm, ?string 
                 <section class="card card-narrow">
                     <h2>Pagamento</h2>
                     <p class="hint">Use o link abaixo para concluir o pagamento.</p>
-                    <p><a class="btn" href="<?= h($flashPayUrl) ?>" target="_blank" rel="noopener">Abrir checkout PagSeguro</a></p>
+                    <p><a class="btn" href="<?= h($flashPayUrl) ?>" target="_blank" rel="noopener">Abrir checkout de pagamento</a></p>
                     <p class="hint"><code style="word-break:break-all"><?= h($flashPayUrl) ?></code></p>
                 </section>
             <?php endif; ?>
@@ -565,8 +745,8 @@ function app_nav(string $tab, string $key, string $label, string $perm, ?string 
             </section>
             <section class="card">
                 <h2>Planos disponíveis</h2>
-                <?php if (!pagseguro_configured()): ?>
-                    <p class="hint">Pagamento online ainda não configurado na plataforma. Entre em contato com o suporte.</p>
+                <?php if (!payment_configured()): ?>
+                    <p class="hint"><?= h(payment_not_configured_message()) ?> Entre em contato com o suporte.</p>
                 <?php endif; ?>
                 <div class="table-wrap">
                     <table class="saas-table">
@@ -589,7 +769,7 @@ function app_nav(string $tab, string $key, string $label, string $perm, ?string 
                                             <input type="hidden" name="plan_id" value="<?= (int) $p['id'] ?>">
                                             <button class="btn ghost btn-sm" type="submit">Selecionar</button>
                                         </form>
-                                    <?php elseif (pagseguro_configured()): ?>
+                                    <?php elseif (payment_configured()): ?>
                                         <form method="post" action="/app/assinatura" style="display:inline">
                                             <?= csrf_field() ?>
                                             <input type="hidden" name="do" value="charge">

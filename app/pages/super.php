@@ -71,6 +71,7 @@ $setupReady = $setupFile !== null && is_file($setupFile);
             </div>
 
         <?php elseif ($tab === 'empresas'): ?>
+            <?php $orphans = orphan_stores(); $companies = all_companies(); ?>
             <section class="card">
                 <form method="post" action="/super/empresas" class="form form-inline" style="margin-bottom:16px">
                     <?= csrf_field() ?>
@@ -84,7 +85,7 @@ $setupReady = $setupFile !== null && is_file($setupFile);
                     <table class="saas-table">
                         <thead><tr><th>Empresa</th><th>Status</th><th>Assinatura</th><th></th></tr></thead>
                         <tbody>
-                        <?php foreach (all_companies() as $c): ?>
+                        <?php foreach ($companies as $c): ?>
                             <?php $s = company_subscription((int) $c['id']); ?>
                             <tr>
                                 <td><strong><?= h((string) $c['trade_name']) ?></strong><br><small><?= h((string) $c['email']) ?></small></td>
@@ -109,6 +110,64 @@ $setupReady = $setupFile !== null && is_file($setupFile);
                         </tbody>
                     </table>
                 </div>
+            </section>
+
+            <section class="card" style="margin-top:16px">
+                <h2>Lojas legadas (sem empresa)</h2>
+                <?php if ($orphans === []): ?>
+                    <p class="hint">Nenhuma loja órfã. Todas já estão vinculadas a uma empresa SaaS.</p>
+                <?php else: ?>
+                    <p class="hint">Vincule a uma empresa existente ou promova cada loja a uma nova empresa (com login).</p>
+                    <div class="table-wrap">
+                        <table class="saas-table">
+                            <thead><tr><th>Loja</th><th>Status</th><th>Vincular</th><th>Promover a empresa</th></tr></thead>
+                            <tbody>
+                            <?php foreach ($orphans as $o): ?>
+                                <tr>
+                                    <td>
+                                        <strong><?= h((string) $o['name']) ?></strong>
+                                        <?php if (($o['city'] ?? '') !== ''): ?><br><small><?= h((string) $o['city']) ?></small><?php endif; ?>
+                                        <br><small>ID <?= (int) $o['id'] ?> · token <?= h(substr((string) $o['token'], 0, 8)) ?>…</small>
+                                    </td>
+                                    <td><?= h(subscription_label((string) ($o['billing_status'] ?? ''))) ?></td>
+                                    <td>
+                                        <form method="post" action="/super/empresas" class="form form-inline">
+                                            <?= csrf_field() ?>
+                                            <input type="hidden" name="do" value="attach_store">
+                                            <input type="hidden" name="store_id" value="<?= (int) $o['id'] ?>">
+                                            <select name="company_id" required>
+                                                <option value="">Empresa…</option>
+                                                <?php foreach ($companies as $c): ?>
+                                                    <option value="<?= (int) $c['id'] ?>"><?= h((string) $c['trade_name']) ?></option>
+                                                <?php endforeach; ?>
+                                            </select>
+                                            <button class="btn ghost btn-sm" type="submit">Vincular</button>
+                                        </form>
+                                    </td>
+                                    <td>
+                                        <form method="post" action="/super/empresas" class="form">
+                                            <?= csrf_field() ?>
+                                            <input type="hidden" name="do" value="promote_store">
+                                            <input type="hidden" name="store_id" value="<?= (int) $o['id'] ?>">
+                                            <label>E-mail admin<input type="email" name="admin_email" required placeholder="dono@loja.com"></label>
+                                            <label>Senha<input type="password" name="admin_pass" minlength="8" required></label>
+                                            <label>Plano
+                                                <select name="plan_code">
+                                                    <?php foreach (all_plans() as $p): ?>
+                                                        <?php if (empty($p['active'])) { continue; } ?>
+                                                        <option value="<?= h((string) $p['code']) ?>" <?= ($p['code'] ?? '') === 'essencial' ? 'selected' : '' ?>><?= h((string) $p['name']) ?></option>
+                                                    <?php endforeach; ?>
+                                                </select>
+                                            </label>
+                                            <button class="btn btn-sm" type="submit">Promover</button>
+                                        </form>
+                                    </td>
+                                </tr>
+                            <?php endforeach; ?>
+                            </tbody>
+                        </table>
+                    </div>
+                <?php endif; ?>
             </section>
 
         <?php elseif ($tab === 'planos'): ?>
@@ -223,21 +282,106 @@ $setupReady = $setupFile !== null && is_file($setupFile);
         <?php elseif ($tab === 'configuracoes'): ?>
             <nav class="app-subnav">
                 <a class="<?= $cfgSec === 'politicas' ? 'active' : '' ?>" href="/super?tab=configuracoes&sec=politicas">Políticas SaaS</a>
-                <a class="<?= $cfgSec === 'integracao' ? 'active' : '' ?>" href="/super?tab=configuracoes&sec=integracao">PagSeguro</a>
+                <a class="<?= $cfgSec === 'integracao' ? 'active' : '' ?>" href="/super?tab=configuracoes&sec=integracao">Pagamentos</a>
+                <a class="<?= $cfgSec === 'whatsapp' ? 'active' : '' ?>" href="/super?tab=configuracoes&sec=whatsapp">WhatsApp</a>
             </nav>
-            <?php if ($cfgSec === 'integracao'): ?>
+            <?php if ($cfgSec === 'whatsapp'): ?>
             <section class="card card-narrow">
-                <h2>PagSeguro / PagBank</h2>
-                <ol class="steps">
-                    <li>Token em PagSeguro / PagBank (sandbox ou produção).</li>
-                    <li>Webhook: <code><?= h(pagseguro_webhook_url()) ?></code></li>
-                    <li>Cobranças SaaS usam referência <code>wlc-{empresa}-…</code></li>
-                </ol>
+                <h2>WhatsApp (Evolution API)</h2>
+                <p class="hint">Envio automático de mensagens para empresas e lojas legadas. Placeholders: <?= h(notification_placeholder_help()) ?>.</p>
+                <form method="post" action="/super/whatsapp" class="form">
+                    <?= csrf_field() ?>
+                    <input type="hidden" name="do" value="save">
+                    <input type="hidden" name="return_to" value="/super?tab=configuracoes&sec=whatsapp">
+                    <label class="check"><input type="hidden" name="evolution_enabled" value="0"><input type="checkbox" name="evolution_enabled" value="1" <?= evolution_enabled() ? 'checked' : '' ?>> Ativar envio por WhatsApp</label>
+                    <label>URL da Evolution API
+                        <input name="evolution_base_url" value="<?= h(evolution_base_url()) ?>" placeholder="https://api.seudominio.com">
+                    </label>
+                    <label>Nome da instância
+                        <input name="evolution_instance" value="<?= h(evolution_instance()) ?>" autocomplete="off" placeholder="minha-instancia">
+                    </label>
+                    <label>API key
+                        <input name="evolution_api_key" type="password" autocomplete="off" placeholder="<?= evolution_api_key() !== '' ? h(evolution_mask_secret()) : 'Cole a apikey' ?>">
+                    </label>
+                    <p class="hint"><?= evolution_configured() ? 'API key salva (' . h(evolution_mask_secret()) . ').' : 'A chave não aparece inteira depois de salvar.' ?></p>
+                    <label>Lembrete de trial (dias antes)
+                        <input name="notify_trial_reminder_days" type="number" min="1" max="14" value="<?= (int) notification_trial_reminder_days() ?>">
+                    </label>
+
+                    <h3 style="margin-top:24px">Mensagens automáticas</h3>
+                    <?php foreach (notification_events() as $event => $label): ?>
+                        <fieldset style="margin:16px 0;padding:12px;border:1px solid var(--border,#ddd);border-radius:8px">
+                            <legend><label class="check" style="font-weight:600"><input type="hidden" name="notify_on_<?= h($event) ?>" value="0"><input type="checkbox" name="notify_on_<?= h($event) ?>" value="1" <?= setting('notify_on_' . $event, '1') !== '0' ? 'checked' : '' ?>> <?= h($label) ?></label></legend>
+                            <label>Mensagem
+                                <textarea name="notify_tpl_<?= h($event) ?>" rows="5" placeholder="<?= h(notification_default_template($event)) ?>"><?= h(notification_template($event)) ?></textarea>
+                            </label>
+                        </fieldset>
+                    <?php endforeach; ?>
+                    <button class="btn" type="submit">Salvar WhatsApp</button>
+                </form>
+                <?php if (evolution_configured()): ?>
+                    <form method="post" action="/super/whatsapp" class="form" style="margin-top:16px">
+                        <?= csrf_field() ?>
+                        <input type="hidden" name="do" value="test">
+                        <input type="hidden" name="return_to" value="/super?tab=configuracoes&sec=whatsapp">
+                        <label>Telefone para teste (opcional)
+                            <input name="test_phone" inputmode="tel" placeholder="11 99999-0000">
+                        </label>
+                        <button class="btn ghost" type="submit">Testar conexão<?= evolution_enabled() ? ' e enviar mensagem' : '' ?></button>
+                    </form>
+                <?php endif; ?>
+            </section>
+            <?php
+            $msgLog = notification_recent_log(20);
+            if ($msgLog !== []):
+            ?>
+            <section class="card" style="margin-top:16px">
+                <h2>Últimos envios</h2>
+                <div class="table-wrap">
+                    <table class="table">
+                        <thead><tr><th>Quando</th><th>Evento</th><th>Telefone</th><th>Status</th></tr></thead>
+                        <tbody>
+                        <?php foreach ($msgLog as $row): ?>
+                            <tr>
+                                <td><?= h((string) $row['created_at']) ?></td>
+                                <td><?= h((string) (notification_events()[(string) $row['event_type']] ?? $row['event_type'])) ?></td>
+                                <td><?= h((string) $row['phone']) ?></td>
+                                <td><?= h((string) $row['status']) ?><?php if (!empty($row['error'])): ?> <span class="hint">— <?= h((string) $row['error']) ?></span><?php endif; ?></td>
+                            </tr>
+                        <?php endforeach; ?>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+            <?php endif; ?>
+            <?php elseif ($cfgSec === 'integracao'): ?>
+            <?php $payProvider = payment_provider(); ?>
+            <section class="card card-narrow">
+                <h2>Pagamentos online</h2>
+                <p class="hint">Provedor ativo: <strong><?= h(payment_provider_label($payProvider)) ?></strong></p>
                 <form method="post" action="/super/pagseguro" class="form">
                     <?= csrf_field() ?>
                     <input type="hidden" name="do" value="save">
                     <input type="hidden" name="return_to" value="/super?tab=configuracoes&sec=integracao">
-                    <label>Ambiente
+                    <label>Provedor ativo
+                        <select name="payment_provider">
+                            <option value="pagseguro" <?= $payProvider === 'pagseguro' ? 'selected' : '' ?>>PagSeguro / PagBank</option>
+                            <option value="picpay" <?= $payProvider === 'picpay' ? 'selected' : '' ?>>PicPay</option>
+                        </select>
+                    </label>
+                    <label class="check"><input type="hidden" name="payment_auto" value="0"><input type="checkbox" name="payment_auto" value="1" <?= payment_auto_enabled() ? 'checked' : '' ?>> Cobrança automática (empresas SaaS + lojas legadas)</label>
+                    <p class="hint">O cron gera links de pagamento antes do vencimento; o cliente paga manualmente a cada ciclo. A assinatura renova quando o webhook confirma o pagamento.</p>
+                    <label>Antecedência (dias)
+                        <input name="payment_advance_days" type="number" min="0" max="30" value="<?= (int) payment_advance_days() ?>">
+                    </label>
+
+                    <h3 style="margin-top:24px">PagSeguro / PagBank</h3>
+                    <ol class="steps">
+                        <li>Token em PagSeguro / PagBank (sandbox ou produção).</li>
+                        <li>Webhook: <code><?= h(pagseguro_webhook_url()) ?></code></li>
+                        <li>Cobranças SaaS usam referência <code>wlc-{empresa}-…</code></li>
+                    </ol>
+                    <label>Ambiente PagSeguro
                         <select name="pagseguro_env">
                             <option value="sandbox" <?= pagseguro_env() === 'sandbox' ? 'selected' : '' ?>>Sandbox</option>
                             <option value="production" <?= pagseguro_env() === 'production' ? 'selected' : '' ?>>Produção</option>
@@ -247,20 +391,39 @@ $setupReady = $setupFile !== null && is_file($setupFile);
                         <input name="pagseguro_token" type="password" autocomplete="off" placeholder="<?= pagseguro_configured() ? h(pagseguro_mask_token()) : 'Cole o token' ?>">
                     </label>
                     <p class="hint"><?= pagseguro_configured() ? 'Token salvo (' . h(pagseguro_mask_token()) . ').' : 'O token não aparece inteiro depois de salvar.' ?></p>
-                    <label class="check"><input type="hidden" name="pagseguro_auto" value="0"><input type="checkbox" name="pagseguro_auto" value="1" <?= pagseguro_auto_enabled() ? 'checked' : '' ?>> Cobrança automática (empresas SaaS + lojas legadas)</label>
-                    <label>Antecedência (dias)
-                        <input name="pagseguro_advance_days" type="number" min="0" max="30" value="<?= (int) pagseguro_advance_days() ?>">
+
+                    <h3 style="margin-top:24px">PicPay E-commerce</h3>
+                    <ol class="steps">
+                        <li>Ative Carteira E-commerce no painel PicPay e gere credenciais.</li>
+                        <li>Webhook (callback): <code><?= h(picpay_webhook_url()) ?></code></li>
+                        <li>Use o mesmo <code>x-seller-token</code> no campo abaixo.</li>
+                    </ol>
+                    <label>Ambiente PicPay
+                        <select name="picpay_env">
+                            <option value="sandbox" <?= picpay_env() === 'sandbox' ? 'selected' : '' ?>>Sandbox</option>
+                            <option value="production" <?= picpay_env() === 'production' ? 'selected' : '' ?>>Produção</option>
+                        </select>
+                    </label>
+                    <label>Client ID
+                        <input name="picpay_client_id" value="<?= h(picpay_client_id()) ?>" autocomplete="off">
+                    </label>
+                    <label>Client secret
+                        <input name="picpay_client_secret" type="password" autocomplete="off" placeholder="<?= picpay_client_secret() !== '' ? h(picpay_mask_secret(picpay_client_secret())) : 'Cole o secret' ?>">
+                    </label>
+                    <label>x-seller-token (webhook)
+                        <input name="picpay_seller_token" type="password" autocomplete="off" placeholder="<?= picpay_seller_token() !== '' ? h(picpay_mask_secret(picpay_seller_token())) : 'Token do callback' ?>">
                     </label>
                     <button class="btn" type="submit">Salvar integração</button>
                 </form>
-                <?php if (pagseguro_configured()): ?>
-                    <p class="hint">Cron diário:<br><code><?= h(pagseguro_cron_url()) ?></code></p>
+                <?php if (payment_configured()): ?>
+                    <p class="hint">Webhook ativo: <code><?= h(payment_webhook_url()) ?></code></p>
+                    <p class="hint">Cron diário:<br><code><?= h(payment_cron_url()) ?></code></p>
                     <div class="actions row">
                         <form method="post" action="/super/pagseguro">
                             <?= csrf_field() ?>
                             <input type="hidden" name="do" value="test">
                             <input type="hidden" name="return_to" value="/super?tab=configuracoes&sec=integracao">
-                            <button class="btn ghost" type="submit">Testar token</button>
+                            <button class="btn ghost" type="submit">Testar <?= h(payment_provider_label()) ?></button>
                         </form>
                         <form method="post" action="/super/pagseguro">
                             <?= csrf_field() ?>

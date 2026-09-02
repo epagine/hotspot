@@ -108,7 +108,7 @@ function portal_try_company_login(string $email, string $password): bool
 
 function portal_can_request_company_charge(?array $sub = null): bool
 {
-    if (!pagseguro_configured()) {
+    if (!payment_configured()) {
         return false;
     }
     $companyId = current_company_id();
@@ -227,7 +227,7 @@ function portal_pending_payment(array $payments): ?array
 
 function portal_can_request_charge(array $store): bool
 {
-    if (!pagseguro_configured()) {
+    if (!payment_configured()) {
         return false;
     }
     $status = normalize_subscription_status((string) ($store['billing_status'] ?? ''));

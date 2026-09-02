@@ -150,6 +150,9 @@ function portal_register_guest(
     string $ip,
     string $ua
 ): array {
+    if (!portal_access_allowed($store)) {
+        throw new RuntimeException('Wi-Fi indisponível no momento. Serviço suspenso.');
+    }
     $now = date('Y-m-d H:i:s');
     $expires = date('Y-m-d H:i:s', time() + 2 * 3600);
     $existing = $companyId > 0 ? find_company_client_by_phone($companyId, $phone) : null;

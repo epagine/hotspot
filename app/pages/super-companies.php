@@ -40,5 +40,30 @@ if ($do === 'impersonate') {
     exit;
 }
 
+if ($do === 'attach_store') {
+    try {
+        $storeId = (int) ($_POST['store_id'] ?? 0);
+        $companyId = (int) ($_POST['company_id'] ?? 0);
+        $store = attach_store_to_company($storeId, $companyId);
+        $_SESSION['flash_ok'] = 'Loja "' . (string) ($store['name'] ?? '') . '" vinculada à empresa.';
+    } catch (Throwable $e) {
+        $_SESSION['flash_error'] = $e->getMessage();
+    }
+}
+
+if ($do === 'promote_store') {
+    try {
+        $storeId = (int) ($_POST['store_id'] ?? 0);
+        $company = promote_store_to_company($storeId, [
+            'name' => $_POST['admin_name'] ?? 'Admin',
+            'email' => $_POST['admin_email'] ?? '',
+            'password' => $_POST['admin_pass'] ?? '',
+        ], (string) ($_POST['plan_code'] ?? 'essencial'));
+        $_SESSION['flash_ok'] = 'Loja promovida à empresa "' . (string) ($company['trade_name'] ?? '') . '".';
+    } catch (Throwable $e) {
+        $_SESSION['flash_error'] = $e->getMessage();
+    }
+}
+
 header('Location: /super?tab=empresas');
 exit;

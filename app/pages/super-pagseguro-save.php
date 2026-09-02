@@ -18,26 +18,52 @@ $redirect = static function () use ($returnTo): void {
 $do = (string) ($_POST['do'] ?? 'save');
 
 if ($do === 'save') {
+    $provider = (string) ($_POST['payment_provider'] ?? 'pagseguro');
+    set_setting('payment_provider', $provider === 'picpay' ? 'picpay' : 'pagseguro');
+
     $env = (string) ($_POST['pagseguro_env'] ?? 'sandbox');
     set_setting('pagseguro_env', $env === 'production' ? 'production' : 'sandbox');
     $token = pagseguro_normalize_token((string) ($_POST['pagseguro_token'] ?? ''));
     if ($token !== '') {
         set_setting('pagseguro_token', $token);
     }
-    set_setting('pagseguro_auto', (string) ($_POST['pagseguro_auto'] ?? '0') === '1' ? '1' : '0');
-    $days = (int) ($_POST['pagseguro_advance_days'] ?? 5);
-    set_setting('pagseguro_advance_days', (string) max(0, min(30, $days)));
+
+    $picpayEnv = (string) ($_POST['picpay_env'] ?? 'sandbox');
+    set_setting('picpay_env', $picpayEnv === 'production' ? 'production' : 'sandbox');
+    $clientId = trim((string) ($_POST['picpay_client_id'] ?? ''));
+    if ($clientId !== '') {
+        set_setting('picpay_client_id', $clientId);
+    }
+    $clientSecret = trim((string) ($_POST['picpay_client_secret'] ?? ''));
+    if ($clientSecret !== '') {
+        set_setting('picpay_client_secret', $clientSecret);
+    }
+    $sellerToken = trim((string) ($_POST['picpay_seller_token'] ?? ''));
+    if ($sellerToken !== '') {
+        set_setting('picpay_seller_token', $sellerToken);
+    }
+
+    $auto = (string) ($_POST['payment_auto'] ?? $_POST['pagseguro_auto'] ?? '0') === '1' ? '1' : '0';
+    set_setting('payment_auto', $auto);
+    set_setting('pagseguro_auto', $auto);
+    $days = (int) ($_POST['payment_advance_days'] ?? $_POST['pagseguro_advance_days'] ?? 5);
+    $days = (string) max(0, min(30, $days));
+    set_setting('payment_advance_days', $days);
+    set_setting('pagseguro_advance_days', $days);
     pagseguro_cron_key();
-    if (!pagseguro_configured()) {
-        $_SESSION['flash_error'] = 'Cole o token gerado no PagSeguro (Vendas → Integrações).';
+
+    if (!payment_configured()) {
+        $_SESSION['flash_error'] = payment_provider() === 'picpay'
+            ? 'Informe client_id, client_secret e x-seller-token do PicPay.'
+            : 'Cole o token gerado no PagSeguro (Vendas → Integrações).';
         $redirect();
     }
-    $_SESSION['flash_ok'] = 'Integração PagSeguro salva.';
+    $_SESSION['flash_ok'] = 'Integração ' . payment_provider_label() . ' salva.';
     $redirect();
 }
 
 if ($do === 'test') {
-    $r = pagseguro_test_token();
+    $r = payment_test_credentials();
     if ($r['ok']) {
         $_SESSION['flash_ok'] = $r['message'];
     } else {
@@ -49,11 +75,11 @@ if ($do === 'test') {
 if ($do === 'charge') {
     $id = (int) ($_POST['id'] ?? $GLOBALS['route_id'] ?? 0);
     try {
-        $created = pagseguro_create_charge($id, true);
+        $created = payment_create_charge($id, true);
         $url = $created['pay_url'];
         $_SESSION['flash_ok'] = !empty($created['recurring'])
-            ? 'Checkout recorrente criado no intervalo do plano. Envie o link; o primeiro pagamento (cartão) ativa as próximas cobranças.'
-            : ($url !== '' ? 'Cobrança avulsa criada. Envie o link ao cliente.' : 'Cobrança criada no PagSeguro.');
+            ? 'Checkout recorrente criado. Envie o link ao cliente.'
+            : ($url !== '' ? 'Cobrança criada. Envie o link ao cliente.' : 'Cobrança criada.');
         if ($url !== '') {
             $_SESSION['flash_pay_url'] = $url;
         }
@@ -65,7 +91,7 @@ if ($do === 'charge') {
 }
 
 if ($do === 'run') {
-    $r = pagseguro_run_billing();
+    $r = payment_run_billing();
     $msg = 'Rotina: ' . (int) $r['created'] . ' cobrança(s) gerada(s)';
     if ((int) ($r['overdue'] ?? 0) > 0) {
         $msg .= ', ' . (int) $r['overdue'] . ' marcado(s) atrasado(s)';

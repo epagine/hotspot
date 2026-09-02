@@ -20,6 +20,9 @@ if (!$store) {
 $sid = (int) $store['id'];
 $GLOBALS['force_store_id'] = $sid;
 
+subscription_sync_contract($sid);
+$store = find_store($sid) ?? $store;
+
 $status = $body['status'] ?? [];
 if (is_array($status)) {
     save_store_heartbeat($sid, $status);

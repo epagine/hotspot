@@ -456,7 +456,7 @@ function store_due_for_auto_charge(array $store): bool
     if ($t === false) {
         return true;
     }
-    return $t <= time() + pagseguro_advance_days() * 86400;
+    return $t <= time() + payment_advance_days() * 86400;
 }
 
 function pagseguro_mark_overdue(): int
@@ -602,7 +602,7 @@ function company_due_for_auto_charge(array $sub, array $company): bool
     if ($t === false) {
         return true;
     }
-    return $t <= time() + pagseguro_advance_days() * 86400;
+    return $t <= time() + payment_advance_days() * 86400;
 }
 
 function pagseguro_create_company_charge(int $companyId, bool $force = false, ?int $planId = null): array
@@ -703,6 +703,9 @@ function pagseguro_record_paid_company(int $companyId, string $reference, array 
         return;
     }
     $cents = (int) ($raw['charges'][0]['amount']['value'] ?? 0);
+    if ($cents <= 0 && isset($raw['value'])) {
+        $cents = (int) round(((float) $raw['value']) * 100);
+    }
     if ($cents <= 0) {
         $sub = company_subscription($companyId);
         $cents = (int) ($sub['price_cents'] ?? 0);
@@ -768,18 +771,7 @@ function pagseguro_run_billing(): array
 
 function pagseguro_maybe_run_billing(): void
 {
-    if (!pagseguro_configured() || !pagseguro_auto_enabled()) {
-        return;
-    }
-    $last = strtotime((string) setting('pagseguro_last_run', '')) ?: 0;
-    if (time() - $last < 4 * 3600) {
-        return;
-    }
-    try {
-        subscription_run_daily();
-    } catch (Throwable $e) {
-        // o cron e o webhook tentam de novo
-    }
+    payment_maybe_run_billing();
 }
 
 function pagseguro_record_paid_store(int $storeId, string $reference, array $raw): void
@@ -790,6 +782,9 @@ function pagseguro_record_paid_store(int $storeId, string $reference, array $raw
         return;
     }
     $cents = (int) ($raw['charges'][0]['amount']['value'] ?? 0);
+    if ($cents <= 0 && isset($raw['value'])) {
+        $cents = (int) round(((float) $raw['value']) * 100);
+    }
     if ($cents <= 0) {
         $store = find_store($storeId);
         $cents = $store ? money_to_cents((string) ($store['monthly_fee'] ?? '')) : 0;

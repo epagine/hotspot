@@ -74,11 +74,54 @@ function company_reconcile_subscription(int $companyId): bool
     $derived = company_derive_status($sub, $company);
     $current = normalize_subscription_status((string) ($sub['status'] ?? ''));
     if ($derived === $current) {
+        company_sync_hotspots($companyId);
         return false;
     }
     db()->prepare('UPDATE subscriptions SET status = ? WHERE company_id = ?')->execute([$derived, $companyId]);
     audit_log('subscription.status', $companyId, null, ['from' => $current, 'to' => $derived]);
+    notify_company_status($companyId, $derived);
+    company_sync_hotspots($companyId);
     return true;
+}
+
+function company_sync_hotspots(int $companyId): void
+{
+    if ($companyId <= 0) {
+        return;
+    }
+    $stmt = db()->prepare('SELECT id FROM stores WHERE company_id = ?');
+    $stmt->execute([$companyId]);
+    foreach ($stmt->fetchAll() ?: [] as $row) {
+        subscription_sync_contract((int) $row['id']);
+    }
+}
+
+function company_sync_all_hotspots(): void
+{
+    foreach (all_companies() as $company) {
+        company_sync_hotspots((int) $company['id']);
+    }
+}
+
+function portal_access_allowed(array $store): bool
+{
+    if (($store['hotspot_status'] ?? 'ativo') !== 'ativo') {
+        return false;
+    }
+    return store_service_allowed($store);
+}
+
+function portal_blocked_label(array $store): string
+{
+    $companyId = (int) ($store['company_id'] ?? 0);
+    if ($companyId > 0) {
+        $effective = company_subscription_effective($companyId);
+        if ($effective !== null) {
+            return (string) ($effective['billing_label'] ?? 'Indisponível');
+        }
+    }
+    $sr = subscription_row($store);
+    return (string) ($sr['billing_label'] ?? 'Indisponível');
 }
 
 function company_reconcile_all(): int

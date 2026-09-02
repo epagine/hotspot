@@ -602,6 +602,7 @@ function admin_url(string $section = 'clientes', int $id = 0, string $sub = ''):
         'configuracoes' => match ($sub) {
             'integracao', 'pagseguro' => '/super?tab=configuracoes&sec=integracao',
             'politicas' => '/super?tab=configuracoes&sec=politicas',
+            'whatsapp' => '/super?tab=configuracoes&sec=whatsapp',
             default => '/super?tab=configuracoes',
         },
         'assinaturas' => '/super?tab=assinaturas',
@@ -740,12 +741,17 @@ require_once __DIR__ . '/stores.php';
 require_once __DIR__ . '/subscription.php';
 require_once __DIR__ . '/client-portal.php';
 require_once __DIR__ . '/pagseguro.php';
+require_once __DIR__ . '/picpay.php';
+require_once __DIR__ . '/payment.php';
+require_once __DIR__ . '/evolution.php';
+require_once __DIR__ . '/notifications.php';
 require_once __DIR__ . '/Domain/auth.php';
 require_once __DIR__ . '/Domain/companies.php';
 require_once __DIR__ . '/Domain/plans.php';
 require_once __DIR__ . '/Domain/users.php';
 require_once __DIR__ . '/Domain/dashboard.php';
 require_once __DIR__ . '/Domain/marketing.php';
+require_once __DIR__ . '/Domain/reports.php';
 require_once __DIR__ . '/Domain/hotspots.php';
 require_once __DIR__ . '/Domain/subscriptions.php';
 require_once __DIR__ . '/Integrations/NetworkProviders/providers.php';

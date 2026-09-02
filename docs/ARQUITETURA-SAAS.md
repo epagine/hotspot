@@ -30,13 +30,34 @@ Todas redirecionam para os painéis SaaS. POSTs legados ainda aceitos onde neces
 | `/admin/assinaturas` | `/super?tab=assinaturas` ou `/app?tab=assinatura` |
 | `/admin/configuracoes/*` | `/super?tab=configuracoes` |
 
-Handlers canônicos: `/super/pagseguro`, `/super/politicas`, `/super/instalador`.
+Handlers canônicos: `/super/pagseguro`, `/super/politicas`, `/super/whatsapp`, `/super/instalador`.
 
 ## Assinatura
 
-- **Empresa (SaaS):** tabela `subscriptions` + PagSeguro (`wlc-{id}-…`) em `/app?tab=assinatura`
-- **Loja (portal):** cobrança via `/cliente` (PagSeguro `wl-{id}-…` quando aplicável)
-- Configuração PagSeguro: `/super?tab=configuracoes&sec=integracao`
+- **Empresa (SaaS):** tabela `subscriptions` + cobrança em `/app?tab=assinatura`
+- **Loja (legado):** cobrança via `/cliente` (`wl-{id}-…` quando aplicável)
+- Configuração de pagamentos: `/super?tab=configuracoes&sec=integracao`
+- **PicPay (alternativo):** OAuth + `/ecommerce/v2/payments`; webhook `/notificacoes/picpay`
+- Provedor ativo: `payment_provider` (`pagseguro` ou `picpay`)
+- Cobrança automática: cron gera links; cliente paga manualmente; webhook renova vigência
+
+## WhatsApp (Evolution API)
+
+- Configuração: `/super?tab=configuracoes&sec=whatsapp`
+- Envio via `POST /message/sendText/{instancia}` (Evolution API)
+- Templates por evento: cobrança, pagamento, trial, trial acabando, atraso, suspensão
+- Log de envios: tabela `message_log`
+- Telefone: `companies.whatsapp` (SaaS) ou `stores.contact` (legado)
+
+## Suspensão e hotspot
+
+Quando a assinatura da empresa fica **suspensa** (ou empresa `blocked`):
+
+1. `company_sync_hotspots()` desliga hotspots (`active = 0`) e enfileira comando `stop` no agente
+2. Portal `/portal/{token}` exibe “Wi-Fi indisponível”
+3. Sync do agente (`/agente/sincronizar`) reforça o estado a cada heartbeat
+
+Reativação ocorre ao pagar ou regularizar a assinatura (`company_sync_hotspots` + comando `start`).
 
 ## Banco
 
@@ -73,8 +94,34 @@ Features em `plans.features_json`:
 
 Validação via `company_has_feature()` no `/app` e nos handlers POST.
 
+## Relatórios (plano Empresa)
+
+Aba `/app?tab=relatorios` (feature `reports`):
+
+- Período 7 / 30 / 90 dias
+- KPIs: acessos, média/dia, clientes únicos, novos, duração média, CTR
+- Gráficos: acessos por dia, horários de pico
+- Rankings: hotspots, dispositivos/SO, clientes frequentes
+- Tabelas: campanhas (views/clicks/CTR) e cupons emitidos/usados
+- Export CSV: acessos, clientes, campanhas
+
 ## Instalador Windows
 
 - Gerar: `powershell -ExecutionPolicy Bypass -File installer\Empacotar.ps1`
 - Saída: `dist/WiFiDaLoja-Setup.exe` (cópia em `storage/downloads/` para download pelo Super Admin)
 - Inclui PHP embarcado, portal v2 (`/portal/{token}`) e sync com painel SaaS
+
+## Migração de lojas legadas
+
+No Super Admin → **Empresas**, a seção **Lojas legadas (sem empresa)** lista hotspots com `company_id` vazio:
+
+- **Vincular** — associa a uma empresa existente (respeita limite de hotspots do plano)
+- **Promover** — cria empresa + admin + assinatura a partir da loja (copia vigência quando houver)
+
+Clientes da loja recebem o `company_id` no vínculo.
+
+## Próximas etapas
+
+1. Fase 5 — integrações MikroTik / OpenWrt / UniFi
+2. Feature `multi_unit` (filiais / unidades)
+3. Commit/push das integrações recentes (PicPay, WhatsApp, suspensão, relatórios)

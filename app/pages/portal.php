@@ -2,6 +2,29 @@
 
 declare(strict_types=1);
 
+$localStoreId = local_store_id();
+$localStore = $localStoreId > 0 ? find_store($localStoreId) : null;
+if ($localStore && !portal_access_allowed($localStore)) {
+    $storeName = setting('store_name', 'nossa loja');
+    ?><!doctype html>
+<html lang="pt-BR">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Wi-Fi indisponível</title>
+    <link rel="stylesheet" href="/assets/app.css">
+</head>
+<body class="page">
+<main class="card">
+    <h1>Wi-Fi indisponível</h1>
+    <p class="lead"><?= h($storeName) ?> — serviço temporariamente suspenso.</p>
+    <p class="hint">Situação: <?= h(portal_blocked_label($localStore)) ?>.</p>
+</main>
+</body>
+</html><?php
+    exit;
+}
+
 $client = current_client();
 $online = client_is_online($client);
 $full = !$online && online_count() >= max_clients();

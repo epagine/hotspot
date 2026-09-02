@@ -15,11 +15,12 @@ $companyId = (int) ($store['company_id'] ?? 0);
 $pc = portal_config_for($hotspotId);
 $company = $companyId > 0 ? find_company($companyId) : null;
 $primary = (string) (($pc['primary_color'] ?? '') ?: ($company['primary_color'] ?? '#c8892a'));
+$portalBlocked = !portal_access_allowed($store);
 $error = '';
 $done = false;
 $campaign = null;
 
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && !$portalBlocked) {
     $name = trim((string) ($_POST['name'] ?? ''));
     $phone = preg_replace('/\D+/', '', (string) ($_POST['phone'] ?? '')) ?? '';
     $email = trim((string) ($_POST['email'] ?? ''));
@@ -68,7 +69,11 @@ $guestName = $guestName ?? '';
 <body class="portal-v2">
 <section class="portal-card">
     <?php if ($brand): ?><img class="portal-logo" src="<?= h($brand) ?>" alt=""><?php endif; ?>
-    <?php if ($done): ?>
+    <?php if ($portalBlocked): ?>
+        <h1>Wi-Fi indisponível</h1>
+        <p class="lead">Este hotspot está temporariamente fora do ar.</p>
+        <p class="hint">Situação: <?= h(portal_blocked_label($store)) ?>. Entre em contato com o estabelecimento.</p>
+    <?php elseif ($done): ?>
         <h1>Internet liberada</h1>
         <p class="lead">Obrigado<?= $guestName !== '' ? ', ' . h($guestName) : '' ?>! Você já pode navegar.</p>
         <?php if ($campaign): ?>

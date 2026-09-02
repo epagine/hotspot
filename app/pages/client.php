@@ -141,7 +141,7 @@ if ($mode === 'company') {
 
             <section class="card">
                 <h2>Planos</h2>
-                <?php if (!pagseguro_configured()): ?>
+                <?php if (!payment_configured()): ?>
                     <p class="hint">Pagamento online não configurado. Fale com o suporte.</p>
                 <?php endif; ?>
                 <div class="table-wrap">

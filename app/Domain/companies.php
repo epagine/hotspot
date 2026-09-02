@@ -69,6 +69,7 @@ function create_company(array $data, ?int $ownerUserId = null, string $planCode 
     }
 
     audit_log('company.create', $companyId, $ownerUserId, ['trade_name' => $trade]);
+    notify_company($companyId, 'trial_started');
     return find_company($companyId) ?? ['id' => $companyId, 'trade_name' => $trade];
 }
 
@@ -106,6 +107,7 @@ function set_company_status(int $id, string $status): void
     }
     db()->prepare('UPDATE companies SET status = ? WHERE id = ?')->execute([$status, $id]);
     audit_log('company.status', $id, null, ['status' => $status]);
+    company_sync_hotspots($id);
 }
 
 function company_subscription(int $companyId): ?array
@@ -183,9 +185,106 @@ function company_on_payment_paid(int $companyId, ?int $planId = null): void
     )->execute(['ativa', '', $newEnds, $planId, $companyId]);
     company_reconcile_subscription($companyId);
     audit_log('subscription.paid', $companyId, null, ['ends_at' => $newEnds, 'plan_id' => $planId]);
+    notify_company($companyId, 'payment_paid');
+    company_sync_hotspots($companyId);
 }
 
 function company_on_charge_created(int $companyId): void
 {
     company_reconcile_subscription($companyId);
+    notify_company($companyId, 'charge_created');
+}
+
+function orphan_stores(): array
+{
+    return db()->query(
+        'SELECT * FROM stores WHERE company_id IS NULL OR company_id = 0 ORDER BY id ASC'
+    )->fetchAll() ?: [];
+}
+
+function attach_store_to_company(int $storeId, int $companyId, bool $force = false): array
+{
+    $store = find_store($storeId);
+    if (!$store) {
+        throw new RuntimeException('Loja não encontrada.');
+    }
+    $current = (int) ($store['company_id'] ?? 0);
+    if ($current > 0 && $current === $companyId) {
+        return $store;
+    }
+    if ($current > 0 && !$force) {
+        throw new RuntimeException('Esta loja já pertence a outra empresa.');
+    }
+    $company = find_company($companyId);
+    if (!$company) {
+        throw new RuntimeException('Empresa não encontrada.');
+    }
+    if ($current !== $companyId && !company_within_hotspot_limit($companyId)) {
+        throw new RuntimeException(company_limit_error('hotspots'));
+    }
+
+    db()->prepare('UPDATE stores SET company_id = ? WHERE id = ?')->execute([$companyId, $storeId]);
+    db()->prepare('UPDATE clients SET company_id = ? WHERE store_id = ?')->execute([$companyId, $storeId]);
+    company_sync_hotspots($companyId);
+    audit_log('store.attach', $companyId, null, ['store_id' => $storeId, 'from_company_id' => $current]);
+    return find_store($storeId) ?? $store;
+}
+
+function promote_store_to_company(int $storeId, array $admin = [], string $planCode = 'essencial'): array
+{
+    $store = find_store($storeId);
+    if (!$store) {
+        throw new RuntimeException('Loja não encontrada.');
+    }
+    if ((int) ($store['company_id'] ?? 0) > 0) {
+        throw new RuntimeException('Esta loja já está vinculada a uma empresa.');
+    }
+
+    $ownerId = null;
+    $email = trim((string) ($admin['email'] ?? ''));
+    $password = (string) ($admin['password'] ?? '');
+    if ($email !== '') {
+        if ($password === '' || strlen($password) < 8) {
+            throw new RuntimeException('Informe uma senha com pelo menos 8 caracteres para o admin.');
+        }
+        $user = create_user([
+            'name' => (string) ($admin['name'] ?? 'Admin'),
+            'email' => $email,
+            'password' => $password,
+            'role' => 'company_admin',
+        ]);
+        $ownerId = (int) $user['id'];
+    }
+
+    $company = create_company([
+        'trade_name' => (string) ($store['name'] ?? 'Nova empresa'),
+        'legal_name' => (string) ($store['name'] ?? 'Nova empresa'),
+        'email' => $email !== '' ? $email : (string) ($store['portal_email'] ?? $store['contact'] ?? ''),
+        'phone' => (string) ($store['contact'] ?? ''),
+        'whatsapp' => (string) ($store['contact'] ?? ''),
+        'city' => (string) ($store['city'] ?? ''),
+    ], $ownerId, $planCode);
+
+    $companyId = (int) $company['id'];
+    attach_store_to_company($storeId, $companyId, true);
+
+    $paidUntil = trim((string) ($store['paid_until'] ?? ''));
+    $billing = normalize_subscription_status((string) ($store['billing_status'] ?? 'trial'));
+    if ($paidUntil !== '' || in_array($billing, ['ativa', 'atrasada', 'pendente', 'suspensa', 'cortesia'], true)) {
+        $status = $billing === 'trial' && $paidUntil !== '' ? 'ativa' : $billing;
+        if ($status === 'active') {
+            $status = 'ativa';
+        }
+        db()->prepare(
+            'UPDATE subscriptions SET status = ?, trial_ends_at = ?, ends_at = ? WHERE company_id = ?'
+        )->execute([
+            $status,
+            $status === 'trial' ? trim((string) ($store['trial_ends_at'] ?? '')) : '',
+            $paidUntil !== '' ? $paidUntil : trim((string) ($store['trial_ends_at'] ?? '')),
+            $companyId,
+        ]);
+        company_reconcile_subscription($companyId);
+    }
+
+    return find_company($companyId) ?? $company;
 }

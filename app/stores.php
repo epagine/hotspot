@@ -8,7 +8,15 @@ function owner_setting_keys(): array
         'admin_user', 'admin_pass_hash',
         'pagseguro_env', 'pagseguro_token',
         'pagseguro_cron_key', 'pagseguro_last_run', 'pagseguro_advance_days', 'pagseguro_auto',
+        'payment_provider', 'payment_auto', 'payment_advance_days', 'payment_last_run',
+        'picpay_env', 'picpay_client_id', 'picpay_client_secret', 'picpay_seller_token',
         'saas_grace_days', 'saas_trial_days', 'saas_auto_suspend',
+        'evolution_base_url', 'evolution_api_key', 'evolution_instance', 'evolution_enabled',
+        'notify_on_charge_created', 'notify_on_payment_paid', 'notify_on_trial_started',
+        'notify_on_trial_ending', 'notify_on_overdue', 'notify_on_suspended',
+        'notify_tpl_charge_created', 'notify_tpl_payment_paid', 'notify_tpl_trial_started',
+        'notify_tpl_trial_ending', 'notify_tpl_overdue', 'notify_tpl_suspended',
+        'notify_trial_reminder_days',
     ];
 }
 

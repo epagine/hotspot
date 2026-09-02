@@ -255,8 +255,7 @@ function subscription_sync_contract(int $storeId): void
     if (!$store) {
         return;
     }
-    $status = normalize_subscription_status((string) ($store['billing_status'] ?? 'ativa'));
-    $shouldRun = subscription_service_allowed($status);
+    $shouldRun = portal_access_allowed($store);
     $active = (int) ($store['active'] ?? 1) === 1;
     if ($shouldRun && !$active) {
         db()->prepare('UPDATE stores SET active = 1, suspended_at = ? WHERE id = ?')->execute(['', $storeId]);
@@ -301,6 +300,7 @@ function subscription_transition(int $storeId, string $toStatus, string $note = 
 
     subscription_log_event($storeId, 'status_change', $from, $to, $note, $actor);
     subscription_sync_contract($storeId);
+    notify_store_status($storeId, $to);
 }
 
 function subscription_init_trial(int $storeId): void
@@ -314,11 +314,13 @@ function subscription_init_trial(int $storeId): void
         'UPDATE stores SET billing_status = ?, trial_ends_at = ?, paid_until = ?, active = 1 WHERE id = ?'
     )->execute(['trial', $ends, $ends, $storeId]);
     subscription_log_event($storeId, 'trial_started', '', 'trial', $days . ' dia(s) de trial', 'system');
+    notify_store($storeId, 'trial_started');
 }
 
 function subscription_on_charge_created(int $storeId): void
 {
     subscription_reconcile($storeId, 'Cobrança gerada', 'system');
+    notify_store($storeId, 'charge_created');
 }
 
 function subscription_on_payment_paid(int $storeId, string $note = 'Pagamento confirmado'): void
@@ -332,6 +334,7 @@ function subscription_on_payment_paid(int $storeId, string $note = 'Pagamento co
         'UPDATE stores SET paid_until = ?, trial_ends_at = ?, next_billing_at = ? WHERE id = ?'
     )->execute([$until, '', $until, $storeId]);
     subscription_reconcile($storeId, $note, 'system');
+    notify_store($storeId, 'payment_paid');
 }
 
 function subscription_mrr_cents(array $stores): int
@@ -429,9 +432,11 @@ function subscription_run_daily(): array
     pagseguro_expire_stale_pending();
     $reconciled = subscription_reconcile_all();
     $company = company_subscription_run_daily();
-    $billing = pagseguro_run_billing();
+    $billing = payment_run_billing();
     $afterBilling = subscription_reconcile_all();
     $afterCompany = company_reconcile_all();
+    company_sync_all_hotspots();
+    $trialReminders = notification_run_trial_reminders();
     return [
         'trials_ended' => $reconciled,
         'overdue' => $afterBilling,
@@ -439,6 +444,7 @@ function subscription_run_daily(): array
         'reconciled' => $reconciled + $afterBilling,
         'company_reconciled' => (int) ($company['reconciled'] ?? 0) + $afterCompany,
         'created' => (int) ($billing['created'] ?? 0),
+        'trial_reminders' => $trialReminders,
         'errors' => $billing['errors'] ?? [],
     ];
 }

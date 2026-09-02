@@ -378,9 +378,86 @@ body.app-auth {
   color: var(--app-ink);
 }
 .app .empty td { color: var(--app-muted); }
+.app .report-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.app .report-periods { display: flex; gap: 8px; flex-wrap: wrap; }
+.app .report-chart {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  min-height: 180px;
+  margin-top: 12px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+}
+.app .report-chart-hours { min-height: 140px; gap: 4px; }
+.app .report-bar { flex: 1; min-width: 28px; text-align: center; }
+.app .report-chart-hours .report-bar { min-width: 18px; }
+.app .report-bar-track {
+  height: 140px;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+.app .report-bar-track-sm { height: 100px; }
+.app .report-bar-fill {
+  width: 100%;
+  max-width: 36px;
+  background: var(--accent);
+  border-radius: 6px 6px 0 0;
+}
+.app .report-chart-hours .report-bar-fill { max-width: 16px; border-radius: 4px 4px 0 0; }
+.app .report-bar strong {
+  display: block;
+  font-size: 11px;
+  margin-top: 6px;
+  color: var(--app-ink);
+}
+.app .report-bar small { color: var(--app-muted); font-size: 11px; }
+.app .report-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+.app .report-grid > .card { margin-bottom: 0; }
+.app .report-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
+.app .report-list-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 6px;
+  font-size: 13px;
+}
+.app .report-list-head span { color: var(--app-muted); white-space: nowrap; }
+.app .report-meter {
+  height: 8px;
+  background: var(--app-input);
+  border: 1px solid var(--app-line);
+  border-radius: 999px;
+  overflow: hidden;
+}
+.app .report-meter span {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+  border-radius: 999px;
+}
+.app .report-sub {
+  margin: 16px 0 10px;
+  font-size: 13px;
+  color: var(--app-muted);
+  text-transform: uppercase;
+  letter-spacing: .04em;
+}
 @media (max-width: 1100px) {
   .app .stats { grid-template-columns: repeat(3, 1fr); }
-  .page-split, .form-grid { grid-template-columns: 1fr; }
+  .page-split, .form-grid, .app .report-grid { grid-template-columns: 1fr; }
 }
 @media (max-width: 900px) {
   body.app { grid-template-columns: 1fr; }

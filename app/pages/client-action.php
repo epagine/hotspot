@@ -37,7 +37,7 @@ if ($mode === 'company') {
                 throw new RuntimeException('Não é possível gerar cobrança no momento.');
             }
             $planId = (int) ($_POST['plan_id'] ?? 0);
-            $created = pagseguro_create_company_charge(
+            $created = payment_create_company_charge(
                 $companyId,
                 true,
                 $planId > 0 ? $planId : null
@@ -89,7 +89,7 @@ if ($do === 'charge') {
         if (!portal_can_request_charge($store)) {
             throw new RuntimeException('Não é possível gerar cobrança no momento.');
         }
-        $created = pagseguro_create_charge($id, true);
+        $created = payment_create_charge($id, true);
         $url = (string) ($created['pay_url'] ?? '');
         $_SESSION['flash_ok'] = $url !== ''
             ? 'Link de pagamento gerado. Conclua o pagamento para regularizar sua assinatura.'
