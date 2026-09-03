@@ -19,124 +19,174 @@ try {
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Wi-Fi da loja · Transforme o Wi-Fi em relacionamento</title>
     <meta name="description" content="Ofereça internet aos seus clientes, conheça seu público e transforme acessos em oportunidades.">
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&family=Syne:wght@600;700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/assets/landing.css">
+    <?php require __DIR__ . '/../partials/tw-head.php'; ?>
+    <link href="https://fonts.googleapis.com/css2?family=Syne:wght@600;700;800&display=swap" rel="stylesheet">
+    <style>
+        .font-display{font-family:'Syne','Figtree',system-ui,sans-serif}
+    </style>
 </head>
-<body class="lp">
-<header class="lp-nav">
-    <a class="lp-brand" href="/">
-        <img class="lp-logo lp-logo-nav" src="<?= h(platform_logo_url()) ?>" alt="WiFi da Loja">
-    </a>
-    <nav class="lp-nav-links">
-        <a href="#como">Como funciona</a>
-        <a href="#recursos">Recursos</a>
-        <a href="#planos">Planos</a>
-        <a href="#faq">FAQ</a>
-        <a class="lp-nav-cta" href="<?= h($startUrl) ?>">Começar grátis</a>
-    </nav>
+<body class="bg-white text-ink font-sans antialiased">
+
+<!-- Nav -->
+<header class="sticky top-0 z-30 bg-white/90 backdrop-blur border-b border-line/50">
+    <div class="max-w-6xl mx-auto flex items-center justify-between px-5 py-3">
+        <a href="/" class="flex-shrink-0">
+            <img class="h-10 w-auto rounded-lg bg-white object-contain" src="<?= h(platform_logo_url()) ?>" alt="WiFi da Loja">
+        </a>
+        <nav class="hidden sm:flex items-center gap-6 text-sm font-semibold text-muted">
+            <a href="#como" class="hover:text-ink transition">Como funciona</a>
+            <a href="#recursos" class="hover:text-ink transition">Recursos</a>
+            <a href="#planos" class="hover:text-ink transition">Planos</a>
+            <a href="#faq" class="hover:text-ink transition">FAQ</a>
+            <a href="<?= h($startUrl) ?>" class="bg-accent hover:bg-accent/90 text-white px-4 py-2 rounded-btn transition">Começar grátis</a>
+        </nav>
+        <a href="<?= h($startUrl) ?>" class="sm:hidden bg-accent hover:bg-accent/90 text-white text-sm font-bold px-4 py-2 rounded-btn transition">Começar</a>
+    </div>
 </header>
 
-<main>
-    <section class="lp-hero">
-        <div class="lp-hero-copy">
-            <img class="lp-logo lp-logo-hero" src="<?= h(platform_logo_url()) ?>" alt="WiFi da Loja — Internet para seus clientes. Dados para o seu negócio.">
-            <h1>Transforme o Wi-Fi da sua empresa em uma ferramenta de relacionamento</h1>
-            <p class="lp-lead">Ofereça internet aos seus clientes, conheça seu público e transforme acessos em oportunidades para o seu negócio.</p>
-            <div class="lp-cta">
-                <a class="lp-btn" href="<?= h($startUrl) ?>">Começar grátis</a>
-                <a class="lp-btn lp-btn-ghost" href="<?= h($panelUrl) ?>">Já tenho conta</a>
-            </div>
+<!-- Hero -->
+<section class="relative overflow-hidden">
+    <div class="absolute inset-0 bg-gradient-to-br from-accent/5 via-transparent to-surface pointer-events-none"></div>
+    <div class="relative max-w-6xl mx-auto px-5 py-20 sm:py-28 lg:py-36 text-center">
+        <img class="h-16 w-auto mx-auto mb-6 rounded-xl bg-white object-contain" src="<?= h(platform_logo_url()) ?>" alt="">
+        <h1 class="font-display text-4xl sm:text-5xl lg:text-6xl font-extrabold tracking-tight leading-tight max-w-3xl mx-auto">Transforme o Wi-Fi em <span class="text-accent">relacionamento</span></h1>
+        <p class="mt-5 text-lg text-muted max-w-2xl mx-auto">Ofereça internet aos seus clientes, conheça seu público e transforme acessos em oportunidades para o seu negócio.</p>
+        <div class="mt-8 flex flex-wrap justify-center gap-4">
+            <a href="<?= h($startUrl) ?>" class="bg-accent hover:bg-accent/90 text-white font-bold px-8 py-3.5 rounded-btn text-base transition shadow-lg shadow-accent/20">Começar grátis</a>
+            <a href="<?= h($panelUrl) ?>" class="bg-white hover:bg-hover text-ink font-bold px-8 py-3.5 rounded-btn text-base border border-line transition">Já tenho conta</a>
         </div>
-        <div class="lp-hero-visual" aria-hidden="true">
-            <div class="lp-hero-stage lp-hero-stage-logo">
-                <img class="lp-logo lp-logo-stage" src="<?= h(platform_logo_url()) ?>" alt="">
-            </div>
-        </div>
-    </section>
+    </div>
+</section>
 
-    <section class="lp-section" id="como">
-        <div class="lp-section-head">
-            <h2>Como funciona</h2>
-            <p>Do Wi-Fi ao cadastro do cliente, em poucos passos.</p>
+<!-- Como funciona -->
+<section class="py-20 bg-surface" id="como">
+    <div class="max-w-6xl mx-auto px-5">
+        <div class="text-center mb-12">
+            <h2 class="font-display text-3xl sm:text-4xl font-bold">Como funciona</h2>
+            <p class="text-muted mt-2">Do Wi-Fi ao cadastro do cliente, em poucos passos.</p>
         </div>
-        <ol class="lp-steps">
-            <li><span>01</span><h3>Cliente conecta</h3><p>O visitante entra na rede Wi-Fi do estabelecimento.</p></li>
-            <li><span>02</span><h3>Portal da empresa</h3><p>Ele se identifica com nome e WhatsApp e aceita os termos.</p></li>
-            <li><span>03</span><h3>Internet liberada</h3><p>O acesso é registrado e você acompanha tudo no painel.</p></li>
-        </ol>
-    </section>
+        <div class="grid sm:grid-cols-3 gap-8">
+            <?php foreach ([
+                ['01', 'Cliente conecta', 'O visitante entra na rede Wi-Fi do estabelecimento.'],
+                ['02', 'Portal da empresa', 'Ele se identifica com nome e WhatsApp e aceita os termos.'],
+                ['03', 'Internet liberada', 'O acesso é registrado e você acompanha tudo no painel.'],
+            ] as [$num, $title, $desc]): ?>
+                <div class="bg-white rounded-2xl p-6 border border-line shadow-sm">
+                    <span class="inline-block bg-accent/10 text-accent text-sm font-extrabold w-10 h-10 rounded-full flex items-center justify-center mb-4"><?= $num ?></span>
+                    <h3 class="text-lg font-bold mb-2"><?= h($title) ?></h3>
+                    <p class="text-muted text-sm"><?= h($desc) ?></p>
+                </div>
+            <?php endforeach; ?>
+        </div>
+    </div>
+</section>
 
-    <section class="lp-section lp-section-split" id="recursos">
-        <div class="lp-section-head">
-            <h2>Recursos pensados para o dia a dia</h2>
-            <p>Simples de usar, mesmo sem conhecimento técnico.</p>
+<!-- Recursos -->
+<section class="py-20" id="recursos">
+    <div class="max-w-6xl mx-auto px-5">
+        <div class="text-center mb-12">
+            <h2 class="font-display text-3xl sm:text-4xl font-bold">Recursos pensados para o dia a dia</h2>
+            <p class="text-muted mt-2">Simples de usar, mesmo sem conhecimento técnico.</p>
         </div>
-        <ul class="lp-points">
-            <li><h3>Hotspots e portal</h3><p>Personalize logo, cores, textos e termos por unidade.</p></li>
-            <li><h3>Clientes e acessos</h3><p>Base de visitantes com histórico, filtros e exportação.</p></li>
-            <li><h3>Marketing</h3><p>Campanhas e cupons após o login no Wi-Fi.</p></li>
-            <li><h3>Multi-usuário</h3><p>Admin e operadores com permissões por módulo.</p></li>
-            <li><h3>Assinatura SaaS</h3><p>Trial, planos e limites claros para crescer com segurança.</p></li>
-            <li><h3>Pronto para equipamentos</h3><p>Arquitetura preparada para Windows, MikroTik e outros.</p></li>
-        </ul>
-    </section>
+        <div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
+            <?php foreach ([
+                ['Hotspots e portal', 'Personalize logo, cores, textos e termos por unidade.'],
+                ['Clientes e acessos', 'Base de visitantes com histórico, filtros e exportação.'],
+                ['Marketing', 'Campanhas e cupons após o login no Wi-Fi.'],
+                ['Multi-usuário', 'Admin e operadores com permissões por módulo.'],
+                ['Assinatura SaaS', 'Trial, planos e limites claros para crescer com segurança.'],
+                ['Pronto para equipamentos', 'Arquitetura preparada para Windows, MikroTik e outros.'],
+            ] as [$title, $desc]): ?>
+                <div class="bg-surface rounded-xl p-5 border border-line/60">
+                    <h3 class="font-bold mb-1"><?= h($title) ?></h3>
+                    <p class="text-muted text-sm"><?= h($desc) ?></p>
+                </div>
+            <?php endforeach; ?>
+        </div>
+    </div>
+</section>
 
-    <section class="lp-section" id="planos">
-        <div class="lp-section-head">
-            <h2>Planos</h2>
-            <p>Comece grátis por 14 dias. Cancele quando quiser.</p>
+<!-- Planos -->
+<section class="py-20 bg-surface" id="planos">
+    <div class="max-w-6xl mx-auto px-5">
+        <div class="text-center mb-12">
+            <h2 class="font-display text-3xl sm:text-4xl font-bold">Planos</h2>
+            <p class="text-muted mt-2">Comece grátis por 14 dias. Cancele quando quiser.</p>
         </div>
-        <div class="lp-points">
+        <div class="grid sm:grid-cols-2 lg:grid-cols-<?= count($plans) >= 4 ? '4' : (count($plans) ?: '4') ?> gap-6 max-w-4xl mx-auto">
             <?php if ($plans): ?>
                 <?php foreach ($plans as $p): ?>
-                    <div>
-                        <h3><?= h((string) $p['name']) ?></h3>
-                        <p><strong><?= (int) $p['price_cents'] === 0 ? 'Grátis' : h(cents_label((int) $p['price_cents'])) . '/mês' ?></strong></p>
-                        <p>Hotspots: <?= (int) $p['max_hotspots'] === 0 ? 'ilimitados' : (int) $p['max_hotspots'] ?></p>
-                        <p>Clientes: <?= (int) $p['max_clients'] === 0 ? 'ilimitados' : (int) $p['max_clients'] ?></p>
+                    <div class="bg-white rounded-2xl p-6 border border-line shadow-sm text-center">
+                        <h3 class="text-lg font-bold"><?= h((string) $p['name']) ?></h3>
+                        <p class="text-2xl font-extrabold mt-2"><?= (int) $p['price_cents'] === 0 ? 'Grátis' : h(cents_label((int) $p['price_cents'])) ?><span class="text-sm font-normal text-muted"><?= (int) $p['price_cents'] > 0 ? '/mês' : '' ?></span></p>
+                        <div class="text-sm text-muted mt-3 space-y-1">
+                            <p>Hotspots: <?= (int) $p['max_hotspots'] === 0 ? 'ilimitados' : (int) $p['max_hotspots'] ?></p>
+                            <p>Clientes: <?= (int) $p['max_clients'] === 0 ? 'ilimitados' : (int) $p['max_clients'] ?></p>
+                        </div>
                     </div>
                 <?php endforeach; ?>
             <?php else: ?>
-                <div><h3>Gratuito</h3><p>1 hotspot · 100 clientes</p></div>
-                <div><h3>Essencial</h3><p>R$ 29,90/mês · portal personalizado</p></div>
-                <div><h3>Profissional</h3><p>R$ 49,90/mês · campanhas e cupons</p></div>
-                <div><h3>Empresa</h3><p>R$ 99,90/mês · múltiplas unidades</p></div>
+                <?php foreach ([
+                    ['Gratuito', '1 hotspot · 100 clientes'],
+                    ['Essencial', 'R$ 29,90/mês · portal personalizado'],
+                    ['Profissional', 'R$ 49,90/mês · campanhas e cupons'],
+                    ['Empresa', 'R$ 99,90/mês · múltiplas unidades'],
+                ] as [$name, $desc]): ?>
+                    <div class="bg-white rounded-2xl p-6 border border-line shadow-sm text-center">
+                        <h3 class="text-lg font-bold"><?= h($name) ?></h3>
+                        <p class="text-sm text-muted mt-2"><?= h($desc) ?></p>
+                    </div>
+                <?php endforeach; ?>
             <?php endif; ?>
         </div>
-        <div class="lp-cta" style="margin-top:28px">
-            <a class="lp-btn" href="<?= h($startUrl) ?>">Começar grátis</a>
+        <div class="text-center mt-10">
+            <a href="<?= h($startUrl) ?>" class="bg-accent hover:bg-accent/90 text-white font-bold px-8 py-3.5 rounded-btn text-base transition shadow-lg shadow-accent/20">Começar grátis</a>
         </div>
-    </section>
+    </div>
+</section>
 
-    <section class="lp-section" id="faq">
-        <div class="lp-section-head">
-            <h2>Perguntas frequentes</h2>
-            <p>Respostas rápidas para quem está começando.</p>
+<!-- FAQ -->
+<section class="py-20" id="faq">
+    <div class="max-w-3xl mx-auto px-5">
+        <div class="text-center mb-12">
+            <h2 class="font-display text-3xl sm:text-4xl font-bold">Perguntas frequentes</h2>
+            <p class="text-muted mt-2">Respostas rápidas para quem está começando.</p>
         </div>
-        <ul class="lp-points">
-            <li><h3>Preciso de roteador especial?</h3><p>No MVP usamos o hotspot do Windows no PC da loja. Outros equipamentos virão depois.</p></li>
-            <li><h3>Os dados são da minha empresa?</h3><p>Sim. Cada empresa vê apenas os próprios clientes, hotspots e campanhas.</p></li>
-            <li><h3>Posso testar antes de pagar?</h3><p>Sim. Toda conta nova recebe 14 dias de trial.</p></li>
-        </ul>
-    </section>
-
-    <section class="lp-section lp-closing">
-        <h2>Pronto para conhecer seus clientes pelo Wi-Fi?</h2>
-        <p>Crie sua conta, configure o portal e comece a registrar acessos hoje.</p>
-        <div class="lp-cta">
-            <a class="lp-btn" href="<?= h($startUrl) ?>">Começar grátis</a>
-            <a class="lp-btn lp-btn-ghost" href="<?= h($panelUrl) ?>">Entrar</a>
+        <div class="space-y-4">
+            <?php foreach ([
+                ['Preciso de roteador especial?', 'No MVP usamos o hotspot do Windows no PC da loja. Outros equipamentos virão depois.'],
+                ['Os dados são da minha empresa?', 'Sim. Cada empresa vê apenas os próprios clientes, hotspots e campanhas.'],
+                ['Posso testar antes de pagar?', 'Sim. Toda conta nova recebe 14 dias de trial.'],
+            ] as [$q, $a]): ?>
+                <details class="group bg-surface border border-line/60 rounded-xl p-5">
+                    <summary class="cursor-pointer font-bold text-ink flex items-center justify-between">
+                        <?= h($q) ?>
+                        <svg class="w-5 h-5 text-muted transition group-open:rotate-180" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5"/></svg>
+                    </summary>
+                    <p class="text-muted text-sm mt-3"><?= h($a) ?></p>
+                </details>
+            <?php endforeach; ?>
         </div>
-    </section>
-</main>
+    </div>
+</section>
 
-<footer class="lp-foot">
-    <span class="lp-brand-mini">
-        <img class="lp-logo lp-logo-foot" src="<?= h(platform_logo_url()) ?>" alt="WiFi da Loja">
-    </span>
-    <span>Hotspot com cadastro e relacionamento</span>
+<!-- CTA final -->
+<section class="py-20 bg-gradient-to-br from-accent/5 to-surface text-center">
+    <div class="max-w-2xl mx-auto px-5">
+        <h2 class="font-display text-3xl sm:text-4xl font-bold">Pronto para conhecer seus clientes pelo Wi-Fi?</h2>
+        <p class="text-muted mt-3 text-lg">Crie sua conta, configure o portal e comece a registrar acessos hoje.</p>
+        <div class="mt-8 flex flex-wrap justify-center gap-4">
+            <a href="<?= h($startUrl) ?>" class="bg-accent hover:bg-accent/90 text-white font-bold px-8 py-3.5 rounded-btn text-base transition shadow-lg shadow-accent/20">Começar grátis</a>
+            <a href="<?= h($panelUrl) ?>" class="bg-white hover:bg-hover text-ink font-bold px-8 py-3.5 rounded-btn text-base border border-line transition">Entrar</a>
+        </div>
+    </div>
+</section>
+
+<footer class="border-t border-line py-6">
+    <div class="max-w-6xl mx-auto px-5 flex items-center justify-center gap-3 text-sm text-muted">
+        <img class="h-6 w-auto rounded bg-white object-contain" src="<?= h(platform_logo_url()) ?>" alt="WiFi da Loja">
+        <span>Hotspot com cadastro e relacionamento</span>
+    </div>
 </footer>
 </body>
 </html>

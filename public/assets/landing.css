@@ -5,7 +5,7 @@
   --lp-accent: #c8892a;
   --lp-accent-soft: rgba(200, 137, 42, 0.14);
   --lp-line: #dde3ea;
-  --lp-stage: #18222d;
+  --lp-stage: #eef2f6;
   --lp-cream: #ffffff;
   --lp-font: "Figtree", sans-serif;
   --lp-display: "Syne", sans-serif;
@@ -55,7 +55,7 @@ a { color: inherit; }
 .lp-logo {
   display: block;
   object-fit: contain;
-  background: #000;
+  background: #fff;
   border-radius: 12px;
 }
 
@@ -93,8 +93,8 @@ a { color: inherit; }
   place-items: center;
   min-height: min(420px, 56vh);
   background:
-    radial-gradient(circle at 50% 42%, rgba(56, 160, 255, 0.28), transparent 55%),
-    linear-gradient(160deg, #0b1220 0%, #101a2c 55%, #0a101a 100%);
+    radial-gradient(circle at 50% 42%, rgba(200, 137, 42, 0.16), transparent 55%),
+    linear-gradient(160deg, #f8fafc 0%, #eef2f6 100%);
   border-radius: 28px;
   padding: clamp(20px, 4vw, 36px);
 }
@@ -220,8 +220,8 @@ a { color: inherit; }
   position: absolute;
   inset: 0;
   background:
-    linear-gradient(145deg, rgba(255, 255, 255, 0.08), transparent 40%),
-    radial-gradient(circle at 70% 30%, rgba(200, 137, 42, 0.32), transparent 45%),
+    linear-gradient(145deg, rgba(255, 255, 255, 0.85), transparent 40%),
+    radial-gradient(circle at 70% 30%, rgba(200, 137, 42, 0.18), transparent 45%),
     var(--lp-stage);
   display: grid;
   place-items: center;
@@ -232,9 +232,9 @@ a { color: inherit; }
   aspect-ratio: 9 / 17;
   border-radius: 28px;
   padding: 12px;
-  background: #16120e;
-  border: 1px solid rgba(255, 250, 243, 0.12);
-  box-shadow: 0 30px 60px rgba(0, 0, 0, 0.35);
+  background: #fff;
+  border: 1px solid var(--lp-line);
+  box-shadow: 0 24px 48px rgba(21, 32, 43, 0.12);
   position: relative;
   z-index: 2;
   animation: lp-float 5.5s ease-in-out infinite;
@@ -245,8 +245,8 @@ a { color: inherit; }
   border-radius: 20px;
   padding: 28px 20px;
   background:
-    linear-gradient(180deg, #3a2c1c 0%, #1c1712 100%);
-  color: #f7efe3;
+    linear-gradient(180deg, #ffffff 0%, #f3f5f8 100%);
+  color: var(--lp-ink);
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -256,7 +256,7 @@ a { color: inherit; }
   font-size: 11px;
   letter-spacing: 0.14em;
   text-transform: uppercase;
-  color: #e0b06a;
+  color: var(--lp-accent);
 }
 
 .lp-phone-screen strong {
@@ -268,7 +268,7 @@ a { color: inherit; }
 
 .lp-phone-screen p {
   margin: 0;
-  color: #cbbba4;
+  color: var(--lp-muted);
   font-size: 14px;
   line-height: 1.45;
 }
@@ -278,7 +278,7 @@ a { color: inherit; }
   font-family: var(--lp-display);
   font-size: 42px;
   letter-spacing: 0.22em;
-  color: #e8b058;
+  color: var(--lp-accent);
   text-align: center;
   padding: 18px 0;
 }
@@ -286,8 +286,8 @@ a { color: inherit; }
 .lp-phone-btn {
   display: block;
   text-align: center;
-  background: #e8b058;
-  color: #1a1308;
+  background: var(--lp-accent);
+  color: #fff;
   font-weight: 700;
   border-radius: 12px;
   padding: 12px;

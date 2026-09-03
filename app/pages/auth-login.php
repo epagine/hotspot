@@ -65,7 +65,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <body class="bg-gradient-to-b from-surface to-white min-h-screen flex items-center justify-center p-4 font-sans">
 <section class="w-full max-w-md bg-card border border-line rounded-2xl shadow-lg p-8">
     <div class="flex flex-col items-center mb-6">
-        <img class="h-14 w-auto rounded-xl bg-black object-contain" src="<?= h(platform_logo_url()) ?>" alt="WiFi da Loja">
+        <img class="h-14 w-auto rounded-xl bg-white object-contain" src="<?= h(platform_logo_url()) ?>" alt="WiFi da Loja">
     </div>
     <h1 class="text-2xl font-bold text-ink text-center">Entrar</h1>
     <p class="text-muted text-sm text-center mt-1 mb-6">Gerencie hotspots, clientes e assinatura.</p>

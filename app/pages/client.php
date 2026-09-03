@@ -65,41 +65,51 @@ if ($mode === 'company') {
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title><?= h($pageTitle) ?> · Portal do cliente</title>
+    <?php require __DIR__ . '/../partials/tw-head.php'; ?>
     <link rel="stylesheet" href="/assets/app.css">
 </head>
-<body class="app">
-<aside class="app-side" id="app-sidebar">
-    <a class="app-brand" href="<?= h(client_url()) ?>">
-        <img class="app-logo app-logo-side" src="<?= h(platform_logo_url()) ?>" alt="WiFi da Loja">
-        <div>
-            <strong><?= h($brandName) ?></strong>
-            <small><?= h($brandSub) ?></small>
+<body class="font-sans bg-surface text-ink min-h-screen grid grid-cols-1 lg:grid-cols-[260px_1fr]">
+<aside id="app-sidebar" class="bg-white border-r border-line p-4 flex flex-col gap-6 sticky top-0 h-screen overflow-y-auto max-lg:h-auto max-lg:sticky max-lg:z-20 max-lg:flex-row max-lg:flex-wrap max-lg:items-center max-lg:gap-3 max-lg:p-3 max-lg:border-b max-lg:border-r-0 transition-all" data-sidebar>
+    <a class="flex items-center gap-3 no-underline text-inherit" href="<?= h(client_url()) ?>">
+        <img class="w-10 h-10 rounded-[10px] bg-white object-cover object-left-center flex-shrink-0" src="<?= h(platform_logo_url()) ?>" alt="WiFi da Loja">
+        <div class="max-lg:hidden">
+            <strong class="block text-sm"><?= h($brandName) ?></strong>
+            <span class="text-xs text-muted"><?= h($brandSub) ?></span>
         </div>
     </a>
-    <button type="button" class="app-hamburger" id="app-hamburger" aria-label="Menu" aria-expanded="false">
-        <span></span><span></span><span></span>
+    <button type="button" id="app-hamburger" aria-label="Menu" aria-expanded="false"
+            class="hidden max-lg:flex ml-auto flex-col gap-[5px] items-center justify-center p-1.5 bg-transparent border-0 cursor-pointer">
+        <span class="block w-[22px] h-[2px] bg-ink rounded-sm transition-transform"></span>
+        <span class="block w-[22px] h-[2px] bg-ink rounded-sm transition-opacity"></span>
+        <span class="block w-[22px] h-[2px] bg-ink rounded-sm transition-transform"></span>
     </button>
-    <nav class="app-nav">
-        <div class="app-nav-label">Área</div>
-        <?php client_nav_item($sec, 'assinatura', 'Assinatura'); ?>
-        <?php client_nav_item($sec, 'conta', 'Conta'); ?>
+    <nav class="flex flex-col gap-1 flex-1 max-lg:hidden" data-nav>
+        <div class="text-[11px] tracking-wider uppercase text-muted px-3 pt-4 pb-1">Área</div>
+        <?php
+        $clientNavItems = [
+            ['assinatura', 'Assinatura', client_url('painel')],
+            ['conta', 'Conta', client_url('conta')],
+        ];
+        foreach ($clientNavItems as [$navKey, $navLabel, $navHref]):
+            $navActive = $sec === $navKey;
+        ?>
+            <a href="<?= h($navHref) ?>" class="flex items-center gap-2.5 px-3 py-2.5 rounded-[10px] text-sm font-semibold no-underline transition <?= $navActive ? 'bg-accent/10 text-accent' : 'text-muted hover:bg-hover hover:text-ink' ?>"><?= h($navLabel) ?></a>
+        <?php endforeach; ?>
         <?php if ($mode === 'company'): ?>
-            <a href="/app">Painel completo</a>
+            <a href="/app" class="flex items-center gap-2.5 px-3 py-2.5 rounded-[10px] text-sm font-semibold text-muted hover:bg-hover hover:text-ink no-underline transition">Painel completo</a>
         <?php endif; ?>
     </nav>
-    <div class="app-side-foot">
-        <div class="app-user"><?= h($userLabel) ?></div>
-        <a class="btn ghost btn-sm" href="<?= h(client_url('sair')) ?>">Sair</a>
+    <div class="border-t border-line pt-3 max-lg:hidden" data-foot>
+        <div class="text-xs text-muted px-3 mb-2"><?= h($userLabel) ?></div>
+        <a class="inline-block text-sm font-semibold text-muted border border-line rounded-btn px-3 py-2 hover:text-ink hover:border-ink/20 transition no-underline" href="<?= h(client_url('sair')) ?>">Sair</a>
     </div>
 </aside>
-<div class="app-body">
-    <header class="app-top">
-        <div>
-            <h1><?= h($pageTitle) ?></h1>
-            <p class="lead"><?= h($pageLead) ?></p>
-        </div>
+<div class="min-w-0 flex flex-col">
+    <header class="px-8 pt-6 pb-0 max-md:px-4">
+        <h1 class="text-2xl font-bold tracking-tight"><?= h($pageTitle) ?></h1>
+        <p class="text-muted text-sm mt-1"><?= h($pageLead) ?></p>
     </header>
-    <main class="app-main">
+    <main class="px-8 py-6 max-w-[1180px] w-full max-md:px-4">
         <?php if (!empty($_SESSION['flash_error'])): ?>
             <p class="alert flash-global"><?= h((string) $_SESSION['flash_error']) ?></p>
             <?php unset($_SESSION['flash_error']); ?>
@@ -294,12 +304,15 @@ if ($mode === 'company') {
 (function(){
   var btn=document.getElementById('app-hamburger'),side=document.getElementById('app-sidebar');
   if(!btn||!side)return;
+  var nav=side.querySelector('[data-nav]'),foot=side.querySelector('[data-foot]');
   btn.addEventListener('click',function(){
-    var open=side.classList.toggle('open');
-    btn.setAttribute('aria-expanded',open?'true':'false');
+    var open=!nav.classList.contains('max-lg:hidden')||nav.classList.contains('!flex');
+    if(open){nav.classList.remove('!flex','!flex-col');nav.classList.add('max-lg:hidden');if(foot)foot.classList.add('max-lg:hidden');}
+    else{nav.classList.add('!flex','!flex-col');nav.classList.remove('max-lg:hidden');if(foot){foot.classList.remove('max-lg:hidden');}}
+    btn.setAttribute('aria-expanded',(!open)?'true':'false');
   });
-  side.querySelectorAll('.app-nav a').forEach(function(a){
-    a.addEventListener('click',function(){side.classList.remove('open');btn.setAttribute('aria-expanded','false');});
+  side.querySelectorAll('[data-nav] a').forEach(function(a){
+    a.addEventListener('click',function(){nav.classList.add('max-lg:hidden');if(foot)foot.classList.add('max-lg:hidden');btn.setAttribute('aria-expanded','false');});
   });
 })();
 </script>

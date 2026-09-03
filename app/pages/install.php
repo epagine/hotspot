@@ -93,85 +93,78 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Criar painel · Wi-Fi da loja</title>
-    <link rel="stylesheet" href="/assets/app.css">
+    <?php require __DIR__ . '/../partials/tw-head.php'; ?>
     <style>
-        .install-loading {
-            position: fixed;
-            inset: 0;
-            z-index: 9999;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            background: rgba(15, 23, 32, .55);
-            backdrop-filter: blur(2px);
-        }
-        .install-loading[hidden] { display: none !important; }
-        .install-loading-box {
-            background: #fff;
-            border-radius: 12px;
-            padding: 28px 32px;
-            text-align: center;
-            min-width: 220px;
-            box-shadow: 0 12px 40px rgba(0,0,0,.18);
-        }
-        .install-loading-box p {
-            margin: 14px 0 0;
-            color: #15202b;
-            font-size: .95rem;
-        }
-        .install-spinner {
-            width: 36px;
-            height: 36px;
-            margin: 0 auto;
-            border: 3px solid #e6ebf0;
-            border-top-color: #c8892a;
-            border-radius: 50%;
-            animation: install-spin .7s linear infinite;
-        }
-        @keyframes install-spin {
-            to { transform: rotate(360deg); }
-        }
-        body.install-busy { overflow: hidden; }
+        @keyframes install-spin { to { transform: rotate(360deg); } }
+        .install-spinner { animation: install-spin .7s linear infinite; }
     </style>
 </head>
-<body class="app-auth">
-<div id="install-loading" class="install-loading" hidden aria-live="polite" aria-busy="true">
-    <div class="install-loading-box">
-        <div class="install-spinner" role="status" aria-label="Carregando"></div>
-        <p>Criando painel…</p>
+<body class="bg-gradient-to-b from-surface to-white min-h-screen flex items-center justify-center p-4 font-sans">
+<div id="install-loading" class="fixed inset-0 z-50 flex items-center justify-center bg-ink/50 backdrop-blur-sm" hidden aria-live="polite" aria-busy="true">
+    <div class="bg-white rounded-xl p-8 text-center shadow-xl min-w-[220px]">
+        <div class="install-spinner w-9 h-9 mx-auto border-[3px] border-line border-t-accent rounded-full" role="status" aria-label="Carregando"></div>
+        <p class="mt-3 text-ink text-sm">Criando painel…</p>
     </div>
 </div>
-<section class="card">
-    <div class="app-brand app-brand-logo">
-        <img class="app-logo" src="<?= h(platform_logo_url()) ?>" alt="WiFi da Loja">
+<section class="w-full max-w-lg bg-card border border-line rounded-2xl shadow-lg p-8">
+    <div class="flex flex-col items-center mb-6">
+        <img class="h-14 w-auto rounded-xl bg-white object-contain" src="<?= h(platform_logo_url()) ?>" alt="WiFi da Loja">
     </div>
     <?php if ($ok): ?>
-        <h1>Painel pronto</h1>
-        <p class="lead">MySQL configurado.</p>
-        <p class="hint">Entre em <strong>/entrar</strong> com o e-mail <strong><?= h($loginEmail) ?></strong> e a senha que você definiu.</p>
-        <a class="btn" href="/entrar">Entrar</a>
+        <h1 class="text-2xl font-bold text-ink text-center">Painel pronto</h1>
+        <p class="text-muted text-center mt-2">MySQL configurado.</p>
+        <p class="text-sm text-muted text-center mt-3">Entre em <strong class="text-ink">/entrar</strong> com o e-mail <strong class="text-ink"><?= h($loginEmail) ?></strong> e a senha que você definiu.</p>
+        <div class="mt-6 text-center">
+            <a href="/entrar" class="inline-block bg-accent hover:bg-accent/90 text-white font-bold py-3 px-8 rounded-btn transition">Entrar</a>
+        </div>
     <?php else: ?>
-        <h1><?= $dbBroken ? 'Reconfigurar painel' : 'Criar painel' ?></h1>
-        <p class="lead"><?= $dbBroken
+        <h1 class="text-2xl font-bold text-ink text-center"><?= $dbBroken ? 'Reconfigurar painel' : 'Criar painel' ?></h1>
+        <p class="text-muted text-sm text-center mt-2 mb-6"><?= $dbBroken
             ? 'O MySQL configurado não foi encontrado ou está inacessível. Informe a conexão e o e-mail de Super Admin novamente.'
             : 'Configure o MySQL e o e-mail de Super Admin (o mesmo do login).' ?></p>
         <?php if ($installReason === 'db_unavailable' || $installReason === 'sqlite_removed' || $dbBroken): ?>
-            <p class="alert"><?= $installReason === 'sqlite_removed'
+            <div class="bg-danger-bg text-danger border border-danger/20 rounded-xl px-4 py-3 text-sm mb-4"><?= $installReason === 'sqlite_removed'
                 ? 'SQLite não é mais suportado. Configure o MySQL para continuar.'
-                : 'Não foi possível conectar ao MySQL. Conclua a instalação para continuar.' ?></p>
+                : 'Não foi possível conectar ao MySQL. Conclua a instalação para continuar.' ?></div>
         <?php endif; ?>
-        <?php if ($error): ?><p class="alert"><?= h($error) ?></p><?php endif; ?>
-        <form method="post" action="/instalar" class="form" id="install-form">
-            <label>Host MySQL<input name="mysql_host" value="<?= h($hostVal !== '' ? $hostVal : '127.0.0.1') ?>" required></label>
-            <label>Porta<input name="mysql_port" value="<?= h($portVal !== '' ? $portVal : '3306') ?>" required></label>
-            <label>Banco<input name="mysql_database" value="<?= h($dbVal !== '' ? $dbVal : 'wifidaloja') ?>" required></label>
-            <label>Usuário MySQL<input name="mysql_user" value="<?= h($userVal !== '' ? $userVal : 'root') ?>" autocomplete="off" required></label>
-            <label>Senha MySQL<input name="mysql_pass" type="password" value="" autocomplete="new-password"></label>
-            <p class="hint">O banco será criado automaticamente se ainda não existir (utf8mb4).</p>
-            <label>E-mail do admin<input name="admin_email" type="email" value="<?= h((string) ($_POST['admin_email'] ?? '')) ?>" required autocomplete="username" placeholder="voce@empresa.com"></label>
-            <label>Senha do admin<input name="admin_pass" type="password" minlength="8" required autocomplete="new-password"></label>
-            <p class="hint">Use este mesmo e-mail e senha em /entrar.</p>
-            <button class="btn" type="submit" id="install-submit">Criar painel</button>
+        <?php if ($error): ?><div class="bg-danger-bg text-danger border border-danger/20 rounded-xl px-4 py-3 text-sm mb-4"><?= h($error) ?></div><?php endif; ?>
+        <form method="post" action="/instalar" class="space-y-4" id="install-form">
+            <div class="grid grid-cols-2 gap-4">
+                <label class="block">
+                    <span class="text-sm font-medium text-muted">Host MySQL</span>
+                    <input name="mysql_host" value="<?= h($hostVal !== '' ? $hostVal : '127.0.0.1') ?>" required class="mt-1 block w-full rounded-btn border border-line bg-input px-4 py-3 text-ink focus:outline-none focus:ring-2 focus:ring-accent/30 focus:border-accent transition">
+                </label>
+                <label class="block">
+                    <span class="text-sm font-medium text-muted">Porta</span>
+                    <input name="mysql_port" value="<?= h($portVal !== '' ? $portVal : '3306') ?>" required class="mt-1 block w-full rounded-btn border border-line bg-input px-4 py-3 text-ink focus:outline-none focus:ring-2 focus:ring-accent/30 focus:border-accent transition">
+                </label>
+            </div>
+            <label class="block">
+                <span class="text-sm font-medium text-muted">Banco</span>
+                <input name="mysql_database" value="<?= h($dbVal !== '' ? $dbVal : 'wifidaloja') ?>" required class="mt-1 block w-full rounded-btn border border-line bg-input px-4 py-3 text-ink focus:outline-none focus:ring-2 focus:ring-accent/30 focus:border-accent transition">
+            </label>
+            <div class="grid grid-cols-2 gap-4">
+                <label class="block">
+                    <span class="text-sm font-medium text-muted">Usuário MySQL</span>
+                    <input name="mysql_user" value="<?= h($userVal !== '' ? $userVal : 'root') ?>" autocomplete="off" required class="mt-1 block w-full rounded-btn border border-line bg-input px-4 py-3 text-ink focus:outline-none focus:ring-2 focus:ring-accent/30 focus:border-accent transition">
+                </label>
+                <label class="block">
+                    <span class="text-sm font-medium text-muted">Senha MySQL</span>
+                    <input name="mysql_pass" type="password" value="" autocomplete="new-password" class="mt-1 block w-full rounded-btn border border-line bg-input px-4 py-3 text-ink focus:outline-none focus:ring-2 focus:ring-accent/30 focus:border-accent transition">
+                </label>
+            </div>
+            <p class="text-xs text-muted">O banco será criado automaticamente se ainda não existir (utf8mb4).</p>
+            <hr class="border-line">
+            <label class="block">
+                <span class="text-sm font-medium text-muted">E-mail do admin</span>
+                <input name="admin_email" type="email" value="<?= h((string) ($_POST['admin_email'] ?? '')) ?>" required autocomplete="username" placeholder="voce@empresa.com" class="mt-1 block w-full rounded-btn border border-line bg-input px-4 py-3 text-ink focus:outline-none focus:ring-2 focus:ring-accent/30 focus:border-accent transition">
+            </label>
+            <label class="block">
+                <span class="text-sm font-medium text-muted">Senha do admin</span>
+                <input name="admin_pass" type="password" minlength="8" required autocomplete="new-password" class="mt-1 block w-full rounded-btn border border-line bg-input px-4 py-3 text-ink focus:outline-none focus:ring-2 focus:ring-accent/30 focus:border-accent transition">
+            </label>
+            <p class="text-xs text-muted">Use este mesmo e-mail e senha em /entrar.</p>
+            <button type="submit" id="install-submit" class="w-full bg-accent hover:bg-accent/90 text-white font-bold py-3 px-4 rounded-btn transition">Criar painel</button>
         </form>
         <script>
             (function () {
@@ -182,11 +175,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 form.addEventListener('submit', function () {
                     if (!form.checkValidity()) return;
                     overlay.hidden = false;
-                    document.body.classList.add('install-busy');
-                    if (btn) {
-                        btn.disabled = true;
-                        btn.textContent = 'Criando…';
-                    }
+                    document.body.classList.add('overflow-hidden');
+                    if (btn) { btn.disabled = true; btn.textContent = 'Criando…'; }
                 });
             })();
         </script>

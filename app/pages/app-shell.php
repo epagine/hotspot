@@ -96,7 +96,7 @@ function app_nav_tw(string $tab, array $items): void
 <body class="font-sans bg-surface text-ink min-h-screen grid grid-cols-1 lg:grid-cols-[260px_1fr]">
 <aside id="app-sidebar" class="bg-white border-r border-line p-4 flex flex-col gap-6 sticky top-0 h-screen overflow-y-auto max-lg:h-auto max-lg:sticky max-lg:z-20 max-lg:flex-row max-lg:flex-wrap max-lg:items-center max-lg:gap-3 max-lg:p-3 max-lg:border-b max-lg:border-r-0 transition-all" data-sidebar>
     <a class="flex items-center gap-3 no-underline text-inherit" href="/app">
-        <img class="w-10 h-10 rounded-[10px] bg-black object-cover object-left-center flex-shrink-0" src="<?= h(platform_logo_url()) ?>" alt="WiFi da Loja">
+        <img class="w-10 h-10 rounded-[10px] bg-white object-cover object-left-center flex-shrink-0" src="<?= h(platform_logo_url()) ?>" alt="WiFi da Loja">
         <div class="max-lg:hidden">
             <strong class="block text-sm"><?= h((string) $company['trade_name']) ?></strong>
             <span class="text-xs text-muted">Painel da empresa</span>

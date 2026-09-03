@@ -23,7 +23,6 @@ tailwind.config = {
         warn: { DEFAULT: '#9a6b12', bg: '#fff4df' },
         danger: { DEFAULT: '#b42318', bg: '#fdeceb' },
         offline: { bg: '#eef1f4' },
-        dark: { bg: '#120f0c', card: '#1c1814', ink: '#faf4e8', muted: '#c4b8a4', line: '#3a3228', gold: '#e8b058' }
       },
       fontFamily: {
         sans: ['Figtree', 'Inter', 'system-ui', 'sans-serif']
@@ -40,3 +39,6 @@ tailwind.config = {
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  html { color-scheme: light; }
+</style>
