@@ -16,7 +16,7 @@ if ($do === 'plan') {
     } catch (Throwable $e) {
         $_SESSION['flash_error'] = $e->getMessage();
     }
-    header('Location: /app?tab=assinatura');
+    header('Location: /app/assinatura');
     exit;
 }
 
@@ -34,9 +34,9 @@ if ($do === 'charge') {
     } catch (Throwable $e) {
         $_SESSION['flash_error'] = $e->getMessage();
     }
-    header('Location: /app?tab=assinatura');
+    header('Location: /app/assinatura');
     exit;
 }
 
-header('Location: /app?tab=assinatura');
+header('Location: /app/assinatura');
 exit;

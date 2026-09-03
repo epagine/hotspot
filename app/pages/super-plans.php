@@ -7,7 +7,7 @@ require_post_csrf();
 
 $returnTo = trim((string) ($_POST['return_to'] ?? ''));
 if ($returnTo === '' || !str_starts_with($returnTo, '/super')) {
-    $returnTo = '/super?tab=planos';
+    $returnTo = '/super/planos';
 }
 
 $id = (int) ($_POST['id'] ?? 0);

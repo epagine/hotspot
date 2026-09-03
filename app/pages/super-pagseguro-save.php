@@ -5,13 +5,13 @@ declare(strict_types=1);
 require_super_admin();
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-    header('Location: /super?tab=configuracoes&sec=integracao');
+    header('Location: /super/configuracoes/integracao');
     exit;
 }
 
 $returnTo = trim((string) ($_POST['return_to'] ?? ''));
 $redirect = static function () use ($returnTo): void {
-    header('Location: ' . ($returnTo !== '' ? $returnTo : '/super?tab=configuracoes&sec=integracao'));
+    header('Location: ' . ($returnTo !== '' ? $returnTo : '/super/configuracoes/integracao'));
     exit;
 };
 
@@ -105,5 +105,5 @@ if ($do === 'run') {
     $redirect();
 }
 
-header('Location: /super?tab=assinaturas');
+header('Location: /super/assinaturas');
 exit;

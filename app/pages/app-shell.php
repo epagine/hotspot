@@ -61,7 +61,7 @@ function app_nav(string $tab, string $key, string $label, string $perm, ?string 
         return;
     }
     $active = $tab === $key ? ' active' : '';
-    echo '<a class="' . $active . '" href="/app?tab=' . h($key) . '">' . h($label) . '</a>';
+    echo '<a class="' . $active . '" href="/app/' . h($key) . '">' . h($label) . '</a>';
 }
 ?><!doctype html>
 <html lang="pt-BR">
@@ -122,7 +122,7 @@ function app_nav(string $tab, string $key, string $label, string $perm, ?string 
         <?php if ($flashErr): ?><p class="alert"><?= h($flashErr) ?></p><?php endif; ?>
         <?php if ($flashOk): ?><p class="hint flash-ok"><?= h($flashOk) ?></p><?php endif; ?>
         <?php if (!$serviceOk && $tab !== 'assinatura'): ?>
-            <p class="alert">Sua assinatura está <?= h((string) ($sub['billing_label'] ?? 'inativa')) ?>. Escolha um plano em <a href="/app?tab=assinatura">Assinatura</a> para continuar usando o serviço.</p>
+            <p class="alert">Sua assinatura está <?= h((string) ($sub['billing_label'] ?? 'inativa')) ?>. Escolha um plano em <a href="/app/assinatura">Assinatura</a> para continuar usando o serviço.</p>
         <?php endif; ?>
 
         <?php if ($tab === 'dashboard'): ?>
@@ -180,7 +180,7 @@ function app_nav(string $tab, string $key, string $label, string $perm, ?string 
             <section class="card">
                 <div class="card-head"><h2>Hotspots</h2>
                     <?php if (company_within_hotspot_limit($companyId)): ?>
-                        <a class="btn btn-sm" href="/app?tab=hotspots&novo=1">Novo hotspot</a>
+                        <a class="btn btn-sm" href="/app/hotspots?novo=1">Novo hotspot</a>
                     <?php endif; ?>
                 </div>
                 <p class="hint">Uso do plano: <?= h(plan_usage_label($limitUsage['hotspots']['used'], $limitUsage['hotspots']['max'])) ?> hotspots.</p>
@@ -209,7 +209,7 @@ function app_nav(string $tab, string $key, string $label, string $perm, ?string 
                                 <td><span class="tag conn-<?= h((string) $health['key']) ?>"><?= h((string) $health['label']) ?></span></td>
                                 <td><span class="tag <?= (($h['hotspot_status'] ?? 'ativo') === 'ativo') ? 'online' : 'blocked' ?>"><?= h((string) ($h['hotspot_status'] ?? 'ativo')) ?></span></td>
                                 <td><?= h(network_provider((string) ($h['provider'] ?? 'windows'))->label()) ?></td>
-                                <td><a class="btn ghost btn-sm" href="/app?tab=hotspots&id=<?= (int) $h['id'] ?>">Abrir</a></td>
+                                <td><a class="btn ghost btn-sm" href="/app/hotspots/<?= (int) $h['id'] ?>">Abrir</a></td>
                             </tr>
                         <?php endforeach; ?>
                         <?php if (!$hotspots): ?>
@@ -371,7 +371,7 @@ function app_nav(string $tab, string $key, string $label, string $perm, ?string 
             <?php if (!company_has_feature($companyId, 'campaigns')): ?>
                 <section class="card card-narrow">
                     <p class="alert"><?= h(company_feature_error('campaigns')) ?></p>
-                    <a class="btn" href="/app?tab=assinatura">Ver planos</a>
+                    <a class="btn" href="/app/assinatura">Ver planos</a>
                 </section>
             <?php else: ?>
             <?php $camps = company_campaigns($companyId); ?>
@@ -421,7 +421,7 @@ function app_nav(string $tab, string $key, string $label, string $perm, ?string 
             <?php if (!company_has_feature($companyId, 'coupons')): ?>
                 <section class="card card-narrow">
                     <p class="alert"><?= h(company_feature_error('coupons')) ?></p>
-                    <a class="btn" href="/app?tab=assinatura">Ver planos</a>
+                    <a class="btn" href="/app/assinatura">Ver planos</a>
                 </section>
             <?php else: ?>
             <?php $coupons = company_coupons($companyId); ?>
@@ -459,7 +459,7 @@ function app_nav(string $tab, string $key, string $label, string $perm, ?string 
             <?php if (!company_has_feature($companyId, 'reports')): ?>
                 <section class="card card-narrow">
                     <p class="alert"><?= h(company_feature_error('reports')) ?></p>
-                    <a class="btn" href="/app?tab=assinatura">Ver planos</a>
+                    <a class="btn" href="/app/assinatura">Ver planos</a>
                 </section>
             <?php else: ?>
             <?php
@@ -485,7 +485,7 @@ function app_nav(string $tab, string $key, string $label, string $perm, ?string 
                     </div>
                     <div class="report-periods">
                         <?php foreach ([7 => '7 dias', 30 => '30 dias', 90 => '90 dias'] as $d => $lbl): ?>
-                            <a class="btn btn-sm <?= $reportDays === $d ? '' : 'ghost' ?>" href="/app?tab=relatorios&days=<?= $d ?>"><?= h($lbl) ?></a>
+                            <a class="btn btn-sm <?= $reportDays === $d ? '' : 'ghost' ?>" href="/app/relatorios?days=<?= $d ?>"><?= h($lbl) ?></a>
                         <?php endforeach; ?>
                     </div>
                 </div>

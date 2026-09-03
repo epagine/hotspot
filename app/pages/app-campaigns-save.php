@@ -24,5 +24,5 @@ try {
 } catch (Throwable $e) {
     $_SESSION['flash_error'] = $e->getMessage();
 }
-header('Location: /app?tab=campanhas');
+header('Location: /app/campanhas');
 exit;

@@ -11,13 +11,13 @@ $do = (string) ($_POST['do'] ?? 'save');
 if ($do === 'create') {
     if (!company_within_hotspot_limit($companyId)) {
         $_SESSION['flash_error'] = company_limit_error('hotspots');
-        header('Location: /app?tab=hotspots');
+        header('Location: /app/hotspots');
         exit;
     }
     $name = trim((string) ($_POST['name'] ?? ''));
     if ($name === '') {
         $_SESSION['flash_error'] = 'Informe o nome do hotspot.';
-        header('Location: /app?tab=hotspots&novo=1');
+        header('Location: /app/hotspots?novo=1');
         exit;
     }
     $store = create_store($name, trim((string) ($_POST['city'] ?? '')));
@@ -34,7 +34,7 @@ if ($do === 'create') {
     ]);
     audit_log('hotspot.create', $companyId, null, ['id' => $id]);
     $_SESSION['flash_ok'] = 'Hotspot criado.';
-    header('Location: /app?tab=hotspots&id=' . $id);
+    header('Location: /app/hotspots/' . $id);
     exit;
 }
 
@@ -42,7 +42,7 @@ $id = (int) ($_POST['id'] ?? 0);
 $store = find_store($id);
 if (!$store || (int) ($store['company_id'] ?? 0) !== $companyId) {
     $_SESSION['flash_error'] = 'Hotspot não encontrado.';
-    header('Location: /app?tab=hotspots');
+    header('Location: /app/hotspots');
     exit;
 }
 
@@ -50,7 +50,7 @@ if ($do === 'rotate') {
     rotate_store_token($id);
     audit_log('hotspot.rotate_token', $companyId, null, ['id' => $id]);
     $_SESSION['flash_ok'] = 'Token do agente renovado. Atualize o PC da loja.';
-    header('Location: /app?tab=hotspots&id=' . $id);
+    header('Location: /app/hotspots/' . $id);
     exit;
 }
 
@@ -79,5 +79,5 @@ save_portal_config($id, [
 ]);
 audit_log('hotspot.update', $companyId, null, ['id' => $id]);
 $_SESSION['flash_ok'] = 'Hotspot atualizado.';
-header('Location: /app?tab=hotspots&id=' . $id);
+header('Location: /app/hotspots/' . $id);
 exit;

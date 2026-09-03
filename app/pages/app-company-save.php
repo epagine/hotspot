@@ -20,5 +20,5 @@ update_company($companyId, [
     'secondary_color' => $_POST['secondary_color'] ?? '#15202b',
 ]);
 $_SESSION['flash_ok'] = 'Dados da empresa salvos.';
-header('Location: /app?tab=empresa');
+header('Location: /app/empresa');
 exit;

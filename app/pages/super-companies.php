@@ -65,5 +65,5 @@ if ($do === 'promote_store') {
     }
 }
 
-header('Location: /super?tab=empresas');
+header('Location: /super/empresas');
 exit;

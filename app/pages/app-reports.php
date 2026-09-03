@@ -10,7 +10,7 @@ $days = company_report_days((int) ($_GET['days'] ?? 30));
 if ($export !== '') {
     if (!company_has_feature($companyId, 'reports')) {
         $_SESSION['flash_error'] = company_feature_error('reports');
-        header('Location: /app?tab=relatorios');
+        header('Location: /app/relatorios');
         exit;
     }
     $filename = 'relatorio.csv';
@@ -25,7 +25,7 @@ if ($export !== '') {
         $filename = 'campanhas.csv';
         $csv = export_campaigns_csv($companyId, $days);
     } else {
-        header('Location: /app?tab=relatorios&days=' . $days);
+        header('Location: /app/relatorios&days=' . $days);
         exit;
     }
     header('Content-Type: text/csv; charset=utf-8');
@@ -34,5 +34,5 @@ if ($export !== '') {
     exit;
 }
 
-header('Location: /app?tab=relatorios&days=' . $days);
+header('Location: /app/relatorios&days=' . $days);
 exit;

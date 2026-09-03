@@ -5,13 +5,13 @@ declare(strict_types=1);
 require_super_admin();
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-    header('Location: /super?tab=configuracoes&sec=whatsapp');
+    header('Location: /super/configuracoes/whatsapp');
     exit;
 }
 
 $returnTo = trim((string) ($_POST['return_to'] ?? ''));
 $redirect = static function () use ($returnTo): void {
-    header('Location: ' . ($returnTo !== '' ? $returnTo : '/super?tab=configuracoes&sec=whatsapp'));
+    header('Location: ' . ($returnTo !== '' ? $returnTo : '/super/configuracoes/whatsapp'));
     exit;
 };
 
@@ -64,5 +64,5 @@ if ($do === 'test') {
     $redirect();
 }
 
-header('Location: /super?tab=configuracoes&sec=whatsapp');
+header('Location: /super/configuracoes/whatsapp');
 exit;

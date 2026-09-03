@@ -7,7 +7,7 @@ csrf_verify();
 
 $returnTo = trim((string) ($_POST['return_to'] ?? ''));
 if ($returnTo === '' || !str_starts_with($returnTo, '/super')) {
-    $returnTo = '/super?tab=configuracoes&sec=sistema';
+    $returnTo = '/super/configuracoes/sistema';
 }
 
 try {

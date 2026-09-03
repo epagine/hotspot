@@ -96,7 +96,7 @@ $featureCatalog = plan_feature_catalog();
         </header>
         <form method="post" action="/super/planos" class="form app-modal-form" id="plan-form">
             <?= csrf_field() ?>
-            <input type="hidden" name="return_to" value="/super?tab=planos">
+            <input type="hidden" name="return_to" value="/super/planos">
             <input type="hidden" name="id" id="plan-id" value="0">
 
             <div class="form-grid-2">

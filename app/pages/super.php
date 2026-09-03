@@ -45,13 +45,13 @@ $setupReady = $setupFile !== null && is_file($setupFile);
     </button>
     <nav class="app-nav">
         <a class="<?= $tab === 'dashboard' ? 'active' : '' ?>" href="/super">Dashboard</a>
-        <a class="<?= $tab === 'empresas' ? 'active' : '' ?>" href="/super?tab=empresas">Empresas</a>
-        <a class="<?= $tab === 'planos' ? 'active' : '' ?>" href="/super?tab=planos">Planos</a>
-        <a class="<?= $tab === 'assinaturas' ? 'active' : '' ?>" href="/super?tab=assinaturas">Assinaturas</a>
-        <a class="<?= $tab === 'usuarios' ? 'active' : '' ?>" href="/super?tab=usuarios">Usuários</a>
-        <a class="<?= $tab === 'logs' ? 'active' : '' ?>" href="/super?tab=logs">Logs</a>
-        <a class="<?= $tab === 'instalador' ? 'active' : '' ?>" href="/super?tab=instalador">Instalador</a>
-        <a class="<?= $tab === 'configuracoes' ? 'active' : '' ?>" href="/super?tab=configuracoes">Configurações</a>
+        <a class="<?= $tab === 'empresas' ? 'active' : '' ?>" href="/super/empresas">Empresas</a>
+        <a class="<?= $tab === 'planos' ? 'active' : '' ?>" href="/super/planos">Planos</a>
+        <a class="<?= $tab === 'assinaturas' ? 'active' : '' ?>" href="/super/assinaturas">Assinaturas</a>
+        <a class="<?= $tab === 'usuarios' ? 'active' : '' ?>" href="/super/usuarios">Usuários</a>
+        <a class="<?= $tab === 'logs' ? 'active' : '' ?>" href="/super/logs">Logs</a>
+        <a class="<?= $tab === 'instalador' ? 'active' : '' ?>" href="/super/instalador">Instalador</a>
+        <a class="<?= $tab === 'configuracoes' ? 'active' : '' ?>" href="/super/configuracoes">Configurações</a>
     </nav>
     <div class="app-side-foot">
         <a class="btn ghost btn-sm" href="/sair">Sair</a>
@@ -245,7 +245,7 @@ $setupReady = $setupFile !== null && is_file($setupFile);
                 <?php endif; ?>
                 <form method="post" action="/super/instalador" class="form" enctype="multipart/form-data">
                     <?= csrf_field() ?>
-                    <input type="hidden" name="return_to" value="/super?tab=instalador">
+                    <input type="hidden" name="return_to" value="/super/instalador">
                     <label>Publicar .exe
                         <input name="setup" type="file" accept=".exe,application/vnd.microsoft-portable-executable" required>
                     </label>
@@ -256,10 +256,10 @@ $setupReady = $setupFile !== null && is_file($setupFile);
 
         <?php elseif ($tab === 'configuracoes'): ?>
             <nav class="app-subnav">
-                <a class="<?= $cfgSec === 'politicas' ? 'active' : '' ?>" href="/super?tab=configuracoes&sec=politicas">Políticas SaaS</a>
-                <a class="<?= $cfgSec === 'integracao' ? 'active' : '' ?>" href="/super?tab=configuracoes&sec=integracao">Pagamentos</a>
-                <a class="<?= $cfgSec === 'whatsapp' ? 'active' : '' ?>" href="/super?tab=configuracoes&sec=whatsapp">WhatsApp</a>
-                <a class="<?= $cfgSec === 'sistema' ? 'active' : '' ?>" href="/super?tab=configuracoes&sec=sistema">Sistema</a>
+                <a class="<?= $cfgSec === 'politicas' ? 'active' : '' ?>" href="/super/configuracoes/politicas">Políticas SaaS</a>
+                <a class="<?= $cfgSec === 'integracao' ? 'active' : '' ?>" href="/super/configuracoes/integracao">Pagamentos</a>
+                <a class="<?= $cfgSec === 'whatsapp' ? 'active' : '' ?>" href="/super/configuracoes/whatsapp">WhatsApp</a>
+                <a class="<?= $cfgSec === 'sistema' ? 'active' : '' ?>" href="/super/configuracoes/sistema">Sistema</a>
             </nav>
             <?php if ($cfgSec === 'sistema'): ?>
             <?php
@@ -274,7 +274,7 @@ $setupReady = $setupFile !== null && is_file($setupFile);
                 <?php if ($migPending > 0): ?>
                     <form method="post" action="/super/migrations" class="form" style="margin:12px 0">
                         <?= csrf_field() ?>
-                        <input type="hidden" name="return_to" value="/super?tab=configuracoes&sec=sistema">
+                        <input type="hidden" name="return_to" value="/super/configuracoes/sistema">
                         <button class="btn" type="submit">Aplicar pendentes agora</button>
                     </form>
                 <?php else: ?>
@@ -308,7 +308,7 @@ $setupReady = $setupFile !== null && is_file($setupFile);
                 <form method="post" action="/super/whatsapp" class="form">
                     <?= csrf_field() ?>
                     <input type="hidden" name="do" value="save">
-                    <input type="hidden" name="return_to" value="/super?tab=configuracoes&sec=whatsapp">
+                    <input type="hidden" name="return_to" value="/super/configuracoes/whatsapp">
                     <label class="check"><input type="hidden" name="evolution_enabled" value="0"><input type="checkbox" name="evolution_enabled" value="1" <?= evolution_enabled() ? 'checked' : '' ?>> Ativar envio por WhatsApp</label>
                     <label>URL da Evolution API
                         <input name="evolution_base_url" value="<?= h(evolution_base_url()) ?>" placeholder="https://api.seudominio.com">
@@ -339,7 +339,7 @@ $setupReady = $setupFile !== null && is_file($setupFile);
                     <form method="post" action="/super/whatsapp" class="form" style="margin-top:16px">
                         <?= csrf_field() ?>
                         <input type="hidden" name="do" value="test">
-                        <input type="hidden" name="return_to" value="/super?tab=configuracoes&sec=whatsapp">
+                        <input type="hidden" name="return_to" value="/super/configuracoes/whatsapp">
                         <label>Telefone para teste (opcional)
                             <input name="test_phone" inputmode="tel" placeholder="11 99999-0000">
                         </label>
@@ -378,7 +378,7 @@ $setupReady = $setupFile !== null && is_file($setupFile);
                 <form method="post" action="/super/pagseguro" class="form">
                     <?= csrf_field() ?>
                     <input type="hidden" name="do" value="save">
-                    <input type="hidden" name="return_to" value="/super?tab=configuracoes&sec=integracao">
+                    <input type="hidden" name="return_to" value="/super/configuracoes/integracao">
                     <label>Provedor ativo
                         <select name="payment_provider">
                             <option value="pagseguro" <?= $payProvider === 'pagseguro' ? 'selected' : '' ?>>PagSeguro / PagBank</option>
@@ -438,13 +438,13 @@ $setupReady = $setupFile !== null && is_file($setupFile);
                         <form method="post" action="/super/pagseguro">
                             <?= csrf_field() ?>
                             <input type="hidden" name="do" value="test">
-                            <input type="hidden" name="return_to" value="/super?tab=configuracoes&sec=integracao">
+                            <input type="hidden" name="return_to" value="/super/configuracoes/integracao">
                             <button class="btn ghost" type="submit">Testar <?= h(payment_provider_label()) ?></button>
                         </form>
                         <form method="post" action="/super/pagseguro">
                             <?= csrf_field() ?>
                             <input type="hidden" name="do" value="run">
-                            <input type="hidden" name="return_to" value="/super?tab=configuracoes&sec=integracao">
+                            <input type="hidden" name="return_to" value="/super/configuracoes/integracao">
                             <button class="btn ghost" type="submit">Gerar cobranças agora</button>
                         </form>
                     </div>
@@ -455,7 +455,7 @@ $setupReady = $setupFile !== null && is_file($setupFile);
                 <h2>Políticas SaaS</h2>
                 <form method="post" action="/super/politicas" class="form">
                     <?= csrf_field() ?>
-                    <input type="hidden" name="return_to" value="/super?tab=configuracoes&sec=politicas">
+                    <input type="hidden" name="return_to" value="/super/configuracoes/politicas">
                     <label>Dias de trial por empresa
                         <input name="saas_trial_days" type="number" min="0" max="90" value="<?= (int) saas_trial_days() ?>">
                     </label>

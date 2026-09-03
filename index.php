@@ -82,53 +82,93 @@ switch (true) {
         auth_logout();
         header('Location: /entrar');
         exit;
+
+    // ── App panel (company) ──────────────────────────────
     case $path === '/app':
-        require __DIR__ . '/app/pages/app-shell.php';
-        break;
-    case $path === '/app/empresa':
-        require __DIR__ . '/app/pages/app-company-save.php';
-        break;
-    case $path === '/app/hotspots':
-        require __DIR__ . '/app/pages/app-hotspots-save.php';
-        break;
-    case $path === '/app/usuarios':
-        require __DIR__ . '/app/pages/app-users-save.php';
-        break;
-    case $path === '/app/campanhas':
-        require __DIR__ . '/app/pages/app-campaigns-save.php';
-        break;
-    case $path === '/app/cupons':
-        require __DIR__ . '/app/pages/app-coupons-save.php';
-        break;
-    case $path === '/app/assinatura':
-        require __DIR__ . '/app/pages/app-billing-save.php';
-        break;
-    case $path === '/app/relatorios':
-        require __DIR__ . '/app/pages/app-reports.php';
-        break;
-    case $path === '/super':
-        require __DIR__ . '/app/pages/super.php';
-        break;
-    case $path === '/super/empresas':
-        require __DIR__ . '/app/pages/super-companies.php';
-        break;
-    case $path === '/super/planos':
-        if (!is_http_post()) {
-            header('Location: /super?tab=planos', true, 301);
+        if (!empty($_GET['tab'])) {
+            header('Location: /app/' . urlencode($_GET['tab']) . (isset($_GET['id']) ? '/' . (int) $_GET['id'] : '') . (isset($_GET['novo']) ? '?novo=1' : '') . (isset($_GET['days']) ? '?days=' . (int) $_GET['days'] : ''), true, 301);
             exit;
         }
-        require __DIR__ . '/app/pages/super-plans.php';
+        $_GET['tab'] = 'dashboard';
+        require __DIR__ . '/app/pages/app-shell.php';
         break;
-    case $path === '/super/instalador/baixar':
-        require __DIR__ . '/app/pages/admin-instalador.php';
-        break;
-    case $path === '/super/instalador':
+    case preg_match('#^/app/(dashboard|hotspots|clientes|acessos|campanhas|cupons|relatorios|empresa|usuarios|assinatura)(?:/(\d+))?$#', $path, $m) === 1:
+        $_GET['tab'] = $m[1];
+        if (!empty($m[2])) {
+            $_GET['id'] = $m[2];
+        }
         if (is_http_post()) {
+            $postHandlers = [
+                'empresa'    => 'app-company-save.php',
+                'hotspots'   => 'app-hotspots-save.php',
+                'usuarios'   => 'app-users-save.php',
+                'campanhas'  => 'app-campaigns-save.php',
+                'cupons'     => 'app-coupons-save.php',
+                'assinatura' => 'app-billing-save.php',
+                'relatorios' => 'app-reports.php',
+            ];
+            if (isset($postHandlers[$m[1]])) {
+                require __DIR__ . '/app/pages/' . $postHandlers[$m[1]];
+                break;
+            }
+        }
+        require __DIR__ . '/app/pages/app-shell.php';
+        break;
+
+    // ── Super Admin panel ────────────────────────────────
+    case $path === '/super':
+        if (!empty($_GET['tab'])) {
+            $redir = '/super/' . urlencode($_GET['tab']);
+            if (!empty($_GET['sec'])) {
+                $redir .= '/' . urlencode($_GET['sec']);
+            }
+            header('Location: ' . $redir, true, 301);
+            exit;
+        }
+        $_GET['tab'] = 'dashboard';
+        require __DIR__ . '/app/pages/super.php';
+        break;
+    case preg_match('#^/super/(empresas|planos|assinaturas|usuarios|logs|instalador|configuracoes)(?:/([\w-]+))?$#', $path, $m) === 1:
+        $_GET['tab'] = $m[1];
+        if (!empty($m[2])) {
+            $_GET['sec'] = $m[2];
+        }
+        if (is_http_post()) {
+            $superPost = [
+                'empresas'  => 'super-companies.php',
+                'planos'    => 'super-plans.php',
+                'instalador' => 'admin-instalador.php',
+            ];
+            if (isset($superPost[$m[1]])) {
+                require __DIR__ . '/app/pages/' . $superPost[$m[1]];
+                break;
+            }
+            if ($m[1] === 'configuracoes') {
+                $sec = $m[2] ?? '';
+                $cfgPost = [
+                    'integracao' => 'super-pagseguro-save.php',
+                    'politicas'  => 'super-policies-save.php',
+                    'whatsapp'   => 'super-whatsapp-save.php',
+                    'sistema'    => 'super-migrate-run.php',
+                ];
+                if (isset($cfgPost[$sec])) {
+                    require __DIR__ . '/app/pages/' . $cfgPost[$sec];
+                    break;
+                }
+            }
+        }
+        if ($m[1] === 'instalador' && (!empty($m[2]) && $m[2] === 'baixar')) {
             require __DIR__ . '/app/pages/admin-instalador.php';
             break;
         }
-        $_GET['tab'] = 'instalador';
         require __DIR__ . '/app/pages/super.php';
+        break;
+    case $path === '/super/migrations':
+        if (!is_http_post()) {
+            header('Location: /super/configuracoes/sistema', true, 301);
+            exit;
+        }
+        require __DIR__ . '/app/pages/super-migrate-run.php';
         break;
     case preg_match('#^/portal/([a-fA-F0-9]+)$#', $path, $m) === 1:
         $GLOBALS['portal_token'] = $m[1];
@@ -172,45 +212,38 @@ switch (true) {
     case $path === '/admin/pagseguro':
     case $path === '/admin/financeiro/pagseguro':
         if (!is_http_post()) {
-            header('Location: /super?tab=configuracoes&sec=integracao', true, 301);
+            header('Location: /super/configuracoes/integracao', true, 301);
             exit;
         }
         require __DIR__ . '/app/pages/super-pagseguro-save.php';
         break;
     case $path === '/super/politicas':
         if (!is_http_post()) {
-            header('Location: /super?tab=configuracoes&sec=politicas', true, 301);
+            header('Location: /super/configuracoes/politicas', true, 301);
             exit;
         }
         require __DIR__ . '/app/pages/super-policies-save.php';
         break;
     case $path === '/super/whatsapp':
         if (!is_http_post()) {
-            header('Location: /super?tab=configuracoes&sec=whatsapp', true, 301);
+            header('Location: /super/configuracoes/whatsapp', true, 301);
             exit;
         }
         require __DIR__ . '/app/pages/super-whatsapp-save.php';
-        break;
-    case $path === '/super/migrations':
-        if (!is_http_post()) {
-            header('Location: /super?tab=configuracoes&sec=sistema', true, 301);
-            exit;
-        }
-        require __DIR__ . '/app/pages/super-migrate-run.php';
         break;
     case $path === '/admin/configuracoes/politicas':
         if (is_http_post()) {
             require __DIR__ . '/app/pages/super-policies-save.php';
             break;
         }
-        header('Location: /super?tab=configuracoes&sec=politicas', true, 301);
+        header('Location: /super/configuracoes/politicas', true, 301);
         exit;
     case $path === '/admin/configuracoes/integracao':
         if (is_http_post()) {
             require __DIR__ . '/app/pages/super-pagseguro-save.php';
             break;
         }
-        header('Location: /super?tab=configuracoes&sec=integracao', true, 301);
+        header('Location: /super/configuracoes/integracao', true, 301);
         exit;
     case preg_match('#^/admin/financeiro(?:/(\d+))?$#', $path, $m) === 1:
         if (is_http_post() && (string) ($_POST['do'] ?? '') === 'charge') {
@@ -245,7 +278,7 @@ switch (true) {
             require __DIR__ . '/app/pages/admin-instalador.php';
             break;
         }
-        header('Location: /super?tab=instalador', true, 301);
+        header('Location: /super/instalador', true, 301);
         exit;
     case preg_match('#^/admin#', $path) === 1:
         legacy_admin_route($path);
