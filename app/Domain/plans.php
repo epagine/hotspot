@@ -12,10 +12,79 @@ function find_plan(int $id): ?array
 
 function find_plan_by_code(string $code): ?array
 {
+    $code = normalize_plan_code($code);
+    if ($code === '') {
+        return null;
+    }
     $stmt = db()->prepare('SELECT * FROM plans WHERE code = ? LIMIT 1');
     $stmt->execute([$code]);
     $row = $stmt->fetch();
     return $row ?: null;
+}
+
+function normalize_plan_code(string $code): string
+{
+    $code = strtolower(trim($code));
+    $code = preg_replace('/[^a-z0-9]+/', '_', $code) ?? '';
+    return trim($code, '_');
+}
+
+/** @return array<string, string> */
+function plan_feature_catalog(): array
+{
+    return [
+        'stats_basic' => 'Estatísticas básicas',
+        'stats' => 'Estatísticas completas',
+        'portal' => 'Portal personalizado',
+        'campaigns' => 'Campanhas',
+        'coupons' => 'Cupons',
+        'multi_unit' => 'Múltiplas unidades',
+        'reports' => 'Relatórios avançados',
+    ];
+}
+
+/** @return list<string> */
+function plan_features_from_row(?array $plan): array
+{
+    if (!$plan) {
+        return [];
+    }
+    $features = json_decode((string) ($plan['features_json'] ?? '[]'), true);
+    return is_array($features) ? array_values(array_filter($features, 'is_string')) : [];
+}
+
+function plan_features_summary(?array $plan): string
+{
+    $catalog = plan_feature_catalog();
+    $labels = [];
+    foreach (plan_features_from_row($plan) as $key) {
+        $labels[] = $catalog[$key] ?? $key;
+    }
+    return $labels === [] ? '—' : implode(', ', $labels);
+}
+
+function plan_limit_label(int $max): string
+{
+    return $max <= 0 ? '∞' : (string) $max;
+}
+
+function plan_billing_label(string $period): string
+{
+    return match ($period) {
+        'trimestral' => 'Trimestral',
+        'anual' => 'Anual',
+        default => 'Mensal',
+    };
+}
+
+function plan_active_subscriptions_count(int $planId): int
+{
+    if ($planId <= 0) {
+        return 0;
+    }
+    $stmt = db()->prepare('SELECT COUNT(*) FROM subscriptions WHERE plan_id = ?');
+    $stmt->execute([$planId]);
+    return (int) $stmt->fetchColumn();
 }
 
 function all_plans(bool $activeOnly = false): array
@@ -30,26 +99,53 @@ function all_plans(bool $activeOnly = false): array
 
 function save_plan(array $data, ?int $id = null): int
 {
+    $code = normalize_plan_code((string) ($data['code'] ?? ''));
+    if ($code === '') {
+        throw new InvalidArgumentException('Informe o código do plano (letras, números e _).');
+    }
+    $name = trim((string) ($data['name'] ?? ''));
+    if ($name === '') {
+        throw new InvalidArgumentException('Informe o nome do plano.');
+    }
+
+    $duplicate = find_plan_by_code($code);
+    if ($duplicate && (!$id || (int) $duplicate['id'] !== $id)) {
+        throw new InvalidArgumentException('Já existe um plano com o código "' . $code . '".');
+    }
+
+    $billing = (string) ($data['billing_period'] ?? 'mensal');
+    if (!in_array($billing, ['mensal', 'trimestral', 'anual'], true)) {
+        $billing = 'mensal';
+    }
+
+    $features = $data['features'] ?? [];
+    if (!is_array($features)) {
+        $features = [];
+    }
+    $catalog = plan_feature_catalog();
+    $features = array_values(array_unique(array_filter(
+        array_map('strval', $features),
+        static fn (string $f): bool => isset($catalog[$f])
+    )));
+
     $now = date('Y-m-d H:i:s');
     $fields = [
-        trim((string) ($data['code'] ?? '')),
-        trim((string) ($data['name'] ?? '')),
-        (int) ($data['price_cents'] ?? 0),
-        (string) ($data['billing_period'] ?? 'mensal'),
-        (int) ($data['max_hotspots'] ?? 1),
-        (int) ($data['max_clients'] ?? 100),
-        (int) ($data['max_users'] ?? 2),
-        is_string($data['features_json'] ?? null)
-            ? (string) $data['features_json']
-            : json_encode($data['features'] ?? [], JSON_UNESCAPED_UNICODE),
+        $code,
+        $name,
+        max(0, (int) ($data['price_cents'] ?? 0)),
+        $billing,
+        max(0, (int) ($data['max_hotspots'] ?? 1)),
+        max(0, (int) ($data['max_clients'] ?? 100)),
+        max(0, (int) ($data['max_users'] ?? 2)),
+        json_encode($features, JSON_UNESCAPED_UNICODE),
         !empty($data['active']) ? 1 : 0,
-        (int) ($data['sort_order'] ?? 0),
+        max(0, (int) ($data['sort_order'] ?? 0)),
     ];
     if ($id) {
         db()->prepare(
             'UPDATE plans SET code=?, name=?, price_cents=?, billing_period=?, max_hotspots=?, max_clients=?, max_users=?, features_json=?, active=?, sort_order=? WHERE id=?'
         )->execute([...$fields, $id]);
-        audit_log('plan.update', null, null, ['id' => $id]);
+        audit_log('plan.update', null, null, ['id' => $id, 'code' => $code]);
         return $id;
     }
     db()->prepare(
@@ -57,7 +153,7 @@ function save_plan(array $data, ?int $id = null): int
          VALUES (?,?,?,?,?,?,?,?,?,?,?)'
     )->execute([...$fields, $now]);
     $newId = (int) db()->lastInsertId();
-    audit_log('plan.create', null, null, ['id' => $newId]);
+    audit_log('plan.create', null, null, ['id' => $newId, 'code' => $code]);
     return $newId;
 }
 

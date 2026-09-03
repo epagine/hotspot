@@ -366,6 +366,93 @@ body.app-auth {
   align-items: start;
 }
 .card-head { display: flex; justify-content: space-between; align-items: flex-end; gap: 16px; margin-bottom: 8px; }
+.card-head h2 { margin: 0 0 4px; font-size: 20px; }
+.card-head .hint { margin: 0; }
+.form-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.form-grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+.plan-limits-cell { display: grid; gap: 2px; font-size: 13px; color: var(--app-muted); }
+.plan-limits-cell span { display: block; }
+.table-actions { white-space: nowrap; text-align: right; }
+.badge {
+  display: inline-block;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+}
+.badge-ok { background: var(--app-ok-bg); color: var(--app-ok); }
+.badge-muted { background: var(--app-offline-bg); color: var(--app-muted); }
+.plan-features-field {
+  border: 1px solid var(--app-line);
+  border-radius: 12px;
+  padding: 14px 16px;
+  margin: 0;
+}
+.plan-features-field legend { padding: 0 4px; font-size: 14px; color: var(--app-muted); }
+.plan-features-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px 16px;
+  margin-top: 8px;
+}
+body.modal-open { overflow: hidden; }
+.app-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 24px 16px;
+  overflow-y: auto;
+}
+.app-modal[hidden] { display: none !important; }
+.app-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 32, .45);
+  backdrop-filter: blur(2px);
+}
+.app-modal-panel {
+  position: relative;
+  z-index: 1;
+  width: min(640px, 100%);
+  background: var(--app-card);
+  border: 1px solid var(--app-line);
+  border-radius: 16px;
+  padding: 22px 24px;
+  box-shadow: 0 24px 60px rgba(15, 23, 32, .18);
+  margin: auto 0;
+}
+.app-modal-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.app-modal-head h2 { margin: 0 0 4px; font-size: 20px; }
+.app-modal-close {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  font-size: 28px;
+  line-height: 1;
+  color: var(--app-muted);
+  cursor: pointer;
+  padding: 0 4px;
+}
+.app-modal-form { margin-top: 0; }
+.app-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 8px;
+}
+@media (max-width: 720px) {
+  .form-grid-2, .form-grid-3, .plan-features-grid { grid-template-columns: 1fr; }
+  .card-head { flex-direction: column; align-items: stretch; }
+}
 .ficha-head { margin-bottom: 16px; display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
 .back-link { color: var(--app-muted); text-decoration: none; font-size: 13px; font-weight: 600; }
 .back-link:hover { color: var(--accent); }

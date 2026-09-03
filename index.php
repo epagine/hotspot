@@ -113,6 +113,10 @@ switch (true) {
         require __DIR__ . '/app/pages/super-companies.php';
         break;
     case $path === '/super/planos':
+        if (!is_http_post()) {
+            header('Location: /super?tab=planos', true, 301);
+            exit;
+        }
         require __DIR__ . '/app/pages/super-plans.php';
         break;
     case $path === '/super/instalador/baixar':

@@ -171,35 +171,7 @@ $setupReady = $setupFile !== null && is_file($setupFile);
             </section>
 
         <?php elseif ($tab === 'planos'): ?>
-            <section class="card">
-                <div class="table-wrap">
-                    <table class="saas-table">
-                        <thead><tr><th>Plano</th><th>Preço</th><th>Hotspots</th><th>Clientes</th><th>Ativo</th></tr></thead>
-                        <tbody>
-                        <?php foreach (all_plans() as $p): ?>
-                            <tr>
-                                <td><strong><?= h((string) $p['name']) ?></strong><br><small><?= h((string) $p['code']) ?></small></td>
-                                <td><?= h(cents_label((int) $p['price_cents'])) ?></td>
-                                <td><?= (int) $p['max_hotspots'] === 0 ? '∞' : (int) $p['max_hotspots'] ?></td>
-                                <td><?= (int) $p['max_clients'] === 0 ? '∞' : (int) $p['max_clients'] ?></td>
-                                <td><?= !empty($p['active']) ? 'Sim' : 'Não' ?></td>
-                            </tr>
-                        <?php endforeach; ?>
-                        </tbody>
-                    </table>
-                </div>
-                <form method="post" action="/super/planos" class="form" style="margin-top:20px">
-                    <?= csrf_field() ?>
-                    <h2>Novo / atualizar por código</h2>
-                    <label>Código<input name="code" required></label>
-                    <label>Nome<input name="name" required></label>
-                    <label>Preço (centavos)<input name="price_cents" type="number" value="2990"></label>
-                    <label>Máx. hotspots (0=ilimitado)<input name="max_hotspots" type="number" value="1"></label>
-                    <label>Máx. clientes (0=ilimitado)<input name="max_clients" type="number" value="0"></label>
-                    <label class="check"><input type="checkbox" name="active" value="1" checked> Ativo</label>
-                    <button class="btn" type="submit">Salvar plano</button>
-                </form>
-            </section>
+            <?php require __DIR__ . '/super-plans-tab.php'; ?>
 
         <?php elseif ($tab === 'assinaturas'): ?>
             <?php
