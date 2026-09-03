@@ -42,5 +42,4 @@ try {
     $_SESSION['flash_error'] = $e->getMessage();
 }
 
-header('Location: ' . $returnTo);
-exit;
+safe_internal_redirect($returnTo, '/super/planos');

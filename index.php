@@ -2,9 +2,10 @@
 
 declare(strict_types=1);
 
-session_start();
-
 require __DIR__ . '/app/helpers.php';
+
+session_boot();
+send_security_headers();
 
 $path = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?: '/';
 $path = '/' . trim($path, '/');

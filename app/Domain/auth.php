@@ -208,7 +208,7 @@ function ensure_legacy_admin_user(): void
         }
         $hash = setting('admin_pass_hash', '');
         if ($hash === '') {
-            $hash = password_hash('admin123', PASSWORD_DEFAULT);
+            return;
         }
         $now = date('Y-m-d H:i:s');
         db()->prepare(

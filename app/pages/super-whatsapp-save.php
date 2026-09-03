@@ -9,10 +9,11 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     exit;
 }
 
+require_post_csrf();
+
 $returnTo = trim((string) ($_POST['return_to'] ?? ''));
 $redirect = static function () use ($returnTo): void {
-    header('Location: ' . ($returnTo !== '' ? $returnTo : '/super/configuracoes/whatsapp'));
-    exit;
+    safe_internal_redirect($returnTo, '/super/configuracoes/whatsapp');
 };
 
 $do = (string) ($_POST['do'] ?? 'save');
@@ -50,6 +51,7 @@ if ($do === 'save') {
         $redirect();
     }
     $_SESSION['flash_ok'] = 'WhatsApp (Evolution API) e mensagens salvos.';
+    audit_log('whatsapp.settings.save', null, null, []);
     $redirect();
 }
 
@@ -64,5 +66,4 @@ if ($do === 'test') {
     $redirect();
 }
 
-header('Location: /super/configuracoes/whatsapp');
-exit;
+    safe_internal_redirect('', '/super/configuracoes/whatsapp');

@@ -375,7 +375,8 @@ function Sync-Cloud {
     }
     try {
         $json = $payload | ConvertTo-Json -Depth 8 -Compress
-        $resp = Invoke-RestMethod -Uri $url -Method Post -Body $json -ContentType "application/json; charset=utf-8" -TimeoutSec 6
+        $headers = @{ "X-Agent-Token" = [string]$cfg.token }
+        $resp = Invoke-RestMethod -Uri $url -Method Post -Headers $headers -Body $json -ContentType "application/json; charset=utf-8" -TimeoutSec 6
         if ($resp.config -and $resp.config.wifi_ssid) {
             $suffixes = @()
             if ($resp.config.dns_allowlist) {

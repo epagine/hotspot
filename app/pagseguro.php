@@ -815,7 +815,7 @@ function pagseguro_handle_notification(array $payload): void
 {
     $reference = (string) ($payload['reference_id'] ?? '');
     $checkoutId = (string) ($payload['id'] ?? '');
-    $payment = find_payment_by_reference($reference);
+    $payment = $reference !== '' ? find_payment_by_reference($reference) : null;
     if (!$payment && str_starts_with($checkoutId, 'CHEC_')) {
         $payment = find_payment_by_checkout($checkoutId);
     }
@@ -830,31 +830,16 @@ function pagseguro_handle_notification(array $payload): void
             }
         }
     }
-    $paid = pagseguro_payload_paid($payload);
-    if ($payment && !$paid && !empty($payment['checkout_id'])) {
-        $check = pagseguro_request('GET', '/checkouts/' . rawurlencode((string) $payment['checkout_id']));
-        if ($check['ok']) {
-            $paid = pagseguro_payload_paid($check['data']);
-            $payload = $check['data'];
-        }
-    }
-    if (!$paid) {
+    if (!$payment) {
         return;
     }
-    if ($payment) {
-        mark_payment_paid($payment, $payload);
+    $cid = (string) ($payment['checkout_id'] ?? '');
+    if ($cid === '') {
         return;
     }
-    $companyId = company_id_from_reference($reference);
-    if ($companyId > 0 && find_company($companyId)) {
-        pagseguro_record_paid_company($companyId, $reference, $payload);
+    $check = pagseguro_request('GET', '/checkouts/' . rawurlencode($cid));
+    if (!$check['ok'] || !pagseguro_payload_paid($check['data'])) {
         return;
     }
-    $storeId = store_id_from_reference($reference);
-    if ($storeId < 1 && $payment) {
-        $storeId = (int) $payment['store_id'];
-    }
-    if ($storeId > 0 && find_store($storeId)) {
-        pagseguro_record_paid_store($storeId, $reference, $payload);
-    }
+    mark_payment_paid($payment, $check['data']);
 }

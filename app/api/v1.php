@@ -10,10 +10,15 @@ if (!is_array($body)) {
 }
 
 if ($path === '/auth' && $method === 'POST') {
+    if (rate_limit_is_blocked('api_auth')) {
+        json_out(['ok' => false, 'error' => 'rate_limited', 'message' => rate_limit_reject_message()], 429);
+    }
     $user = auth_attempt((string) ($body['email'] ?? ''), (string) ($body['password'] ?? ''));
     if (!$user) {
+        rate_limit_fail('api_auth');
         json_out(['ok' => false, 'error' => 'invalid_credentials'], 401);
     }
+    rate_limit_clear('api_auth');
     auth_login($user);
     json_out([
         'ok' => true,
@@ -28,7 +33,7 @@ if ($path === '/auth' && $method === 'POST') {
 }
 
 if ($path === '/hotspot/authenticate' && $method === 'POST') {
-    $token = trim((string) ($body['token'] ?? ''));
+    $token = agent_request_token($body);
     $store = find_store_by_token($token);
     if (!$store) {
         json_out(['ok' => false, 'error' => 'token'], 401);
@@ -43,7 +48,7 @@ if ($path === '/hotspot/authenticate' && $method === 'POST') {
 }
 
 if ($path === '/hotspot/status' && $method === 'GET') {
-    $token = trim((string) ($_GET['token'] ?? ''));
+    $token = agent_request_token($body);
     $store = find_store_by_token($token);
     if (!$store) {
         json_out(['ok' => false, 'error' => 'token'], 401);
@@ -53,7 +58,7 @@ if ($path === '/hotspot/status' && $method === 'GET') {
 }
 
 if ($path === '/hotspot/session' && $method === 'POST') {
-    $token = trim((string) ($body['token'] ?? ''));
+    $token = agent_request_token($body);
     $store = find_store_by_token($token);
     if (!$store) {
         json_out(['ok' => false, 'error' => 'token'], 401);
@@ -62,7 +67,7 @@ if ($path === '/hotspot/session' && $method === 'POST') {
 }
 
 if ($path === '/hotspot/disconnect' && $method === 'POST') {
-    $token = trim((string) ($body['token'] ?? ''));
+    $token = agent_request_token($body);
     $store = find_store_by_token($token);
     if (!$store) {
         json_out(['ok' => false, 'error' => 'token'], 401);
@@ -74,8 +79,37 @@ if ($path === '/hotspot/disconnect' && $method === 'POST') {
 
 if ($path === '/client' && $method === 'GET') {
     $id = (int) ($_GET['id'] ?? 0);
-    $stmt = db()->prepare('SELECT id, name, phone, email, state, access_count, last_access_at FROM clients WHERE id = ?');
-    $stmt->execute([$id]);
+    $user = current_user();
+    $token = agent_request_token($body);
+    $store = $token !== '' ? find_store_by_token($token) : null;
+    if (!$user && !$store) {
+        json_out(['ok' => false, 'error' => 'unauthorized'], 401);
+    }
+    if ($id <= 0) {
+        json_out(['ok' => false, 'error' => 'not_found'], 404);
+    }
+    if ($store) {
+        $stmt = db()->prepare(
+            'SELECT id, name, phone, email, state, access_count, last_access_at FROM clients WHERE id = ? AND store_id = ?'
+        );
+        $stmt->execute([$id, (int) $store['id']]);
+    } else {
+        $companyId = current_company_id();
+        if (($user['role'] ?? '') === 'super_admin') {
+            $stmt = db()->prepare(
+                'SELECT id, name, phone, email, state, access_count, last_access_at FROM clients WHERE id = ?'
+            );
+            $stmt->execute([$id]);
+        } else {
+            if ($companyId <= 0) {
+                json_out(['ok' => false, 'error' => 'not_found'], 404);
+            }
+            $stmt = db()->prepare(
+                'SELECT id, name, phone, email, state, access_count, last_access_at FROM clients WHERE id = ? AND company_id = ?'
+            );
+            $stmt->execute([$id, $companyId]);
+        }
+    }
     $row = $stmt->fetch();
     if (!$row) {
         json_out(['ok' => false, 'error' => 'not_found'], 404);
@@ -88,7 +122,7 @@ if ($path === '/client' && $method === 'POST') {
 }
 
 if ($path === '/campaign' && $method === 'GET') {
-    $token = trim((string) ($_GET['token'] ?? ''));
+    $token = agent_request_token($body);
     $store = find_store_by_token($token);
     if (!$store) {
         json_out(['ok' => false, 'error' => 'token'], 401);
@@ -99,11 +133,22 @@ if ($path === '/campaign' && $method === 'GET') {
 }
 
 if ($path === '/campaign/click' && $method === 'POST') {
-    $campaignId = (int) ($body['campaign_id'] ?? 0);
-    $companyId = (int) ($body['company_id'] ?? 0);
-    if ($campaignId > 0 && $companyId > 0) {
-        record_campaign_click($campaignId, $companyId, null, null);
+    $token = agent_request_token($body);
+    $store = find_store_by_token($token);
+    if (!$store) {
+        json_out(['ok' => false, 'error' => 'token'], 401);
     }
+    $campaignId = (int) ($body['campaign_id'] ?? 0);
+    $companyId = (int) ($store['company_id'] ?? 0);
+    if ($campaignId <= 0 || $companyId <= 0) {
+        json_out(['ok' => false, 'error' => 'invalid'], 400);
+    }
+    $stmt = db()->prepare('SELECT id FROM campaigns WHERE id = ? AND company_id = ? LIMIT 1');
+    $stmt->execute([$campaignId, $companyId]);
+    if (!$stmt->fetch()) {
+        json_out(['ok' => false, 'error' => 'not_found'], 404);
+    }
+    record_campaign_click($campaignId, $companyId, null, null);
     json_out(['ok' => true]);
 }
 

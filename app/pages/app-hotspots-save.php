@@ -67,7 +67,10 @@ db()->prepare(
     $id,
 ]);
 set_setting_for_store($id, 'wifi_ssid', trim((string) ($_POST['ssid'] ?? 'WifiDaLoja')));
-set_setting_for_store($id, 'wifi_pass', trim((string) ($_POST['wifi_pass'] ?? '')));
+$wifiPass = trim((string) ($_POST['wifi_pass'] ?? ''));
+if ($wifiPass !== '') {
+    set_setting_for_store($id, 'wifi_pass', $wifiPass);
+}
 set_setting_for_store($id, 'store_name', trim((string) ($_POST['name'] ?? $store['name'])));
 save_portal_config($id, [
     'title' => $_POST['portal_title'] ?? 'Bem-vindo',

@@ -9,10 +9,11 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     exit;
 }
 
+require_post_csrf();
+
 $returnTo = trim((string) ($_POST['return_to'] ?? ''));
 $redirect = static function () use ($returnTo): void {
-    header('Location: ' . ($returnTo !== '' ? $returnTo : '/super/configuracoes/integracao'));
-    exit;
+    safe_internal_redirect($returnTo, '/super/configuracoes/integracao');
 };
 
 $do = (string) ($_POST['do'] ?? 'save');
@@ -59,6 +60,7 @@ if ($do === 'save') {
         $redirect();
     }
     $_SESSION['flash_ok'] = 'Integração ' . payment_provider_label() . ' salva.';
+    audit_log('payment.settings.save', null, null, ['provider' => payment_provider()]);
     $redirect();
 }
 

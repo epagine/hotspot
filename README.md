@@ -47,7 +47,9 @@ Rotas legadas `/admin/*` redirecionam para `/app` ou `/super`.
 
 ## 1. Painel na hospedagem (produção)
 
-PHP 8.1+ com PDO MySQL. **HTTPS obrigatório** (webhooks de pagamento e sync do agente).
+PHP 8.1+ com PDO MySQL (**recomendado 8.3+**; 8.1 está fora de suporte de segurança). **HTTPS obrigatório** (webhooks de pagamento e sync do agente).
+
+Defina `APP_URL=https://seu-dominio` no `.env` ou em Super → Configurações → Sistema (URL canônica). O status do agente aceita o header `X-Agent-Token` (o query `token` ainda funciona). Headers CSP permitem o Tailwind CDN; um build local com SRI fica para uma etapa futura.
 
 ### O que enviar
 

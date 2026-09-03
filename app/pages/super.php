@@ -29,48 +29,73 @@ $setupReady = $setupFile !== null && is_file($setupFile);
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title><?= h($pageTitle) ?> · Super Admin</title>
+    <?php require __DIR__ . '/../partials/tw-head.php'; ?>
     <link rel="stylesheet" href="/assets/app.css">
 </head>
-<body class="app">
-<aside class="app-side" id="app-sidebar">
-    <a class="app-brand" href="/super">
-        <img class="app-logo app-logo-side" src="<?= h(platform_logo_url()) ?>" alt="WiFi da Loja">
-        <div>
-            <strong>Wi-Fi da loja</strong>
-            <small>Super Admin</small>
+<body class="font-sans bg-surface text-ink min-h-screen grid grid-cols-1 lg:grid-cols-[260px_1fr]">
+<?php
+$superNavItems = [
+    ['dashboard', 'Dashboard', '/super', '<path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6A2.25 2.25 0 0 1 6 3.75h2.25A2.25 2.25 0 0 1 10.5 6v2.25a2.25 2.25 0 0 1-2.25 2.25H6a2.25 2.25 0 0 1-2.25-2.25V6ZM3.75 15.75A2.25 2.25 0 0 1 6 13.5h2.25a2.25 2.25 0 0 1 2.25 2.25V18a2.25 2.25 0 0 1-2.25 2.25H6A2.25 2.25 0 0 1 3.75 18v-2.25ZM13.5 6a2.25 2.25 0 0 1 2.25-2.25H18A2.25 2.25 0 0 1 20.25 6v2.25A2.25 2.25 0 0 1 18 10.5h-2.25a2.25 2.25 0 0 1-2.25-2.25V6ZM13.5 15.75a2.25 2.25 0 0 1 2.25-2.25H18a2.25 2.25 0 0 1 2.25 2.25V18A2.25 2.25 0 0 1 18 20.25h-2.25a2.25 2.25 0 0 1-2.25-2.25v-2.25Z"/>'],
+    ['empresas', 'Empresas', '/super/empresas', '<path stroke-linecap="round" stroke-linejoin="round" d="M3.75 21h16.5M4.5 3h15M5.25 3v18m13.5-18v18M9 6.75h1.5m-1.5 3h1.5m-1.5 3h1.5m3-6H15m-1.5 3H15m-1.5 3H15M9 21v-3.375c0-.621.504-1.125 1.125-1.125h3.75c.621 0 1.125.504 1.125 1.125V21"/>'],
+    ['planos', 'Planos', '/super/planos', '<path stroke-linecap="round" stroke-linejoin="round" d="M9.568 3H5.25A2.25 2.25 0 0 0 3 5.25v4.318c0 .597.237 1.17.659 1.591l9.581 9.581c.699.699 1.78.872 2.607.33a18.095 18.095 0 0 0 5.223-5.223c.542-.827.369-1.908-.33-2.607L11.16 3.66A2.25 2.25 0 0 0 9.568 3Z"/><path stroke-linecap="round" stroke-linejoin="round" d="M6 6h.008v.008H6V6Z"/>'],
+    ['assinaturas', 'Assinaturas', '/super/assinaturas', '<path stroke-linecap="round" stroke-linejoin="round" d="M2.25 8.25h19.5M2.25 9h19.5m-16.5 5.25h6m-6 2.25h3m-3.75 3h15a2.25 2.25 0 0 0 2.25-2.25V6.75A2.25 2.25 0 0 0 19.5 4.5h-15a2.25 2.25 0 0 0-2.25 2.25v10.5A2.25 2.25 0 0 0 4.5 19.5Z"/>'],
+    ['usuarios', 'Usuários', '/super/usuarios', '<path stroke-linecap="round" stroke-linejoin="round" d="M15 19.128a9.38 9.38 0 0 0 2.625.372 9.337 9.337 0 0 0 4.121-.952 4.125 4.125 0 0 0-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 0 1 8.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0 1 11.964-3.07M12 6.375a3.375 3.375 0 1 1-6.75 0 3.375 3.375 0 0 1 6.75 0Zm8.25 2.25a2.625 2.625 0 1 1-5.25 0 2.625 2.625 0 0 1 5.25 0Z"/>'],
+    ['logs', 'Logs', '/super/logs', '<path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"/>'],
+    ['instalador', 'Instalador', '/super/instalador', '<path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3"/>'],
+    ['configuracoes', 'Configurações', '/super/configuracoes', '<path stroke-linecap="round" stroke-linejoin="round" d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.325.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 0 1 1.37.49l1.296 2.247a1.125 1.125 0 0 1-.26 1.431l-1.003.827c-.293.241-.438.613-.43.992a7.723 7.723 0 0 1 0 .255c-.008.378.137.75.43.991l1.004.827c.424.35.534.955.26 1.43l-1.298 2.247a1.125 1.125 0 0 1-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.47 6.47 0 0 1-.22.128c-.331.183-.581.495-.644.869l-.213 1.281c-.09.543-.56.94-1.11.94h-2.594c-.55 0-1.019-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 0 1-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 0 1-1.369-.49l-1.297-2.247a1.125 1.125 0 0 1 .26-1.431l1.004-.827c.292-.24.437-.613.43-.991a6.932 6.932 0 0 1 0-.255c.007-.38-.138-.751-.43-.992l-1.004-.827a1.125 1.125 0 0 1-.26-1.43l1.297-2.247a1.125 1.125 0 0 1 1.37-.491l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.086.22-.128.332-.183.582-.495.644-.869l.214-1.28Z"/><path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z"/>'],
+];
+?>
+<aside id="app-sidebar" class="bg-white border-r border-line p-4 flex flex-col gap-6 sticky top-0 h-screen overflow-y-auto max-lg:h-auto max-lg:sticky max-lg:z-20 max-lg:flex-row max-lg:flex-wrap max-lg:items-center max-lg:gap-3 max-lg:p-3 max-lg:border-b max-lg:border-r-0 transition-all" data-sidebar>
+    <a class="flex items-center gap-3 no-underline text-inherit" href="/super">
+        <img class="w-10 h-10 rounded-[10px] bg-black object-cover object-left-center flex-shrink-0" src="<?= h(platform_logo_url()) ?>" alt="WiFi da Loja">
+        <div class="max-lg:hidden">
+            <strong class="block text-sm">Wi-Fi da loja</strong>
+            <span class="text-xs text-muted">Super Admin</span>
         </div>
     </a>
-    <button type="button" class="app-hamburger" id="app-hamburger" aria-label="Menu" aria-expanded="false">
-        <span></span><span></span><span></span>
+    <button type="button" id="app-hamburger" aria-label="Menu" aria-expanded="false"
+            class="hidden max-lg:flex ml-auto flex-col gap-[5px] items-center justify-center p-1.5 bg-transparent border-0 cursor-pointer">
+        <span class="block w-[22px] h-[2px] bg-ink rounded-sm transition-transform"></span>
+        <span class="block w-[22px] h-[2px] bg-ink rounded-sm transition-opacity"></span>
+        <span class="block w-[22px] h-[2px] bg-ink rounded-sm transition-transform"></span>
     </button>
-    <nav class="app-nav">
-        <a class="<?= $tab === 'dashboard' ? 'active' : '' ?>" href="/super">Dashboard</a>
-        <a class="<?= $tab === 'empresas' ? 'active' : '' ?>" href="/super/empresas">Empresas</a>
-        <a class="<?= $tab === 'planos' ? 'active' : '' ?>" href="/super/planos">Planos</a>
-        <a class="<?= $tab === 'assinaturas' ? 'active' : '' ?>" href="/super/assinaturas">Assinaturas</a>
-        <a class="<?= $tab === 'usuarios' ? 'active' : '' ?>" href="/super/usuarios">Usuários</a>
-        <a class="<?= $tab === 'logs' ? 'active' : '' ?>" href="/super/logs">Logs</a>
-        <a class="<?= $tab === 'instalador' ? 'active' : '' ?>" href="/super/instalador">Instalador</a>
-        <a class="<?= $tab === 'configuracoes' ? 'active' : '' ?>" href="/super/configuracoes">Configurações</a>
+    <nav class="flex flex-col gap-1 flex-1 max-lg:hidden" data-nav>
+        <?php foreach ($superNavItems as [$key, $label, $href, $icon]): ?>
+            <a href="<?= $href ?>" class="flex items-center gap-2.5 px-3 py-2.5 rounded-[10px] text-sm font-semibold no-underline transition
+                <?= $tab === $key ? 'bg-accent/10 text-accent' : 'text-muted hover:bg-hover hover:text-ink' ?>">
+                <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><?= $icon ?></svg>
+                <?= h($label) ?>
+            </a>
+        <?php endforeach; ?>
     </nav>
-    <div class="app-side-foot">
-        <a class="btn ghost btn-sm" href="/sair">Sair</a>
+    <div class="border-t border-line pt-3 max-lg:hidden" data-foot>
+        <a class="inline-block text-sm font-semibold text-muted border border-line rounded-btn px-3 py-2 hover:text-ink hover:border-ink/20 transition no-underline" href="/sair">Sair</a>
     </div>
 </aside>
-<div class="app-body">
-    <header class="app-top"><div><h1><?= h($pageTitle) ?></h1><p class="lead">Administração da plataforma.</p></div></header>
-    <main class="app-main">
-        <?php if ($flashErr): ?><p class="alert"><?= h($flashErr) ?></p><?php endif; ?>
-        <?php if ($flashOk): ?><p class="hint flash-ok"><?= h($flashOk) ?></p><?php endif; ?>
+<div class="min-w-0 flex flex-col">
+    <header class="px-8 pt-6 pb-0 max-md:px-4">
+        <h1 class="text-2xl font-bold tracking-tight"><?= h($pageTitle) ?></h1>
+        <p class="text-muted text-sm mt-1">Administração da plataforma.</p>
+    </header>
+    <main class="px-8 py-6 max-w-[1180px] w-full max-md:px-4">
+        <?php if ($flashErr): ?><div class="bg-danger-bg text-danger border border-danger/20 rounded-xl px-4 py-3 text-sm mb-4"><?= h($flashErr) ?></div><?php endif; ?>
+        <?php if ($flashOk): ?><div class="bg-ok-bg text-ok border border-ok/20 rounded-xl px-4 py-3 text-sm mb-4"><?= h($flashOk) ?></div><?php endif; ?>
 
         <?php if ($tab === 'dashboard'): ?>
-            <div class="stats">
-                <article><span>Empresas</span><strong><?= (int) $kpis['companies'] ?></strong></article>
-                <article><span>Ativas</span><strong><?= (int) $kpis['companies_active'] ?></strong></article>
-                <article><span>Trials</span><strong><?= (int) $kpis['trials'] ?></strong></article>
-                <article><span>Assinaturas</span><strong><?= (int) $kpis['subscriptions'] ?></strong></article>
-                <article><span>MRR</span><strong><?= h(cents_label((int) $kpis['mrr_cents'])) ?></strong></article>
-                <article><span>Hotspots</span><strong><?= (int) $kpis['hotspots'] ?></strong></article>
+            <div class="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-3 mb-4">
+                <?php foreach ([
+                    ['Empresas', (int) $kpis['companies']],
+                    ['Ativas', (int) $kpis['companies_active']],
+                    ['Trials', (int) $kpis['trials']],
+                    ['Assinaturas', (int) $kpis['subscriptions']],
+                    ['MRR', cents_label((int) $kpis['mrr_cents'])],
+                    ['Hotspots', (int) $kpis['hotspots']],
+                ] as [$kLabel, $kVal]): ?>
+                    <article class="bg-white border border-line rounded-xl p-4 shadow-sm">
+                        <span class="block text-xs text-muted mb-1"><?= h($kLabel) ?></span>
+                        <strong class="block text-xl font-bold tracking-tight"><?= h((string) $kVal) ?></strong>
+                    </article>
+                <?php endforeach; ?>
             </div>
 
         <?php elseif ($tab === 'empresas'): ?>
@@ -225,12 +250,23 @@ $setupReady = $setupFile !== null && is_file($setupFile);
         <?php elseif ($tab === 'logs'): ?>
             <?php $logs = db()->query('SELECT * FROM audit_logs ORDER BY id DESC LIMIT 100')->fetchAll() ?: []; ?>
             <section class="card">
-                <ul class="steps">
-                <?php foreach ($logs as $log): ?>
-                    <li><?= h((string) $log['created_at']) ?> — <?= h((string) $log['action']) ?></li>
-                <?php endforeach; ?>
-                <?php if (!$logs): ?><li>Nenhum log ainda.</li><?php endif; ?>
-                </ul>
+                <div class="table-wrap">
+                    <table class="saas-table">
+                        <thead><tr><th>Quando</th><th>Ação</th><th>Usuário</th><th>Empresa</th><th>IP</th></tr></thead>
+                        <tbody>
+                        <?php foreach ($logs as $log): ?>
+                            <tr>
+                                <td><?= h((string) $log['created_at']) ?></td>
+                                <td><?= h((string) $log['action']) ?></td>
+                                <td><?= (int) ($log['actor_user_id'] ?? 0) ?: '—' ?></td>
+                                <td><?= (int) ($log['company_id'] ?? 0) ?: '—' ?></td>
+                                <td><?= h((string) ($log['ip'] ?? '')) ?></td>
+                            </tr>
+                        <?php endforeach; ?>
+                        <?php if (!$logs): ?><tr class="empty"><td colspan="5">Nenhum log ainda.</td></tr><?php endif; ?>
+                        </tbody>
+                    </table>
+                </div>
             </section>
 
         <?php elseif ($tab === 'instalador'): ?>
@@ -255,17 +291,37 @@ $setupReady = $setupFile !== null && is_file($setupFile);
             </section>
 
         <?php elseif ($tab === 'configuracoes'): ?>
-            <nav class="app-subnav">
-                <a class="<?= $cfgSec === 'politicas' ? 'active' : '' ?>" href="/super/configuracoes/politicas">Políticas SaaS</a>
-                <a class="<?= $cfgSec === 'integracao' ? 'active' : '' ?>" href="/super/configuracoes/integracao">Pagamentos</a>
-                <a class="<?= $cfgSec === 'whatsapp' ? 'active' : '' ?>" href="/super/configuracoes/whatsapp">WhatsApp</a>
-                <a class="<?= $cfgSec === 'sistema' ? 'active' : '' ?>" href="/super/configuracoes/sistema">Sistema</a>
+            <nav class="flex gap-2 mb-5 overflow-x-auto pb-1">
+                <?php foreach ([
+                    ['politicas', 'Políticas SaaS'],
+                    ['integracao', 'Pagamentos'],
+                    ['whatsapp', 'WhatsApp'],
+                    ['sistema', 'Sistema'],
+                ] as [$secKey, $secLabel]): ?>
+                    <a href="/super/configuracoes/<?= h($secKey) ?>"
+                       class="flex-shrink-0 text-sm font-semibold px-4 py-2 rounded-full border no-underline transition
+                           <?= $cfgSec === $secKey ? 'bg-accent/10 text-accent border-accent/40' : 'bg-white text-muted border-line hover:text-ink' ?>"><?= h($secLabel) ?></a>
+                <?php endforeach; ?>
             </nav>
             <?php if ($cfgSec === 'sistema'): ?>
             <?php
                 $migRows = migrations_status(db());
                 $migPending = migrations_pending_count(db());
             ?>
+            <section class="card">
+                <h2>URL canônica do painel</h2>
+                <p class="hint">Usada em links de cron, webhooks e no agente. Em produção use HTTPS. Deixe em branco só em localhost.</p>
+                <form method="post" action="/super/migrations" class="form">
+                    <?= csrf_field() ?>
+                    <input type="hidden" name="do" value="panel_url">
+                    <input type="hidden" name="return_to" value="/super/configuracoes/sistema">
+                    <label>URL do painel
+                        <input name="panel_url" type="url" placeholder="https://wifidaloja.com.br" value="<?= h(setting('panel_url', (string) env('APP_URL', ''))) ?>">
+                    </label>
+                    <button class="btn" type="submit">Salvar URL</button>
+                </form>
+                <p class="hint">URL efetiva agora: <code><?= h(guess_panel_url()) ?></code></p>
+            </section>
             <section class="card">
                 <h2>Migrations do banco</h2>
                 <p class="hint">Atualizações de schema rodam automaticamente ao abrir o painel. Use este painel ou <code>php scripts/migrate.php</code> no deploy.</p>
@@ -474,12 +530,15 @@ $setupReady = $setupFile !== null && is_file($setupFile);
 (function(){
   var btn=document.getElementById('app-hamburger'),side=document.getElementById('app-sidebar');
   if(!btn||!side)return;
+  var nav=side.querySelector('[data-nav]'),foot=side.querySelector('[data-foot]');
   btn.addEventListener('click',function(){
-    var open=side.classList.toggle('open');
-    btn.setAttribute('aria-expanded',open?'true':'false');
+    var open=!nav.classList.contains('max-lg:hidden')||nav.classList.contains('!flex');
+    if(open){nav.classList.remove('!flex','!flex-col');nav.classList.add('max-lg:hidden');if(foot)foot.classList.add('max-lg:hidden');}
+    else{nav.classList.add('!flex','!flex-col');nav.classList.remove('max-lg:hidden');if(foot){foot.classList.remove('max-lg:hidden');}}
+    btn.setAttribute('aria-expanded',(!open)?'true':'false');
   });
-  side.querySelectorAll('.app-nav a').forEach(function(a){
-    a.addEventListener('click',function(){side.classList.remove('open');btn.setAttribute('aria-expanded','false');});
+  side.querySelectorAll('[data-nav] a').forEach(function(a){
+    a.addEventListener('click',function(){nav.classList.add('max-lg:hidden');if(foot)foot.classList.add('max-lg:hidden');btn.setAttribute('aria-expanded','false');});
   });
 })();
 </script>

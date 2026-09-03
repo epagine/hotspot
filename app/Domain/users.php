@@ -35,6 +35,12 @@ function create_user(array $data): array
     if (!in_array($role, ['super_admin', 'company_admin', 'operator'], true)) {
         $role = 'operator';
     }
+    if ($role === 'super_admin') {
+        $caller = current_user();
+        if (!$caller || ($caller['role'] ?? '') !== 'super_admin') {
+            $role = 'company_admin';
+        }
+    }
     $now = date('Y-m-d H:i:s');
     db()->prepare(
         'INSERT INTO users (name, email, pass_hash, role, status, created_at) VALUES (?,?,?,?,?,?)'

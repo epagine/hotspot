@@ -11,7 +11,7 @@ if (!is_array($body)) {
     json_out(['ok' => false, 'error' => 'json'], 400);
 }
 
-$token = trim((string) ($body['token'] ?? ''));
+$token = agent_request_token($body);
 $store = find_store_by_token($token);
 if (!$store) {
     json_out(['ok' => false, 'error' => 'token'], 401);

@@ -1,4 +1,18 @@
 RewriteEngine On
+
+# Arquivos e pastas que não devem ser servidos pela web
+RewriteRule ^\.env - [F,L]
+RewriteRule ^\.git - [F,L]
+RewriteRule ^(app|storage|scripts|docs|installer)(/|$) - [F,L]
+RewriteRule ^(composer\.(json|lock))$ - [F,L]
+RewriteRule \.md$ - [F,L]
+
+# Só arquivos públicos em /public/ (CSS legado, imagens)
 RewriteCond %{REQUEST_FILENAME} -f
+RewriteCond %{REQUEST_URI} ^/public/ [NC]
 RewriteRule ^ - [L]
+
+RewriteCond %{REQUEST_FILENAME} -f
+RewriteRule ^index\.php$ - [L]
+
 RewriteRule ^ index.php [L]

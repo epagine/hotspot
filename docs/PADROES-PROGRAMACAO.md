@@ -380,7 +380,8 @@ Local: `app/api/`.
 
 | Endpoint | Método | Auth |
 |----------|--------|------|
-| `/agente/sincronizar` | POST JSON | token da loja |
+| `/agente/sincronizar` | POST JSON | header `X-Agent-Token` (ou `token` no JSON) |
+| `/api/v1/hotspot/status` | GET | header `X-Agent-Token` (ou `token` no query, legado) |
 | `/admin/estado` | GET | sessão admin |
 | `/confirmar` | POST | portal (LAN) |
 

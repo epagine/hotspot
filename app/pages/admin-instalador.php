@@ -7,6 +7,7 @@ require_super_admin();
 $dest = installer_downloads_dir() . DIRECTORY_SEPARATOR . 'WiFiDaLoja-Setup.exe';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    require_post_csrf();
     $file = $_FILES['setup'] ?? null;
     try {
         if ($file === null || (int) ($file['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_NO_FILE) {
@@ -31,16 +32,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $_SESSION['flash_error'] = $e->getMessage();
     }
     $returnTo = trim((string) ($_POST['return_to'] ?? ''));
-    header('Location: ' . ($returnTo !== '' ? $returnTo : admin_url('instalador')));
-    exit;
+    safe_internal_redirect($returnTo, admin_url('instalador'));
 }
 
 $path = installer_setup_path();
 if ($path === null) {
     $_SESSION['flash_error'] = 'Ainda não há instalador neste painel. Envie o WiFiDaLoja-Setup.exe em Instalador.';
     $returnTo = trim((string) ($_GET['return_to'] ?? ''));
-    header('Location: ' . ($returnTo !== '' ? $returnTo : admin_url('instalador')));
-    exit;
+    safe_internal_redirect($returnTo, admin_url('instalador'));
 }
 
 header('Content-Type: application/octet-stream');

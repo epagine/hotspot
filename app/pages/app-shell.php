@@ -52,16 +52,37 @@ $pageTitle = match ($tab) {
     default => 'Dashboard',
 };
 
-function app_nav(string $tab, string $key, string $label, string $perm, ?string $feature = null): void
+$appNavItems = [
+    ['label' => 'Principal'],
+    ['dashboard', 'Dashboard', '/app/dashboard', 'dashboard', null, '<path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6A2.25 2.25 0 0 1 6 3.75h2.25A2.25 2.25 0 0 1 10.5 6v2.25a2.25 2.25 0 0 1-2.25 2.25H6a2.25 2.25 0 0 1-2.25-2.25V6ZM3.75 15.75A2.25 2.25 0 0 1 6 13.5h2.25a2.25 2.25 0 0 1 2.25 2.25V18a2.25 2.25 0 0 1-2.25 2.25H6A2.25 2.25 0 0 1 3.75 18v-2.25ZM13.5 6a2.25 2.25 0 0 1 2.25-2.25H18A2.25 2.25 0 0 1 20.25 6v2.25A2.25 2.25 0 0 1 18 10.5h-2.25a2.25 2.25 0 0 1-2.25-2.25V6ZM13.5 15.75a2.25 2.25 0 0 1 2.25-2.25H18a2.25 2.25 0 0 1 2.25 2.25V18A2.25 2.25 0 0 1 18 20.25h-2.25a2.25 2.25 0 0 1-2.25-2.25v-2.25Z"/>'],
+    ['hotspots', 'Hotspots', '/app/hotspots', 'hotspots', null, '<path stroke-linecap="round" stroke-linejoin="round" d="M8.288 15.038a5.25 5.25 0 0 1 7.424 0M5.106 11.856c3.807-3.808 9.98-3.808 13.788 0M1.924 8.674c5.565-5.565 14.587-5.565 20.152 0M12.53 18.22l-.53.53-.53-.53a.75.75 0 0 1 1.06 0Z"/>'],
+    ['clientes', 'Clientes', '/app/clientes', 'clients', null, '<path stroke-linecap="round" stroke-linejoin="round" d="M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.501 20.118a7.5 7.5 0 0 1 14.998 0A17.933 17.933 0 0 1 12 21.75c-2.676 0-5.216-.584-7.499-1.632Z"/>'],
+    ['acessos', 'Acessos', '/app/acessos', 'access', null, '<path stroke-linecap="round" stroke-linejoin="round" d="M3.75 12h16.5m-16.5 3.75h16.5M3.75 19.5h16.5M5.625 4.5h12.75a1.875 1.875 0 0 1 0 3.75H5.625a1.875 1.875 0 0 1 0-3.75Z"/>'],
+    ['label' => 'Marketing'],
+    ['campanhas', 'Campanhas', '/app/campanhas', 'campaigns', 'campaigns', '<path stroke-linecap="round" stroke-linejoin="round" d="M10.34 15.84c-.688-.06-1.386-.09-2.09-.09H7.5a4.5 4.5 0 1 1 0-9h.75c.704 0 1.402-.03 2.09-.09m0 9.18c.253.962.584 1.892.985 2.783.247.55.06 1.21-.463 1.511l-.657.38c-.551.318-1.26.117-1.527-.461a20.845 20.845 0 0 1-1.44-4.282m3.102.069a18.03 18.03 0 0 1-.59-4.59c0-1.586.205-3.124.59-4.59m0 9.18a23.848 23.848 0 0 1 8.835 2.535M10.34 6.66a23.847 23.847 0 0 0 8.835-2.535m0 0A23.74 23.74 0 0 0 18.795 3m.38 1.125a23.91 23.91 0 0 1 1.014 5.395m-1.014 8.855c-.118.38-.245.754-.38 1.125m.38-1.125a23.91 23.91 0 0 0 1.014-5.395m0-3.46c.495.413.811 1.035.811 1.73 0 .695-.316 1.317-.811 1.73m0-3.46a24.347 24.347 0 0 1 0 3.46"/>'],
+    ['cupons', 'Cupons', '/app/cupons', 'coupons', 'coupons', '<path stroke-linecap="round" stroke-linejoin="round" d="M16.5 6v.75m0 3v.75m0 3v.75m0 3V18m-9-5.25h5.25M7.5 15h3M3.375 5.25c-.621 0-1.125.504-1.125 1.125v3.026a2.999 2.999 0 0 1 0 5.198v3.026c0 .621.504 1.125 1.125 1.125h17.25c.621 0 1.125-.504 1.125-1.125v-3.026a2.999 2.999 0 0 1 0-5.198V6.375c0-.621-.504-1.125-1.125-1.125H3.375Z"/>'],
+    ['relatorios', 'Relatórios', '/app/relatorios', 'reports', 'reports', '<path stroke-linecap="round" stroke-linejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 0 1 3 19.875v-6.75ZM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 0 1-1.125-1.125V8.625ZM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 0 1-1.125-1.125V4.125Z"/>'],
+    ['label' => 'Conta'],
+    ['empresa', 'Empresa', '/app/empresa', 'company', null, '<path stroke-linecap="round" stroke-linejoin="round" d="M13.5 21v-7.5a.75.75 0 0 1 .75-.75h3a.75.75 0 0 1 .75.75V21m-4.5 0H2.36m11.14 0H18m0 0h3.64m-1.39 0V9.349M3.75 21V9.349m0 0a3.001 3.001 0 0 0 3.75-.615A2.993 2.993 0 0 0 9.75 9.75c.896 0 1.7-.393 2.25-1.016a2.993 2.993 0 0 0 2.25 1.016c.896 0 1.7-.393 2.25-1.015a3.001 3.001 0 0 0 3.75.614m-16.5 0a3.004 3.004 0 0 1-.621-4.72l1.189-1.19A1.5 1.5 0 0 1 5.378 3h13.243a1.5 1.5 0 0 1 1.06.44l1.19 1.189a3 3 0 0 1-.621 4.72M6.75 18h3.75a.75.75 0 0 0 .75-.75V13.5a.75.75 0 0 0-.75-.75H6.75a.75.75 0 0 0-.75.75v3.75c0 .414.336.75.75.75Z"/>'],
+    ['usuarios', 'Usuários', '/app/usuarios', 'users', null, '<path stroke-linecap="round" stroke-linejoin="round" d="M18 18.72a9.094 9.094 0 0 0 3.741-.479 3 3 0 0 0-4.682-2.72m.94 3.198.001.031c0 .225-.012.447-.037.666A11.944 11.944 0 0 1 12 21c-2.17 0-4.207-.576-5.963-1.584A6.062 6.062 0 0 1 6 18.719m12 0a5.971 5.971 0 0 0-.941-3.197m0 0A5.995 5.995 0 0 0 12 12.75a5.995 5.995 0 0 0-5.058 2.772m0 0a3 3 0 0 0-4.681 2.72 8.986 8.986 0 0 0 3.74.477m.94-3.197a5.971 5.971 0 0 0-.94 3.197M15 6.75a3 3 0 1 1-6 0 3 3 0 0 1 6 0Zm6 3a2.25 2.25 0 1 1-4.5 0 2.25 2.25 0 0 1 4.5 0Zm-13.5 0a2.25 2.25 0 1 1-4.5 0 2.25 2.25 0 0 1 4.5 0Z"/>'],
+    ['assinatura', 'Assinatura', '/app/assinatura', 'billing', null, '<path stroke-linecap="round" stroke-linejoin="round" d="M2.25 8.25h19.5M2.25 9h19.5m-16.5 5.25h6m-6 2.25h3m-3.75 3h15a2.25 2.25 0 0 0 2.25-2.25V6.75A2.25 2.25 0 0 0 19.5 4.5h-15a2.25 2.25 0 0 0-2.25 2.25v10.5A2.25 2.25 0 0 0 4.5 19.5Z"/>'],
+];
+function app_nav_tw(string $tab, array $items): void
 {
-    if (!user_can($perm)) {
-        return;
+    foreach ($items as $item) {
+        if (isset($item['label'])) {
+            echo '<div class="text-[11px] tracking-wider uppercase text-muted px-3 pt-4 pb-1">' . h($item['label']) . '</div>';
+            continue;
+        }
+        [$key, $label, $href, $perm, $feature, $icon] = $item;
+        if (!user_can($perm)) continue;
+        if ($feature !== null && !company_has_feature(current_company_id(), $feature)) continue;
+        $active = $tab === $key;
+        $cls = $active ? 'bg-accent/10 text-accent' : 'text-muted hover:bg-hover hover:text-ink';
+        echo '<a href="' . h($href) . '" class="flex items-center gap-2.5 px-3 py-2.5 rounded-[10px] text-sm font-semibold no-underline transition ' . $cls . '">'
+            . '<svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">' . $icon . '</svg>'
+            . h($label) . '</a>';
     }
-    if ($feature !== null && !company_has_feature(current_company_id(), $feature)) {
-        return;
-    }
-    $active = $tab === $key ? ' active' : '';
-    echo '<a class="' . $active . '" href="/app/' . h($key) . '">' . h($label) . '</a>';
 }
 ?><!doctype html>
 <html lang="pt-BR">
@@ -69,70 +90,67 @@ function app_nav(string $tab, string $key, string $label, string $perm, ?string 
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title><?= h($pageTitle) ?> · <?= h((string) $company['trade_name']) ?></title>
+    <?php require __DIR__ . '/../partials/tw-head.php'; ?>
     <link rel="stylesheet" href="/assets/app.css">
 </head>
-<body class="app">
-<aside class="app-side" id="app-sidebar">
-    <a class="app-brand" href="/app">
-        <img class="app-logo app-logo-side" src="<?= h(platform_logo_url()) ?>" alt="WiFi da Loja">
-        <div>
-            <strong><?= h((string) $company['trade_name']) ?></strong>
-            <small>Painel da empresa</small>
+<body class="font-sans bg-surface text-ink min-h-screen grid grid-cols-1 lg:grid-cols-[260px_1fr]">
+<aside id="app-sidebar" class="bg-white border-r border-line p-4 flex flex-col gap-6 sticky top-0 h-screen overflow-y-auto max-lg:h-auto max-lg:sticky max-lg:z-20 max-lg:flex-row max-lg:flex-wrap max-lg:items-center max-lg:gap-3 max-lg:p-3 max-lg:border-b max-lg:border-r-0 transition-all" data-sidebar>
+    <a class="flex items-center gap-3 no-underline text-inherit" href="/app">
+        <img class="w-10 h-10 rounded-[10px] bg-black object-cover object-left-center flex-shrink-0" src="<?= h(platform_logo_url()) ?>" alt="WiFi da Loja">
+        <div class="max-lg:hidden">
+            <strong class="block text-sm"><?= h((string) $company['trade_name']) ?></strong>
+            <span class="text-xs text-muted">Painel da empresa</span>
         </div>
     </a>
-    <button type="button" class="app-hamburger" id="app-hamburger" aria-label="Menu" aria-expanded="false">
-        <span></span><span></span><span></span>
+    <button type="button" id="app-hamburger" aria-label="Menu" aria-expanded="false"
+            class="hidden max-lg:flex ml-auto flex-col gap-[5px] items-center justify-center p-1.5 bg-transparent border-0 cursor-pointer">
+        <span class="block w-[22px] h-[2px] bg-ink rounded-sm transition-transform"></span>
+        <span class="block w-[22px] h-[2px] bg-ink rounded-sm transition-opacity"></span>
+        <span class="block w-[22px] h-[2px] bg-ink rounded-sm transition-transform"></span>
     </button>
-    <nav class="app-nav">
-        <div class="app-nav-label">Principal</div>
-        <?php app_nav($tab, 'dashboard', 'Dashboard', 'dashboard'); ?>
-        <?php app_nav($tab, 'hotspots', 'Hotspots', 'hotspots'); ?>
-        <?php app_nav($tab, 'clientes', 'Clientes', 'clients'); ?>
-        <?php app_nav($tab, 'acessos', 'Acessos', 'access'); ?>
-        <div class="app-nav-label">Marketing</div>
-        <?php app_nav($tab, 'campanhas', 'Campanhas', 'campaigns', 'campaigns'); ?>
-        <?php app_nav($tab, 'cupons', 'Cupons', 'coupons', 'coupons'); ?>
-        <?php app_nav($tab, 'relatorios', 'Relatórios', 'reports', 'reports'); ?>
-        <div class="app-nav-label">Conta</div>
-        <?php app_nav($tab, 'empresa', 'Empresa', 'company'); ?>
-        <?php app_nav($tab, 'usuarios', 'Usuários', 'users'); ?>
-        <?php app_nav($tab, 'assinatura', 'Assinatura', 'billing'); ?>
+    <nav class="flex flex-col gap-1 flex-1 max-lg:hidden" data-nav>
+        <?php app_nav_tw($tab, $appNavItems); ?>
     </nav>
-    <div class="app-side-foot">
-        <div class="app-user"><?= h((string) ($user['name'] ?? $user['email'] ?? '')) ?></div>
-        <a class="btn ghost btn-sm" href="/sair">Sair</a>
+    <div class="border-t border-line pt-3 max-lg:hidden" data-foot>
+        <div class="text-xs text-muted px-3 mb-2"><?= h((string) ($user['name'] ?? $user['email'] ?? '')) ?></div>
+        <a class="inline-block text-sm font-semibold text-muted border border-line rounded-btn px-3 py-2 hover:text-ink hover:border-ink/20 transition no-underline" href="/sair">Sair</a>
     </div>
 </aside>
-<div class="app-body">
-    <header class="app-top">
-        <div>
-            <h1><?= h($pageTitle) ?></h1>
-            <p class="lead">
-                <?php if ($sub && ($sub['billing_status'] ?? $sub['status'] ?? '') === 'trial'): ?>
-                    Trial até <?= h(date('d/m/Y', strtotime((string) $sub['trial_ends_at']) ?: time())) ?>
-                    · plano <?= h((string) ($sub['plan_name'] ?? '')) ?>
-                <?php else: ?>
-                    <?= h((string) ($sub['billing_label'] ?? company_subscription_label($sub))) ?>
-                    <?php if ($sub): ?> · <?= h((string) ($sub['plan_name'] ?? '')) ?><?php endif; ?>
-                <?php endif; ?>
-            </p>
-        </div>
+<div class="min-w-0 flex flex-col">
+    <header class="px-8 pt-6 pb-0 max-md:px-4">
+        <h1 class="text-2xl font-bold tracking-tight"><?= h($pageTitle) ?></h1>
+        <p class="text-muted text-sm mt-1">
+            <?php if ($sub && ($sub['billing_status'] ?? $sub['status'] ?? '') === 'trial'): ?>
+                Trial até <?= h(date('d/m/Y', strtotime((string) $sub['trial_ends_at']) ?: time())) ?>
+                · plano <?= h((string) ($sub['plan_name'] ?? '')) ?>
+            <?php else: ?>
+                <?= h((string) ($sub['billing_label'] ?? company_subscription_label($sub))) ?>
+                <?php if ($sub): ?> · <?= h((string) ($sub['plan_name'] ?? '')) ?><?php endif; ?>
+            <?php endif; ?>
+        </p>
     </header>
-    <main class="app-main">
-        <?php if ($flashErr): ?><p class="alert"><?= h($flashErr) ?></p><?php endif; ?>
-        <?php if ($flashOk): ?><p class="hint flash-ok"><?= h($flashOk) ?></p><?php endif; ?>
+    <main class="px-8 py-6 max-w-[1180px] w-full max-md:px-4">
+        <?php if ($flashErr): ?><div class="bg-danger-bg text-danger border border-danger/20 rounded-xl px-4 py-3 text-sm mb-4"><?= h($flashErr) ?></div><?php endif; ?>
+        <?php if ($flashOk): ?><div class="bg-ok-bg text-ok border border-ok/20 rounded-xl px-4 py-3 text-sm mb-4"><?= h($flashOk) ?></div><?php endif; ?>
         <?php if (!$serviceOk && $tab !== 'assinatura'): ?>
-            <p class="alert">Sua assinatura está <?= h((string) ($sub['billing_label'] ?? 'inativa')) ?>. Escolha um plano em <a href="/app/assinatura">Assinatura</a> para continuar usando o serviço.</p>
+            <div class="bg-danger-bg text-danger border border-danger/20 rounded-xl px-4 py-3 text-sm mb-4">Sua assinatura está <?= h((string) ($sub['billing_label'] ?? 'inativa')) ?>. Escolha um plano em <a href="/app/assinatura" class="font-semibold underline">Assinatura</a> para continuar usando o serviço.</div>
         <?php endif; ?>
 
         <?php if ($tab === 'dashboard'): ?>
-            <div class="stats">
-                <article><span>Clientes</span><strong><?= h(plan_usage_label($limitUsage['clients']['used'], $limitUsage['clients']['max'])) ?></strong></article>
-                <article><span>Acessos hoje</span><strong><?= (int) $kpis['access_today'] ?></strong></article>
-                <article><span>7 dias</span><strong><?= (int) $kpis['access_7d'] ?></strong></article>
-                <article><span>30 dias</span><strong><?= (int) $kpis['access_30d'] ?></strong></article>
-                <article><span>Hotspots</span><strong><?= h(plan_usage_label($limitUsage['hotspots']['used'], $limitUsage['hotspots']['max'])) ?></strong></article>
-                <article><span>Usuários</span><strong><?= h(plan_usage_label($limitUsage['users']['used'], $limitUsage['users']['max'])) ?></strong></article>
+            <div class="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-3 mb-4">
+                <?php foreach ([
+                    ['Clientes', plan_usage_label($limitUsage['clients']['used'], $limitUsage['clients']['max'])],
+                    ['Acessos hoje', (int) $kpis['access_today']],
+                    ['7 dias', (int) $kpis['access_7d']],
+                    ['30 dias', (int) $kpis['access_30d']],
+                    ['Hotspots', plan_usage_label($limitUsage['hotspots']['used'], $limitUsage['hotspots']['max'])],
+                    ['Usuários', plan_usage_label($limitUsage['users']['used'], $limitUsage['users']['max'])],
+                ] as [$kLabel, $kVal]): ?>
+                    <article class="bg-white border border-line rounded-xl p-4 shadow-sm">
+                        <span class="block text-xs text-muted mb-1"><?= h($kLabel) ?></span>
+                        <strong class="block text-xl font-bold tracking-tight"><?= h((string) $kVal) ?></strong>
+                    </article>
+                <?php endforeach; ?>
             </div>
             <section class="card">
                 <h2>Acessos nos últimos 7 dias</h2>
@@ -247,7 +265,7 @@ function app_nav(string $tab, string $key, string $label, string $perm, ?string 
                             <label>Descrição<textarea name="description" rows="2"><?= h((string) ($hot['description'] ?? '')) ?></textarea></label>
                             <label>Localização<input name="location" value="<?= h((string) ($hot['location'] ?? '')) ?>"></label>
                             <label>SSID<input name="ssid" value="<?= h(setting_for_store((int) $hot['id'], 'wifi_ssid', 'WifiDaLoja')) ?>"></label>
-                            <label>Senha Wi-Fi<input name="wifi_pass" value="<?= h(setting_for_store((int) $hot['id'], 'wifi_pass', '')) ?>"></label>
+                            <label>Senha Wi-Fi<input name="wifi_pass" type="password" value="" autocomplete="new-password" placeholder="Deixe em branco para manter"></label>
                             <label>Status
                                 <select name="hotspot_status">
                                     <?php foreach (['ativo' => 'Ativo', 'inativo' => 'Inativo', 'bloqueado' => 'Bloqueado'] as $v => $l): ?>
@@ -308,8 +326,7 @@ function app_nav(string $tab, string $key, string $label, string $perm, ?string 
                 <?php if (!company_within_client_limit($companyId)): ?>
                     <p class="alert"><?= h(company_limit_error('clients')) ?> Novos cadastros no portal ficarão bloqueados até o upgrade.</p>
                 <?php endif; ?>
-                <form method="get" action="/app" class="form-inline" style="margin-bottom:12px">
-                    <input type="hidden" name="tab" value="clientes">
+                <form method="get" action="/app/clientes" class="form-inline" style="margin-bottom:12px">
                     <label>Buscar<input name="q" value="<?= h($q) ?>" placeholder="Nome, WhatsApp ou e-mail"></label>
                     <button class="btn ghost" type="submit">Filtrar</button>
                 </form>
@@ -816,12 +833,15 @@ function app_nav(string $tab, string $key, string $label, string $perm, ?string 
 (function(){
   var btn=document.getElementById('app-hamburger'),side=document.getElementById('app-sidebar');
   if(!btn||!side)return;
+  var nav=side.querySelector('[data-nav]'),foot=side.querySelector('[data-foot]');
   btn.addEventListener('click',function(){
-    var open=side.classList.toggle('open');
-    btn.setAttribute('aria-expanded',open?'true':'false');
+    var open=!nav.classList.contains('max-lg:hidden')||nav.classList.contains('!flex');
+    if(open){nav.classList.remove('!flex','!flex-col');nav.classList.add('max-lg:hidden');if(foot)foot.classList.add('max-lg:hidden');}
+    else{nav.classList.add('!flex','!flex-col');nav.classList.remove('max-lg:hidden');if(foot){foot.classList.remove('max-lg:hidden');}}
+    btn.setAttribute('aria-expanded',(!open)?'true':'false');
   });
-  side.querySelectorAll('.app-nav a').forEach(function(a){
-    a.addEventListener('click',function(){side.classList.remove('open');btn.setAttribute('aria-expanded','false');});
+  side.querySelectorAll('[data-nav] a').forEach(function(a){
+    a.addEventListener('click',function(){nav.classList.add('max-lg:hidden');if(foot)foot.classList.add('max-lg:hidden');btn.setAttribute('aria-expanded','false');});
   });
 })();
 </script>

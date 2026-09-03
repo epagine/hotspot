@@ -113,7 +113,7 @@ function migrate_multi_store(PDO $pdo): void
     if (is_file($oldBrand) && !is_file($newBrand)) {
         $dir = dirname($newBrand);
         if (!is_dir($dir)) {
-            mkdir($dir, 0777, true);
+            mkdir($dir, 0750, true);
         }
         @rename($oldBrand, $newBrand);
     }
@@ -373,12 +373,27 @@ function update_store_saas(int $id, array $fields): void
 
 function guess_panel_url(): string
 {
-    $host = (string) ($_SERVER['HTTP_HOST'] ?? '127.0.0.1:8080');
-    $https = !empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off';
-    if ($host === '') {
-        $host = '127.0.0.1:8080';
+    $saved = '';
+    try {
+        $saved = rtrim(trim(setting('panel_url', '')), '/');
+    } catch (Throwable $e) {
+        $saved = '';
     }
-    return ($https ? 'https://' : 'http://') . $host;
+    if ($saved === '') {
+        $saved = rtrim(trim((string) env('APP_URL', '')), '/');
+    }
+    if ($saved !== '' && preg_match('#^https?://#i', $saved) === 1) {
+        return $saved;
+    }
+
+    $https = request_is_https();
+    $host = strtolower(trim((string) ($_SERVER['HTTP_HOST'] ?? '')));
+    $hostBare = preg_replace('/:\d+$/', '', $host) ?? $host;
+    if (in_array($hostBare, ['localhost', '127.0.0.1', '::1'], true)) {
+        return ($https ? 'https://' : 'http://') . ($host !== '' ? $host : '127.0.0.1');
+    }
+
+    return 'http://127.0.0.1';
 }
 
 function all_stores(): array
@@ -591,7 +606,7 @@ function brand_image_path_for(int $storeId): string
 {
     $dir = storage_dir() . DIRECTORY_SEPARATOR . 'brand';
     if (!is_dir($dir)) {
-        mkdir($dir, 0777, true);
+        mkdir($dir, 0750, true);
     }
     return $dir . DIRECTORY_SEPARATOR . $storeId . '.png';
 }

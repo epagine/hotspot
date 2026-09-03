@@ -12,6 +12,11 @@ declare(strict_types=1);
  */
 
 $root = dirname(__DIR__);
+if (PHP_SAPI !== 'cli') {
+    http_response_code(403);
+    echo 'Forbidden';
+    exit;
+}
 require $root . '/app/helpers.php';
 
 if (!is_installed()) {

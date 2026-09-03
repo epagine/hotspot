@@ -16,7 +16,7 @@ function migrations_log_path(): string
 {
     $dir = storage_dir() . DIRECTORY_SEPARATOR . 'logs';
     if (!is_dir($dir)) {
-        mkdir($dir, 0777, true);
+        mkdir($dir, 0750, true);
     }
     return $dir . DIRECTORY_SEPARATOR . 'migrations.log';
 }
@@ -274,7 +274,7 @@ function migration_create(string $slug): string
         throw new RuntimeException('Migration já existe: ' . $name);
     }
     if (!is_dir(migrations_dir())) {
-        mkdir(migrations_dir(), 0777, true);
+        mkdir(migrations_dir(), 0750, true);
     }
     $id = basename($name, '.php');
     if (file_put_contents($path, migration_stub_contents($id)) === false) {

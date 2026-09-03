@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/Support/env.php';
+require_once __DIR__ . '/Support/security.php';
 require_once __DIR__ . '/Support/migrations.php';
 require_once __DIR__ . '/Support/csrf.php';
 require_once __DIR__ . '/Support/audit.php';
@@ -36,7 +37,7 @@ function storage_dir_path(): string
 {
     $dir = dirname(__DIR__) . DIRECTORY_SEPARATOR . 'storage';
     if (!is_dir($dir)) {
-        mkdir($dir, 0777, true);
+        mkdir($dir, 0750, true);
     }
     return $dir;
 }
@@ -768,7 +769,7 @@ function installer_downloads_dir(): string
 {
     $dir = storage_dir() . DIRECTORY_SEPARATOR . 'downloads';
     if (!is_dir($dir)) {
-        mkdir($dir, 0777, true);
+        mkdir($dir, 0750, true);
     }
     return $dir;
 }

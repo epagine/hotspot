@@ -5,13 +5,13 @@ declare(strict_types=1);
 $plans = all_plans();
 $featureCatalog = plan_feature_catalog();
 ?>
-<section class="card">
-    <div class="card-head">
+<section class="bg-white border border-line rounded-card p-6 shadow-sm mb-4">
+    <div class="flex flex-wrap justify-between items-end gap-4 mb-4">
         <div>
-            <h2>Planos SaaS</h2>
-            <p class="hint">Limites e recursos exibidos na landing e no painel das empresas.</p>
+            <h2 class="text-lg font-bold">Planos SaaS</h2>
+            <p class="text-sm text-muted mt-1">Limites e recursos exibidos na landing e no painel das empresas.</p>
         </div>
-        <button type="button" class="btn" id="plan-add-btn">Novo plano</button>
+        <button type="button" class="bg-accent hover:bg-accent/90 text-white font-bold text-sm py-2.5 px-4 rounded-btn transition" id="plan-add-btn">Novo plano</button>
     </div>
 
     <?php if ($plans === []): ?>
@@ -84,15 +84,15 @@ $featureCatalog = plan_feature_catalog();
     <?php endif; ?>
 </section>
 
-<div class="app-modal" id="plan-modal" hidden aria-hidden="true">
-    <div class="app-modal-backdrop" data-close-modal tabindex="-1"></div>
-    <div class="app-modal-panel" role="dialog" aria-modal="true" aria-labelledby="plan-modal-title">
-        <header class="app-modal-head">
+<div class="fixed inset-0 z-50 flex items-start justify-center p-6 overflow-y-auto" id="plan-modal" hidden aria-hidden="true">
+    <div class="fixed inset-0 bg-ink/40 backdrop-blur-sm" data-close-modal tabindex="-1"></div>
+    <div class="relative z-10 w-full max-w-2xl bg-white border border-line rounded-card p-6 shadow-xl my-auto" role="dialog" aria-modal="true" aria-labelledby="plan-modal-title">
+        <header class="flex justify-between items-start gap-3 mb-5">
             <div>
-                <h2 id="plan-modal-title">Novo plano</h2>
-                <p class="hint" id="plan-modal-lead">Defina limites, preço e recursos incluídos.</p>
+                <h2 id="plan-modal-title" class="text-lg font-bold">Novo plano</h2>
+                <p class="text-sm text-muted mt-1" id="plan-modal-lead">Defina limites, preço e recursos incluídos.</p>
             </div>
-            <button type="button" class="app-modal-close" data-close-modal aria-label="Fechar">&times;</button>
+            <button type="button" class="text-muted hover:text-ink text-2xl leading-none p-1 bg-transparent border-0 cursor-pointer" data-close-modal aria-label="Fechar">&times;</button>
         </header>
         <form method="post" action="/super/planos" class="form app-modal-form" id="plan-form">
             <?= csrf_field() ?>
@@ -161,9 +161,9 @@ $featureCatalog = plan_feature_catalog();
 
             <p class="hint" id="plan-subs-hint" hidden></p>
 
-            <div class="app-modal-actions">
-                <button type="button" class="btn ghost" data-close-modal>Cancelar</button>
-                <button type="submit" class="btn" id="plan-submit-btn">Salvar plano</button>
+            <div class="flex justify-end gap-3 mt-4">
+                <button type="button" class="text-sm font-semibold text-ink border border-line bg-white px-4 py-2.5 rounded-btn hover:bg-hover transition" data-close-modal>Cancelar</button>
+                <button type="submit" class="text-sm font-bold bg-accent hover:bg-accent/90 text-white px-4 py-2.5 rounded-btn transition" id="plan-submit-btn">Salvar plano</button>
             </div>
         </form>
     </div>
