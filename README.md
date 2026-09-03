@@ -68,13 +68,26 @@ git clone -b master https://github.com/epagine/hotspot.git
 chmod -R u+rwX storage
 ```
 
-Extensões PHP: `pdo_sqlite` (ou `pdo_mysql`), `gd`, `curl`, `session`.
+Extensões PHP: `pdo_sqlite` **ou** `pdo_mysql`, `gd`, `curl`, `session`.
+
+### Banco de dados
+
+Na instalação (`/instalar`) escolha:
+
+| Driver | Quando usar |
+|--------|-------------|
+| **SQLite** | Dev local, painel pequeno, um arquivo em `storage/hotspot.sqlite` |
+| **MySQL / MariaDB** | Produção, várias empresas, backup/rotinas do provedor |
+
+No MySQL o instalador cria o database (`utf8mb4`) se ainda não existir e grava as credenciais em `app/config.php`. Migrations sobem as tabelas SaaS automaticamente.
+
+Alternativa manual: copie `.env.example` → `.env` com `DB_DRIVER=mysql` **ou** edite `app/config.php` após o install.
 
 ### Primeiro acesso
 
 1. Abra `https://seudominio.com/instalar`.
-2. Configure banco, usuário super admin e dados iniciais.
-3. Entre em `/super` para planos, pagamentos e WhatsApp.
+2. Escolha SQLite ou MySQL e a conta de Super Admin.
+3. Entre em `/entrar` e continue em `/super` (planos, pagamentos, WhatsApp).
 4. Empresas se cadastram em `/comecar` ou você cria em **Super → Empresas**.
 
 ### Integrações (Super → Configurações)
@@ -160,11 +173,10 @@ powershell -ExecutionPolicy Bypass -File installer\compilar.ps1
 ## 6. Desenvolvimento local (Laragon)
 
 1. Clone em `C:\laragon\www\hotspot`.
-2. PHP 8.1+, SQLite, GD, curl.
-3. Acesse `http://hotspot.test/instalar` ou `http://127.0.0.1:8080/instalar`.
-4. Agente: ícone da bandeja ou `scripts\agente-hotspot.ps1` (administrador).
-
-MySQL opcional: `.env` ou `app/config.php` com `DB_DRIVER=mysql`.
+2. PHP 8.1+, SQLite e/ou MySQL, GD, curl.
+3. Acesse `http://hotspot.test/instalar` (ou `http://127.0.0.1:8080/instalar`).
+4. Escolha SQLite (rápido) ou MySQL do Laragon (`root` sem senha, banco `wifidaloja`).
+5. Agente: ícone da bandeja ou `scripts\agente-hotspot.ps1` (administrador).
 
 ---
 

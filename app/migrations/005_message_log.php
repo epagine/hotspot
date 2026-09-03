@@ -23,6 +23,6 @@ return static function (PDO $pdo): void {
             created_at {$text} NOT NULL
         )"
     );
-    $pdo->exec('CREATE INDEX IF NOT EXISTS idx_message_log_created ON message_log (created_at)');
-    $pdo->exec('CREATE INDEX IF NOT EXISTS idx_message_log_company ON message_log (company_id, event_type)');
+    db_ensure_index($pdo, 'idx_message_log_created', 'message_log', 'created_at');
+    db_ensure_index($pdo, 'idx_message_log_company', 'message_log', 'company_id, event_type');
 };

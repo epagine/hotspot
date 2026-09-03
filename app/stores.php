@@ -57,38 +57,18 @@ function migrate_multi_store(PDO $pdo): void
     }
     $done = true;
 
-    $pdo->exec(
-        'CREATE TABLE IF NOT EXISTS stores (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT NOT NULL,
-            city TEXT NOT NULL DEFAULT \'\',
-            token TEXT NOT NULL UNIQUE,
-            pending_command TEXT,
-            pending_command_id TEXT,
-            last_seen_at TEXT,
-            last_status TEXT,
-            created_at TEXT NOT NULL
-        )'
-    );
-    $pdo->exec(
-        'CREATE TABLE IF NOT EXISTS store_settings (
-            store_id INTEGER NOT NULL,
-            k TEXT NOT NULL,
-            v TEXT,
-            PRIMARY KEY (store_id, k)
-        )'
-    );
+    ensure_core_schema($pdo);
     ensure_store_saas_columns($pdo);
     ensure_payments_table($pdo);
     ensure_subscription_schema($pdo);
     ensure_portal_schema($pdo);
 
-    $cols = $pdo->query('PRAGMA table_info(clients)')->fetchAll();
-    $names = array_column($cols, 'name');
-    if (!in_array('store_id', $names, true)) {
-        $pdo->exec('ALTER TABLE clients ADD COLUMN store_id INTEGER NOT NULL DEFAULT 1');
+    $names = db_column_names($pdo, 'clients');
+    if ($names !== [] && !in_array('store_id', $names, true)) {
+        $t = db_type_map();
+        $pdo->exec('ALTER TABLE clients ADD COLUMN store_id ' . $t['int'] . ' DEFAULT 1');
     }
-    $pdo->exec('CREATE INDEX IF NOT EXISTS idx_clients_store ON clients (store_id, id)');
+    db_ensure_index($pdo, 'idx_clients_store', 'clients', 'store_id, id');
 
     $count = (int) $pdo->query('SELECT COUNT(*) FROM stores')->fetchColumn();
     if ($count > 0) {
@@ -96,8 +76,12 @@ function migrate_multi_store(PDO $pdo): void
     }
 
     $legacy = [];
-    foreach ($pdo->query('SELECT k, v FROM settings') as $row) {
-        $legacy[(string) $row['k']] = (string) $row['v'];
+    try {
+        foreach ($pdo->query('SELECT k, v FROM settings') as $row) {
+            $legacy[(string) $row['k']] = (string) $row['v'];
+        }
+    } catch (Throwable $e) {
+        return;
     }
     $hasClients = (int) $pdo->query('SELECT COUNT(*) FROM clients')->fetchColumn() > 0;
     if (($legacy['store_name'] ?? '') === '' && !$hasClients) {
@@ -115,9 +99,7 @@ function migrate_multi_store(PDO $pdo): void
         'store_name', 'store_city', 'wifi_ssid', 'wifi_pass', 'portal_ip',
         'max_clients', 'approval_mode', 'status_template', 'dns_allowlist', 'session_hours',
     ];
-    $ins = $pdo->prepare(
-        'INSERT INTO store_settings (store_id, k, v) VALUES (?,?,?) ON CONFLICT(store_id, k) DO UPDATE SET v = excluded.v'
-    );
+    $ins = $pdo->prepare(db_upsert_sql('store_settings', ['store_id', 'k', 'v'], 'store_id, k'));
     foreach ($storeKeys as $k) {
         if (array_key_exists($k, $legacy)) {
             $ins->execute([$id, $k, $legacy[$k]]);
@@ -141,43 +123,93 @@ function migrate_multi_store(PDO $pdo): void
     }
 }
 
+function ensure_core_schema(PDO $pdo): void
+{
+    $t = db_type_map();
+    $pdo->exec(
+        "CREATE TABLE IF NOT EXISTS settings (
+            k {$t['text']} NOT NULL PRIMARY KEY,
+            v {$t['long']}
+        )"
+    );
+    $pdo->exec(
+        "CREATE TABLE IF NOT EXISTS stores (
+            id {$t['auto']},
+            name {$t['text']} NOT NULL,
+            city {$t['text']} NOT NULL DEFAULT '',
+            token {$t['text']} NOT NULL UNIQUE,
+            pending_command {$t['long']},
+            pending_command_id {$t['text']},
+            last_seen_at {$t['text']},
+            last_status {$t['long']},
+            created_at {$t['text']} NOT NULL
+        )"
+    );
+    $pdo->exec(
+        "CREATE TABLE IF NOT EXISTS store_settings (
+            store_id {$t['int']},
+            k {$t['text']} NOT NULL,
+            v {$t['long']},
+            PRIMARY KEY (store_id, k)
+        )"
+    );
+    $pdo->exec(
+        "CREATE TABLE IF NOT EXISTS clients (
+            id {$t['auto']},
+            store_id {$t['int']} DEFAULT 1,
+            ip {$t['text']} NOT NULL,
+            mac {$t['text']},
+            phone {$t['text']},
+            status_code {$t['text']} NOT NULL,
+            status_text {$t['long']} NOT NULL,
+            state {$t['text']} NOT NULL DEFAULT 'pending',
+            user_agent {$t['long']},
+            created_at {$t['text']} NOT NULL,
+            authorized_at {$t['text']},
+            expires_at {$t['text']}
+        )"
+    );
+    db_ensure_index($pdo, 'idx_ip_state', 'clients', 'ip, state');
+    db_ensure_index($pdo, 'idx_code', 'clients', 'status_code');
+    db_ensure_index($pdo, 'idx_clients_store', 'clients', 'store_id, id');
+}
+
 function ensure_store_saas_columns(PDO $pdo): void
 {
-    $cols = array_column($pdo->query('PRAGMA table_info(stores)')->fetchAll(), 'name');
+    $t = db_type_map();
     $add = [
-        'active' => "INTEGER NOT NULL DEFAULT 1",
-        'billing_status' => "TEXT NOT NULL DEFAULT 'em_dia'",
-        'plan' => "TEXT NOT NULL DEFAULT 'mensal'",
-        'monthly_fee' => "TEXT NOT NULL DEFAULT ''",
-        'paid_until' => "TEXT NOT NULL DEFAULT ''",
-        'contact' => "TEXT NOT NULL DEFAULT ''",
-        'notes' => "TEXT NOT NULL DEFAULT ''",
-        'auto_billing' => 'INTEGER NOT NULL DEFAULT 1',
+        'active' => $t['bool'] . ' DEFAULT 1',
+        'billing_status' => "{$t['text']} NOT NULL DEFAULT 'em_dia'",
+        'plan' => "{$t['text']} NOT NULL DEFAULT 'mensal'",
+        'monthly_fee' => "{$t['text']} NOT NULL DEFAULT ''",
+        'paid_until' => "{$t['text']} NOT NULL DEFAULT ''",
+        'contact' => "{$t['text']} NOT NULL DEFAULT ''",
+        'notes' => $t['long'],
+        'auto_billing' => $t['bool'] . ' DEFAULT 1',
     ];
     foreach ($add as $col => $def) {
-        if (!in_array($col, $cols, true)) {
-            $pdo->exec("ALTER TABLE stores ADD COLUMN {$col} {$def}");
-        }
+        db_add_column($pdo, 'stores', $col, $def);
     }
 }
 
 function ensure_payments_table(PDO $pdo): void
 {
+    $t = db_type_map();
     $pdo->exec(
-        'CREATE TABLE IF NOT EXISTS payments (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            store_id INTEGER NOT NULL,
-            reference_id TEXT NOT NULL UNIQUE,
-            checkout_id TEXT NOT NULL DEFAULT \'\',
-            pay_url TEXT NOT NULL DEFAULT \'\',
-            amount_cents INTEGER NOT NULL DEFAULT 0,
-            status TEXT NOT NULL DEFAULT \'pending\',
-            raw TEXT,
-            created_at TEXT NOT NULL,
-            paid_at TEXT
-        )'
+        "CREATE TABLE IF NOT EXISTS payments (
+            id {$t['auto']},
+            store_id {$t['int']},
+            reference_id {$t['text']} NOT NULL UNIQUE,
+            checkout_id {$t['text']} NOT NULL DEFAULT '',
+            pay_url {$t['long']} NOT NULL,
+            amount_cents {$t['int']} DEFAULT 0,
+            status {$t['text']} NOT NULL DEFAULT 'pending',
+            raw {$t['long']},
+            created_at {$t['text']} NOT NULL,
+            paid_at {$t['text']}
+        )"
     );
-    $pdo->exec('CREATE INDEX IF NOT EXISTS idx_payments_store ON payments (store_id, id)');
+    db_ensure_index($pdo, 'idx_payments_store', 'payments', 'store_id, id');
 }
 
 function money_to_cents(string $raw): int
@@ -328,9 +360,7 @@ function update_store_saas(int $id, array $fields): void
         (string) ($fields['contact'] ?? ''),
         $id,
     ]);
-    $ins = db()->prepare(
-        'INSERT INTO store_settings (store_id, k, v) VALUES (?,?,?) ON CONFLICT(store_id, k) DO UPDATE SET v = excluded.v'
-    );
+    $ins = db()->prepare(db_upsert_sql('store_settings', ['store_id', 'k', 'v'], 'store_id, k'));
     $ins->execute([$id, 'store_name', (string) $fields['name']]);
     $ins->execute([$id, 'store_city', (string) $fields['city']]);
     $nowActive = !empty($fields['active']);

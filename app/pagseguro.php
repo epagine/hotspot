@@ -404,10 +404,12 @@ function pagseguro_expire_stale_pending(): void
 {
     $storeIds = [];
     $companyIds = [];
-    $stmt = db()->query(
-        "SELECT * FROM payments WHERE status = 'pending' AND created_at < datetime('now', '-8 days')"
+    $cutoff = date('Y-m-d H:i:s', strtotime('-8 days') ?: time());
+    $stmt = db()->prepare(
+        "SELECT * FROM payments WHERE status = 'pending' AND created_at < ?"
     );
-    foreach ($stmt ? ($stmt->fetchAll() ?: []) : [] as $row) {
+    $stmt->execute([$cutoff]);
+    foreach ($stmt->fetchAll() ?: [] as $row) {
         $cid = (string) ($row['checkout_id'] ?? '');
         if ($cid !== '') {
             pagseguro_request('POST', '/checkouts/' . rawurlencode($cid) . '/inactivate');

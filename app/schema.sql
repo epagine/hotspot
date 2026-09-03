@@ -3,6 +3,9 @@ CREATE TABLE IF NOT EXISTS settings (
   v TEXT
 );
 
+-- Schema base (SQLite). Em MySQL o bootstrap usa ensure_core_schema() + migrations.
+-- Instalação: /instalar → escolha sqlite ou mysql.
+
 CREATE TABLE IF NOT EXISTS stores (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   name TEXT NOT NULL,

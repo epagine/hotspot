@@ -17,5 +17,5 @@ return static function (PDO $pdo): void {
         $pdo->exec('ALTER TABLE payments ADD COLUMN plan_id ' . $type);
     }
 
-    $pdo->exec('CREATE INDEX IF NOT EXISTS idx_payments_company ON payments (company_id, id)');
+    db_ensure_index($pdo, 'idx_payments_company', 'payments', 'company_id, id');
 };

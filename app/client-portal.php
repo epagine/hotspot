@@ -9,16 +9,14 @@ function ensure_portal_schema(PDO $pdo): void
         return;
     }
     $done = true;
-    $cols = array_column($pdo->query('PRAGMA table_info(stores)')->fetchAll(), 'name');
+    $t = db_type_map();
     $add = [
-        'portal_email' => "TEXT NOT NULL DEFAULT ''",
-        'portal_pass_hash' => "TEXT NOT NULL DEFAULT ''",
-        'portal_enabled' => 'INTEGER NOT NULL DEFAULT 0',
+        'portal_email' => "{$t['text']} NOT NULL DEFAULT ''",
+        'portal_pass_hash' => "{$t['text']} NOT NULL DEFAULT ''",
+        'portal_enabled' => $t['bool'] . ' DEFAULT 0',
     ];
     foreach ($add as $col => $def) {
-        if (!in_array($col, $cols, true)) {
-            $pdo->exec("ALTER TABLE stores ADD COLUMN {$col} {$def}");
-        }
+        db_add_column($pdo, 'stores', $col, $def);
     }
 }
 
@@ -135,7 +133,7 @@ function find_store_by_portal_email(string $email): ?array
     if ($email === '') {
         return null;
     }
-    $stmt = db()->prepare('SELECT * FROM stores WHERE portal_email = ? COLLATE NOCASE LIMIT 1');
+    $stmt = db()->prepare('SELECT * FROM stores WHERE LOWER(portal_email) = ? LIMIT 1');
     $stmt->execute([$email]);
     $row = $stmt->fetch();
     return $row ?: null;

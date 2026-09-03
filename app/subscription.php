@@ -192,31 +192,29 @@ function subscription_reconcile_all(): int
 
 function ensure_subscription_schema(PDO $pdo): void
 {
+    $t = db_type_map();
     $pdo->exec(
-        'CREATE TABLE IF NOT EXISTS subscription_events (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            store_id INTEGER NOT NULL,
-            event_type TEXT NOT NULL,
-            from_status TEXT NOT NULL DEFAULT \'\',
-            to_status TEXT NOT NULL DEFAULT \'\',
-            note TEXT NOT NULL DEFAULT \'\',
-            actor TEXT NOT NULL DEFAULT \'system\',
-            created_at TEXT NOT NULL
-        )'
+        "CREATE TABLE IF NOT EXISTS subscription_events (
+            id {$t['auto']},
+            store_id {$t['int']},
+            event_type {$t['text']} NOT NULL,
+            from_status {$t['text']} NOT NULL DEFAULT '',
+            to_status {$t['text']} NOT NULL DEFAULT '',
+            note {$t['long']} NOT NULL,
+            actor {$t['text']} NOT NULL DEFAULT 'system',
+            created_at {$t['text']} NOT NULL
+        )"
     );
-    $pdo->exec('CREATE INDEX IF NOT EXISTS idx_sub_events_store ON subscription_events (store_id, id)');
+    db_ensure_index($pdo, 'idx_sub_events_store', 'subscription_events', 'store_id, id');
 
-    $cols = array_column($pdo->query('PRAGMA table_info(stores)')->fetchAll(), 'name');
     $add = [
-        'trial_ends_at' => "TEXT NOT NULL DEFAULT ''",
-        'suspended_at' => "TEXT NOT NULL DEFAULT ''",
-        'cancelled_at' => "TEXT NOT NULL DEFAULT ''",
-        'next_billing_at' => "TEXT NOT NULL DEFAULT ''",
+        'trial_ends_at' => "{$t['text']} NOT NULL DEFAULT ''",
+        'suspended_at' => "{$t['text']} NOT NULL DEFAULT ''",
+        'cancelled_at' => "{$t['text']} NOT NULL DEFAULT ''",
+        'next_billing_at' => "{$t['text']} NOT NULL DEFAULT ''",
     ];
     foreach ($add as $col => $def) {
-        if (!in_array($col, $cols, true)) {
-            $pdo->exec("ALTER TABLE stores ADD COLUMN {$col} {$def}");
-        }
+        db_add_column($pdo, 'stores', $col, $def);
     }
 
     $pdo->exec("UPDATE stores SET billing_status = 'ativa' WHERE billing_status = 'em_dia'");

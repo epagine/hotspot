@@ -61,8 +61,12 @@ Reativação ocorre ao pagar ou regularizar a assinatura (`company_sync_hotspots
 
 ## Banco
 
-- Driver: SQLite (padrão) ou MySQL via `app/config.php` / `.env`
-- Migrations versionadas em `app/migrations/`
+- Drivers: **SQLite** (padrão) ou **MySQL/MariaDB**
+- Instalação: `/instalar` — escolha o driver e, no MySQL, host/porta/banco/usuário/senha (cria o database se não existir)
+- Config gerada em `app/config.php` (`driver`, credenciais)
+- Opcional: `.env` com `DB_DRIVER=mysql` (sobrescrito pelos valores de `config.php` quando presentes)
+- Migrations versionadas em `app/migrations/` (DDL compatível com ambos)
+- Helpers: `db_driver()`, `db_upsert_sql()`, `db_column_names()`, `db_ensure_index()`
 - Tenant: `company_id` em stores/clients/sessions/campaigns
 
 ## NetworkProviders

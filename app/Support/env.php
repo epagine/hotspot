@@ -65,6 +65,108 @@ function db_driver(): string
     return in_array($driver, ['mysql', 'mariadb'], true) ? 'mysql' : 'sqlite';
 }
 
+function db_is_mysql(): bool
+{
+    return db_driver() === 'mysql';
+}
+
+/** @return array{auto:string,int:string,int_null:string,bool:string,text:string,long:string} */
+function db_type_map(): array
+{
+    if (db_is_mysql()) {
+        return [
+            'auto' => 'INT NOT NULL AUTO_INCREMENT PRIMARY KEY',
+            'int' => 'INT NOT NULL',
+            'int_null' => 'INT NULL',
+            'bool' => 'TINYINT(1) NOT NULL',
+            'text' => 'VARCHAR(255)',
+            'long' => 'TEXT',
+        ];
+    }
+    return [
+        'auto' => 'INTEGER PRIMARY KEY AUTOINCREMENT',
+        'int' => 'INTEGER NOT NULL',
+        'int_null' => 'INTEGER',
+        'bool' => 'INTEGER NOT NULL',
+        'text' => 'TEXT',
+        'long' => 'TEXT',
+    ];
+}
+
+function db_column_names(PDO $pdo, string $table): array
+{
+    $table = preg_replace('/[^a-z0-9_]/i', '', $table) ?? '';
+    if ($table === '') {
+        return [];
+    }
+    try {
+        if (db_is_mysql()) {
+            $rows = $pdo->query('SHOW COLUMNS FROM `' . $table . '`')->fetchAll() ?: [];
+            return array_column($rows, 'Field');
+        }
+        $rows = $pdo->query('PRAGMA table_info(' . $table . ')')->fetchAll() ?: [];
+        return array_column($rows, 'name');
+    } catch (Throwable $e) {
+        return [];
+    }
+}
+
+function db_ensure_index(PDO $pdo, string $name, string $table, string $columns): void
+{
+    $name = preg_replace('/[^a-z0-9_]/i', '', $name) ?? '';
+    $table = preg_replace('/[^a-z0-9_]/i', '', $table) ?? '';
+    $columns = preg_replace('/[^a-z0-9_,\s()]/i', '', $columns) ?? '';
+    if ($name === '' || $table === '' || $columns === '') {
+        return;
+    }
+    try {
+        if (db_is_mysql()) {
+            $exists = $pdo->prepare(
+                'SELECT 1 FROM information_schema.statistics
+                 WHERE table_schema = DATABASE() AND table_name = ? AND index_name = ? LIMIT 1'
+            );
+            $exists->execute([$table, $name]);
+            if ($exists->fetch()) {
+                return;
+            }
+            $pdo->exec("CREATE INDEX {$name} ON {$table} ({$columns})");
+            return;
+        }
+        $pdo->exec("CREATE INDEX IF NOT EXISTS {$name} ON {$table} ({$columns})");
+    } catch (Throwable $e) {
+        // índice pode já existir
+    }
+}
+
+function db_add_column(PDO $pdo, string $table, string $column, string $definition): void
+{
+    $cols = db_column_names($pdo, $table);
+    if (in_array($column, $cols, true)) {
+        return;
+    }
+    $table = preg_replace('/[^a-z0-9_]/i', '', $table) ?? '';
+    $column = preg_replace('/[^a-z0-9_]/i', '', $column) ?? '';
+    if ($table === '' || $column === '') {
+        return;
+    }
+    $pdo->exec("ALTER TABLE {$table} ADD COLUMN {$column} {$definition}");
+}
+
+function mysql_create_database(string $host, string $port, string $database, string $user, string $pass): void
+{
+    $database = trim($database);
+    if ($database === '' || !preg_match('/^[a-zA-Z0-9_]+$/', $database)) {
+        throw new InvalidArgumentException('Nome do banco MySQL inválido (use letras, números e _).');
+    }
+    $dsn = "mysql:host={$host};port={$port};charset=utf8mb4";
+    $pdo = new PDO($dsn, $user, $pass, [
+        PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+    ]);
+    $pdo->exec(
+        'CREATE DATABASE IF NOT EXISTS `' . $database . '` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci'
+    );
+}
+
 function db_upsert_sql(string $table, array $columns, string $conflictTarget): string
 {
     $cols = implode(', ', $columns);
