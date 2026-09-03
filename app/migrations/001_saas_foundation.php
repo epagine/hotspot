@@ -3,12 +3,14 @@
 declare(strict_types=1);
 
 return static function (PDO $pdo): void {
-    $driver = db_driver();
-    $auto = $driver === 'mysql' ? 'INT NOT NULL AUTO_INCREMENT PRIMARY KEY' : 'INTEGER PRIMARY KEY AUTOINCREMENT';
-    $text = $driver === 'mysql' ? 'VARCHAR(255)' : 'TEXT';
-    $long = $driver === 'mysql' ? 'TEXT' : 'TEXT';
-    $int = $driver === 'mysql' ? 'INT NOT NULL' : 'INTEGER NOT NULL';
-    $bool = $driver === 'mysql' ? 'TINYINT(1) NOT NULL' : 'INTEGER NOT NULL';
+    $t = db_type_map();
+    $auto = $t['auto'];
+    $text = $t['text'];
+    $int = $t['int'];
+    $bool = $t['bool'];
+    $long = db_col_long();
+    $jsonObj = db_col_json('{}');
+    $jsonArr = db_col_json('[]');
 
     $pdo->exec(
         "CREATE TABLE IF NOT EXISTS users (
@@ -32,13 +34,13 @@ return static function (PDO $pdo): void {
             phone {$text} NOT NULL DEFAULT '',
             whatsapp {$text} NOT NULL DEFAULT '',
             email {$text} NOT NULL DEFAULT '',
-            address {$long} NOT NULL DEFAULT '',
+            address {$long},
             city {$text} NOT NULL DEFAULT '',
             state {$text} NOT NULL DEFAULT '',
             logo_path {$text} NOT NULL DEFAULT '',
             primary_color {$text} NOT NULL DEFAULT '#c8892a',
             secondary_color {$text} NOT NULL DEFAULT '#15202b',
-            social_json {$long} NOT NULL DEFAULT '{}',
+            social_json {$jsonObj},
             status {$text} NOT NULL DEFAULT 'active',
             created_at {$text} NOT NULL
         )"
@@ -49,7 +51,7 @@ return static function (PDO $pdo): void {
             id {$auto},
             company_id {$int},
             user_id {$int},
-            permissions {$long} NOT NULL DEFAULT '[]',
+            permissions {$jsonArr},
             created_at {$text} NOT NULL,
             UNIQUE (company_id, user_id)
         )"
@@ -65,7 +67,7 @@ return static function (PDO $pdo): void {
             max_hotspots {$int} DEFAULT 1,
             max_clients {$int} DEFAULT 100,
             max_users {$int} DEFAULT 2,
-            features_json {$long} NOT NULL DEFAULT '[]',
+            features_json {$jsonArr},
             active {$bool} DEFAULT 1,
             sort_order {$int} DEFAULT 0,
             created_at {$text} NOT NULL,
@@ -83,7 +85,7 @@ return static function (PDO $pdo): void {
             starts_at {$text} NOT NULL DEFAULT '',
             ends_at {$text} NOT NULL DEFAULT '',
             cancelled_at {$text} NOT NULL DEFAULT '',
-            notes {$long} NOT NULL DEFAULT '',
+            notes {$long},
             created_at {$text} NOT NULL,
             UNIQUE (company_id)
         )"
@@ -95,22 +97,17 @@ return static function (PDO $pdo): void {
             company_id {$int} NULL,
             actor_user_id {$int} NULL,
             action {$text} NOT NULL,
-            meta_json {$long} NOT NULL DEFAULT '{}',
+            meta_json {$jsonObj},
             ip {$text} NOT NULL DEFAULT '',
             created_at {$text} NOT NULL
         )"
     );
 
-    // Link legacy stores to companies
-    $cols = array_column($pdo->query($driver === 'mysql'
-        ? "SHOW COLUMNS FROM stores"
-        : 'PRAGMA table_info(stores)'
-    )->fetchAll(), $driver === 'mysql' ? 'Field' : 'name');
-    if (!in_array('company_id', $cols, true)) {
-        $pdo->exec('ALTER TABLE stores ADD COLUMN company_id ' . ($driver === 'mysql' ? 'INT NULL' : 'INTEGER'));
+    $cols = db_column_names($pdo, 'stores');
+    if ($cols !== [] && !in_array('company_id', $cols, true)) {
+        $pdo->exec('ALTER TABLE stores ADD COLUMN company_id ' . $t['int_null']);
     }
 
-    // Seed default plans if empty
     $count = (int) $pdo->query('SELECT COUNT(*) FROM plans')->fetchColumn();
     if ($count === 0) {
         $now = date('Y-m-d H:i:s');

@@ -3,12 +3,12 @@
 declare(strict_types=1);
 
 return static function (PDO $pdo): void {
-    $driver = db_driver();
-    $auto = $driver === 'mysql' ? 'INT NOT NULL AUTO_INCREMENT PRIMARY KEY' : 'INTEGER PRIMARY KEY AUTOINCREMENT';
-    $text = $driver === 'mysql' ? 'VARCHAR(255)' : 'TEXT';
-    $long = $driver === 'mysql' ? 'TEXT' : 'TEXT';
-    $int = $driver === 'mysql' ? 'INT NOT NULL' : 'INTEGER NOT NULL';
-    $bool = $driver === 'mysql' ? 'TINYINT(1) NOT NULL' : 'INTEGER NOT NULL';
+    $t = db_type_map();
+    $auto = $t['auto'];
+    $text = $t['text'];
+    $int = $t['int'];
+    $long = db_col_long();
+    $jsonArr = db_col_json('[]');
 
     $pdo->exec(
         "CREATE TABLE IF NOT EXISTS campaigns (
@@ -17,13 +17,13 @@ return static function (PDO $pdo): void {
             name {$text} NOT NULL,
             type {$text} NOT NULL DEFAULT 'banner',
             title {$text} NOT NULL DEFAULT '',
-            description {$long} NOT NULL DEFAULT '',
+            description {$long},
             image_path {$text} NOT NULL DEFAULT '',
             button_label {$text} NOT NULL DEFAULT '',
             button_url {$text} NOT NULL DEFAULT '',
             starts_at {$text} NOT NULL DEFAULT '',
             ends_at {$text} NOT NULL DEFAULT '',
-            hotspot_ids_json {$long} NOT NULL DEFAULT '[]',
+            hotspot_ids_json {$jsonArr},
             status {$text} NOT NULL DEFAULT 'ativa',
             created_at {$text} NOT NULL
         )"
@@ -58,7 +58,7 @@ return static function (PDO $pdo): void {
             campaign_id {$int} NULL,
             code {$text} NOT NULL,
             title {$text} NOT NULL DEFAULT '',
-            description {$long} NOT NULL DEFAULT '',
+            description {$long},
             valid_until {$text} NOT NULL DEFAULT '',
             status {$text} NOT NULL DEFAULT 'ativo',
             created_at {$text} NOT NULL,

@@ -3,11 +3,12 @@
 declare(strict_types=1);
 
 return static function (PDO $pdo): void {
-    $driver = db_driver();
-    $auto = $driver === 'mysql' ? 'INT NOT NULL AUTO_INCREMENT PRIMARY KEY' : 'INTEGER PRIMARY KEY AUTOINCREMENT';
-    $text = $driver === 'mysql' ? 'VARCHAR(255)' : 'TEXT';
-    $long = $driver === 'mysql' ? 'TEXT' : 'TEXT';
-    $intNull = $driver === 'mysql' ? 'INT NULL' : 'INTEGER';
+    $t = db_type_map();
+    $auto = $t['auto'];
+    $text = $t['text'];
+    $body = db_col_long(true);
+    $error = db_col_long();
+    $intNull = $t['int_null'];
 
     $pdo->exec(
         "CREATE TABLE IF NOT EXISTS message_log (
@@ -16,10 +17,10 @@ return static function (PDO $pdo): void {
             store_id {$intNull},
             phone {$text} NOT NULL DEFAULT '',
             event_type {$text} NOT NULL DEFAULT '',
-            body {$long} NOT NULL,
+            body {$body},
             status {$text} NOT NULL DEFAULT 'pending',
             provider_ref {$text} NOT NULL DEFAULT '',
-            error {$long} NOT NULL DEFAULT '',
+            error {$error},
             created_at {$text} NOT NULL
         )"
     );

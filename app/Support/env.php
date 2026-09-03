@@ -86,7 +86,7 @@ function db_is_mysql(): bool
     return db_driver() === 'mysql';
 }
 
-/** @return array{auto:string,int:string,int_null:string,bool:string,text:string,long:string} */
+/** @return array{auto:string,int:string,int_null:string,bool:string,text:string,long:string,json:string} */
 function db_type_map(): array
 {
     if (db_is_mysql()) {
@@ -96,7 +96,9 @@ function db_type_map(): array
             'int_null' => 'INT NULL',
             'bool' => 'TINYINT(1) NOT NULL',
             'text' => 'VARCHAR(255)',
-            'long' => 'TEXT',
+            // MySQL (STRICT): TEXT/BLOB não aceitam DEFAULT — use db_col_long() / db_col_json().
+            'long' => 'MEDIUMTEXT',
+            'json' => 'VARCHAR(4000)',
         ];
     }
     return [
@@ -106,7 +108,31 @@ function db_type_map(): array
         'bool' => 'INTEGER NOT NULL',
         'text' => 'TEXT',
         'long' => 'TEXT',
+        'json' => 'TEXT',
     ];
+}
+
+/**
+ * Coluna de texto longo segura no MySQL (sem DEFAULT).
+ * Ex.: address, notes, terms_html, body.
+ */
+function db_col_long(bool $notNull = false): string
+{
+    $t = db_type_map();
+    if (db_is_mysql()) {
+        return $notNull ? "{$t['long']} NOT NULL" : "{$t['long']} NULL";
+    }
+    return $notNull ? "{$t['long']} NOT NULL DEFAULT ''" : $t['long'];
+}
+
+/**
+ * Coluna JSON/payload com DEFAULT (VARCHAR no MySQL).
+ */
+function db_col_json(string $default = '{}'): string
+{
+    $t = db_type_map();
+    $d = str_replace("'", "''", $default);
+    return "{$t['json']} NOT NULL DEFAULT '{$d}'";
 }
 
 function db_column_names(PDO $pdo, string $table): array

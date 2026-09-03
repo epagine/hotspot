@@ -94,8 +94,53 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Criar painel · Wi-Fi da loja</title>
     <link rel="stylesheet" href="/assets/app.css">
+    <style>
+        .install-loading {
+            position: fixed;
+            inset: 0;
+            z-index: 9999;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(15, 23, 32, .55);
+            backdrop-filter: blur(2px);
+        }
+        .install-loading[hidden] { display: none !important; }
+        .install-loading-box {
+            background: #fff;
+            border-radius: 12px;
+            padding: 28px 32px;
+            text-align: center;
+            min-width: 220px;
+            box-shadow: 0 12px 40px rgba(0,0,0,.18);
+        }
+        .install-loading-box p {
+            margin: 14px 0 0;
+            color: #15202b;
+            font-size: .95rem;
+        }
+        .install-spinner {
+            width: 36px;
+            height: 36px;
+            margin: 0 auto;
+            border: 3px solid #e6ebf0;
+            border-top-color: #c8892a;
+            border-radius: 50%;
+            animation: install-spin .7s linear infinite;
+        }
+        @keyframes install-spin {
+            to { transform: rotate(360deg); }
+        }
+        body.install-busy { overflow: hidden; }
+    </style>
 </head>
 <body class="app-auth">
+<div id="install-loading" class="install-loading" hidden aria-live="polite" aria-busy="true">
+    <div class="install-loading-box">
+        <div class="install-spinner" role="status" aria-label="Carregando"></div>
+        <p>Criando painel…</p>
+    </div>
+</div>
 <section class="card">
     <div class="app-brand app-brand-logo">
         <img class="app-logo" src="<?= h(platform_logo_url()) ?>" alt="WiFi da Loja">
@@ -116,7 +161,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 : 'Não foi possível conectar ao MySQL. Conclua a instalação para continuar.' ?></p>
         <?php endif; ?>
         <?php if ($error): ?><p class="alert"><?= h($error) ?></p><?php endif; ?>
-        <form method="post" action="/instalar" class="form">
+        <form method="post" action="/instalar" class="form" id="install-form">
             <label>Host MySQL<input name="mysql_host" value="<?= h($hostVal !== '' ? $hostVal : '127.0.0.1') ?>" required></label>
             <label>Porta<input name="mysql_port" value="<?= h($portVal !== '' ? $portVal : '3306') ?>" required></label>
             <label>Banco<input name="mysql_database" value="<?= h($dbVal !== '' ? $dbVal : 'wifidaloja') ?>" required></label>
@@ -126,8 +171,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             <label>E-mail do admin<input name="admin_email" type="email" value="<?= h((string) ($_POST['admin_email'] ?? '')) ?>" required autocomplete="username" placeholder="voce@empresa.com"></label>
             <label>Senha do admin<input name="admin_pass" type="password" minlength="8" required autocomplete="new-password"></label>
             <p class="hint">Use este mesmo e-mail e senha em /entrar.</p>
-            <button class="btn" type="submit">Criar painel</button>
+            <button class="btn" type="submit" id="install-submit">Criar painel</button>
         </form>
+        <script>
+            (function () {
+                var form = document.getElementById('install-form');
+                var overlay = document.getElementById('install-loading');
+                var btn = document.getElementById('install-submit');
+                if (!form || !overlay) return;
+                form.addEventListener('submit', function () {
+                    if (!form.checkValidity()) return;
+                    overlay.hidden = false;
+                    document.body.classList.add('install-busy');
+                    if (btn) {
+                        btn.disabled = true;
+                        btn.textContent = 'Criando…';
+                    }
+                });
+            })();
+        </script>
     <?php endif; ?>
 </section>
 </body>
