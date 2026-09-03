@@ -64,6 +64,11 @@ $guestName = $guestName ?? '';
         .portal-card { max-width:420px; margin:0 auto; background:#fff; border:1px solid #dde3ea; border-radius:18px; padding:28px 22px; }
         .portal-card h1 { font-size:24px; margin:12px 0; color:#15202b; }
         .portal-logo { max-height:64px; max-width:180px; display:block; margin:0 auto 8px; }
+        @media (max-width:480px) {
+            body.portal-v2 { padding:16px 8px; }
+            .portal-card { padding:20px 14px; border-radius:14px; }
+            .portal-card h1 { font-size:20px; }
+        }
     </style>
 </head>
 <body class="portal-v2">

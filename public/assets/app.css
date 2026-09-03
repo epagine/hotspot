@@ -81,7 +81,7 @@ code.token { font-size: 12px; word-break: break-all; }
 .net-state { color: var(--ink); font-size: 16px; }
 .hidden { display: none !important; }
 .admin h2 { margin-top: 8px; }
-.table-wrap { overflow: auto; }
+.table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
 table { width: 100%; border-collapse: collapse; font-size: 14px; }
 th, td { text-align: left; padding: 10px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
 .tag { padding: 4px 8px; border-radius: 999px; font-size: 12px; font-weight: 600; }
@@ -449,6 +449,31 @@ body.modal-open { overflow: hidden; }
   gap: 10px;
   margin-top: 8px;
 }
+.app-hamburger {
+  display: none;
+  appearance: none;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  padding: 6px;
+  margin-left: auto;
+  flex-direction: column;
+  gap: 5px;
+  align-items: center;
+  justify-content: center;
+}
+.app-hamburger span {
+  display: block;
+  width: 22px;
+  height: 2px;
+  background: var(--app-ink);
+  border-radius: 2px;
+  transition: transform .2s, opacity .2s;
+}
+.app-side.open .app-hamburger span:nth-child(1) { transform: translateY(7px) rotate(45deg); }
+.app-side.open .app-hamburger span:nth-child(2) { opacity: 0; }
+.app-side.open .app-hamburger span:nth-child(3) { transform: translateY(-7px) rotate(-45deg); }
+
 @media (max-width: 720px) {
   .form-grid-2, .form-grid-3, .plan-features-grid { grid-template-columns: 1fr; }
   .card-head { flex-direction: column; align-items: stretch; }
@@ -557,17 +582,53 @@ body.modal-open { overflow: hidden; }
     align-items: center;
     gap: 12px;
     padding: 12px 14px;
+    /* mobile: sidebar vira top-bar; nav escondida até toggle */
   }
-  .app-nav { flex-direction: row; flex-wrap: nowrap; overflow-x: auto; flex: 1; }
-  .app-nav-label { display: none; }
-  .app-side-foot { border: 0; padding: 0; margin-left: auto; }
+  .app-side .app-nav,
+  .app-side .app-side-foot { display: none; }
+  .app-side.open { flex-direction: column; align-items: stretch; gap: 8px; padding-bottom: 16px; }
+  .app-side.open .app-nav,
+  .app-side.open .app-side-foot { display: flex; flex-direction: column; }
+  .app-side.open .app-nav { gap: 4px; overflow-x: visible; flex-wrap: wrap; }
+  .app-hamburger { display: flex; }
   .app-top, .app-main { padding-left: 16px; padding-right: 16px; }
+  .app-top { flex-direction: column; }
   .form-inline { grid-template-columns: 1fr; }
   .form-inline .btn { margin-top: 0; }
+  .app-subnav { overflow-x: auto; flex-wrap: nowrap; -webkit-overflow-scrolling: touch; padding-bottom: 4px; }
+  .app-subnav a { flex-shrink: 0; }
 }
 @media (max-width: 700px) {
   .stats { grid-template-columns: 1fr; }
   .app .stats { grid-template-columns: repeat(2, 1fr); }
   .code-big { font-size: 36px; }
   .tabs { flex-wrap: wrap; }
+  .app-main { padding-left: 12px; padding-right: 12px; padding-bottom: 32px; }
+  .app .card { padding: 16px; border-radius: 12px; }
+  .app-top h1 { font-size: 22px; }
+  h1 { font-size: 26px; }
+  h2 { font-size: 18px; }
+  .app-modal-panel {
+    width: 100%;
+    max-height: none;
+    border-radius: 12px;
+    padding: 16px;
+  }
+  .form-grid-2, .form-grid-3, .plan-features-grid { grid-template-columns: 1fr; }
+  .card-head { flex-direction: column; align-items: stretch; }
+  .page-split { grid-template-columns: 1fr; }
+  .wifi-card { flex-direction: column; text-align: center; }
+  .app .report-grid { grid-template-columns: 1fr; }
+}
+@media (max-width: 480px) {
+  .app .stats { grid-template-columns: 1fr; }
+  body.app-auth { padding: 16px 8px; }
+  .app-auth .card { padding: 20px 16px; border-radius: 14px; }
+  .code-big { font-size: 28px; letter-spacing: .12em; }
+  .form-grid { grid-template-columns: 1fr; }
+  .app-modal { padding: 8px; }
+  .app-modal-panel { padding: 14px 12px; border-radius: 10px; }
+  table { font-size: 13px; }
+  th, td { padding: 8px 6px; }
+  .btn, button[name="do"] { padding: 12px 14px; font-size: 14px; }
 }

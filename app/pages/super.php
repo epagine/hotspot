@@ -32,7 +32,7 @@ $setupReady = $setupFile !== null && is_file($setupFile);
     <link rel="stylesheet" href="/assets/app.css">
 </head>
 <body class="app">
-<aside class="app-side">
+<aside class="app-side" id="app-sidebar">
     <a class="app-brand" href="/super">
         <img class="app-logo app-logo-side" src="<?= h(platform_logo_url()) ?>" alt="WiFi da Loja">
         <div>
@@ -40,6 +40,9 @@ $setupReady = $setupFile !== null && is_file($setupFile);
             <small>Super Admin</small>
         </div>
     </a>
+    <button type="button" class="app-hamburger" id="app-hamburger" aria-label="Menu" aria-expanded="false">
+        <span></span><span></span><span></span>
+    </button>
     <nav class="app-nav">
         <a class="<?= $tab === 'dashboard' ? 'active' : '' ?>" href="/super">Dashboard</a>
         <a class="<?= $tab === 'empresas' ? 'active' : '' ?>" href="/super?tab=empresas">Empresas</a>
@@ -467,5 +470,18 @@ $setupReady = $setupFile !== null && is_file($setupFile);
         <?php endif; ?>
     </main>
 </div>
+<script>
+(function(){
+  var btn=document.getElementById('app-hamburger'),side=document.getElementById('app-sidebar');
+  if(!btn||!side)return;
+  btn.addEventListener('click',function(){
+    var open=side.classList.toggle('open');
+    btn.setAttribute('aria-expanded',open?'true':'false');
+  });
+  side.querySelectorAll('.app-nav a').forEach(function(a){
+    a.addEventListener('click',function(){side.classList.remove('open');btn.setAttribute('aria-expanded','false');});
+  });
+})();
+</script>
 </body>
 </html>
