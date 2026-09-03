@@ -2,93 +2,88 @@
 
 declare(strict_types=1);
 
-if (is_installed() && $_SERVER['REQUEST_METHOD'] !== 'POST') {
+if (is_installed() && database_ready() && $_SERVER['REQUEST_METHOD'] !== 'POST') {
     header('Location: /entrar');
     exit;
 }
 
+$installReason = (string) ($_SESSION['install_reason'] ?? '');
+unset($_SESSION['install_reason']);
+$dbBroken = is_installed() && !database_ready();
+
 $error = '';
 $ok = false;
-$driverChoice = (string) ($_POST['db_driver'] ?? 'sqlite');
-if (!in_array($driverChoice, ['sqlite', 'mysql'], true)) {
-    $driverChoice = 'sqlite';
-}
+$loginEmail = '';
+
+$hostVal = (string) ($_POST['mysql_host'] ?? '127.0.0.1');
+$portVal = (string) ($_POST['mysql_port'] ?? '3306');
+$dbVal = (string) ($_POST['mysql_database'] ?? 'wifidaloja');
+$userVal = (string) ($_POST['mysql_user'] ?? 'root');
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $adminUser = trim((string) ($_POST['admin_user'] ?? 'admin'));
+    $adminEmail = strtolower(trim((string) ($_POST['admin_email'] ?? $_POST['admin_user'] ?? '')));
     $adminPass = (string) ($_POST['admin_pass'] ?? '');
 
     try {
-        if ($adminUser === '' || $adminPass === '') {
-            throw new InvalidArgumentException('Informe usuário e senha do painel.');
+        if ($adminEmail === '' || $adminPass === '') {
+            throw new InvalidArgumentException('Informe e-mail e senha do administrador.');
+        }
+        if (!filter_var($adminEmail, FILTER_VALIDATE_EMAIL)) {
+            throw new InvalidArgumentException('Informe um e-mail válido para entrar no painel.');
         }
         if (strlen($adminPass) < 8) {
             throw new InvalidArgumentException('A senha do painel precisa ter pelo menos 8 caracteres.');
         }
+        if (!extension_loaded('pdo_mysql')) {
+            throw new RuntimeException('Extensão PHP pdo_mysql não está habilitada.');
+        }
 
-        $dir = storage_dir();
-        $sqlitePath = $dir . DIRECTORY_SEPARATOR . 'hotspot.sqlite';
+        $host = trim((string) ($_POST['mysql_host'] ?? '127.0.0.1')) ?: '127.0.0.1';
+        $port = trim((string) ($_POST['mysql_port'] ?? '3306')) ?: '3306';
+        $database = trim((string) ($_POST['mysql_database'] ?? 'wifidaloja')) ?: 'wifidaloja';
+        $user = trim((string) ($_POST['mysql_user'] ?? 'root'));
+        $pass = (string) ($_POST['mysql_pass'] ?? '');
         $configPath = __DIR__ . '/../config.php';
 
-        if ($driverChoice === 'mysql') {
-            if (!extension_loaded('pdo_mysql')) {
-                throw new RuntimeException('Extensão PHP pdo_mysql não está habilitada.');
-            }
-            $host = trim((string) ($_POST['mysql_host'] ?? '127.0.0.1')) ?: '127.0.0.1';
-            $port = trim((string) ($_POST['mysql_port'] ?? '3306')) ?: '3306';
-            $database = trim((string) ($_POST['mysql_database'] ?? 'wifidaloja')) ?: 'wifidaloja';
-            $user = trim((string) ($_POST['mysql_user'] ?? 'root'));
-            $pass = (string) ($_POST['mysql_pass'] ?? '');
+        mysql_create_database($host, $port, $database, $user, $pass);
 
-            mysql_create_database($host, $port, $database, $user, $pass);
-
-            $config = "<?php\n\nreturn [\n"
-                . "    'driver' => 'mysql',\n"
-                . "    'mysql_host' => " . var_export($host, true) . ",\n"
-                . "    'mysql_port' => " . var_export($port, true) . ",\n"
-                . "    'mysql_database' => " . var_export($database, true) . ",\n"
-                . "    'mysql_user' => " . var_export($user, true) . ",\n"
-                . "    'mysql_pass' => " . var_export($pass, true) . ",\n"
-                . "    'sqlite' => " . var_export($sqlitePath, true) . ",\n"
-                . "];\n";
-        } else {
-            if (!extension_loaded('pdo_sqlite')) {
-                throw new RuntimeException('Extensão PHP pdo_sqlite não está habilitada.');
-            }
-            $config = "<?php\n\nreturn [\n"
-                . "    'driver' => 'sqlite',\n"
-                . "    'sqlite' => " . var_export($sqlitePath, true) . ",\n"
-                . "];\n";
-        }
+        $config = "<?php\n\nreturn [\n"
+            . "    'driver' => 'mysql',\n"
+            . "    'mysql_host' => " . var_export($host, true) . ",\n"
+            . "    'mysql_port' => " . var_export($port, true) . ",\n"
+            . "    'mysql_database' => " . var_export($database, true) . ",\n"
+            . "    'mysql_user' => " . var_export($user, true) . ",\n"
+            . "    'mysql_pass' => " . var_export($pass, true) . ",\n"
+            . "];\n";
 
         if (file_put_contents($configPath, $config) === false) {
             throw new RuntimeException('Não foi possível gravar app/config.php');
         }
 
-        // Reinicia cache estático de config/PDO se a instalação for refeita no mesmo request.
         if (function_exists('opcache_invalidate')) {
             @opcache_invalidate($configPath, true);
         }
+        app_config_reset();
+        database_ready_reset();
 
         $hash = password_hash($adminPass, PASSWORD_DEFAULT);
         $upsert = db_upsert_sql('settings', ['k', 'v'], 'k');
         $stmt = db()->prepare($upsert);
-        $stmt->execute(['admin_user', $adminUser]);
+        $stmt->execute(['admin_user', $adminEmail]);
         $stmt->execute(['admin_pass_hash', $hash]);
 
-        // Garante usuário super_admin na tabela users (SaaS).
         try {
             ensure_legacy_admin_user();
         } catch (Throwable $e) {
             // migrations/users podem ainda estar subindo
         }
 
+        database_ready_reset();
+        $loginEmail = $adminEmail;
         $ok = true;
     } catch (Throwable $e) {
         $error = $e->getMessage();
-        if (is_file(__DIR__ . '/../config.php') && !$ok) {
-            // Mantém config se parcial; usuário pode corrigir e tentar de novo.
-        }
+        database_ready_reset();
     }
 }
 
@@ -107,41 +102,32 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     </div>
     <?php if ($ok): ?>
         <h1>Painel pronto</h1>
-        <p class="lead">Banco <?= h($driverChoice === 'mysql' ? 'MySQL' : 'SQLite') ?> configurado. Entre e continue no Super Admin.</p>
+        <p class="lead">MySQL configurado.</p>
+        <p class="hint">Entre em <strong>/entrar</strong> com o e-mail <strong><?= h($loginEmail) ?></strong> e a senha que você definiu.</p>
         <a class="btn" href="/entrar">Entrar</a>
     <?php else: ?>
-        <h1>Criar painel</h1>
-        <p class="lead">Escolha o banco e a conta de administração da plataforma.</p>
+        <h1><?= $dbBroken ? 'Reconfigurar painel' : 'Criar painel' ?></h1>
+        <p class="lead"><?= $dbBroken
+            ? 'O MySQL configurado não foi encontrado ou está inacessível. Informe a conexão e o e-mail de Super Admin novamente.'
+            : 'Configure o MySQL e o e-mail de Super Admin (o mesmo do login).' ?></p>
+        <?php if ($installReason === 'db_unavailable' || $installReason === 'sqlite_removed' || $dbBroken): ?>
+            <p class="alert"><?= $installReason === 'sqlite_removed'
+                ? 'SQLite não é mais suportado. Configure o MySQL para continuar.'
+                : 'Não foi possível conectar ao MySQL. Conclua a instalação para continuar.' ?></p>
+        <?php endif; ?>
         <?php if ($error): ?><p class="alert"><?= h($error) ?></p><?php endif; ?>
-        <form method="post" action="/instalar" class="form" id="install-form">
-            <label>Banco de dados
-                <select name="db_driver" id="db_driver">
-                    <option value="sqlite" <?= $driverChoice === 'sqlite' ? 'selected' : '' ?>>SQLite (arquivo local)</option>
-                    <option value="mysql" <?= $driverChoice === 'mysql' ? 'selected' : '' ?>>MySQL / MariaDB</option>
-                </select>
-            </label>
-            <div id="mysql-fields" style="<?= $driverChoice === 'mysql' ? '' : 'display:none' ?>">
-                <label>Host<input name="mysql_host" value="<?= h((string) ($_POST['mysql_host'] ?? '127.0.0.1')) ?>"></label>
-                <label>Porta<input name="mysql_port" value="<?= h((string) ($_POST['mysql_port'] ?? '3306')) ?>"></label>
-                <label>Banco<input name="mysql_database" value="<?= h((string) ($_POST['mysql_database'] ?? 'wifidaloja')) ?>"></label>
-                <label>Usuário<input name="mysql_user" value="<?= h((string) ($_POST['mysql_user'] ?? 'root')) ?>"></label>
-                <label>Senha<input name="mysql_pass" type="password" value="" autocomplete="new-password"></label>
-                <p class="hint">O banco será criado automaticamente se ainda não existir.</p>
-            </div>
-            <label>Usuário admin<input name="admin_user" value="<?= h((string) ($_POST['admin_user'] ?? 'admin')) ?>" required></label>
-            <label>Senha admin<input name="admin_pass" type="password" minlength="8" required></label>
+        <form method="post" action="/instalar" class="form">
+            <label>Host MySQL<input name="mysql_host" value="<?= h($hostVal !== '' ? $hostVal : '127.0.0.1') ?>" required></label>
+            <label>Porta<input name="mysql_port" value="<?= h($portVal !== '' ? $portVal : '3306') ?>" required></label>
+            <label>Banco<input name="mysql_database" value="<?= h($dbVal !== '' ? $dbVal : 'wifidaloja') ?>" required></label>
+            <label>Usuário MySQL<input name="mysql_user" value="<?= h($userVal !== '' ? $userVal : 'root') ?>" autocomplete="off" required></label>
+            <label>Senha MySQL<input name="mysql_pass" type="password" value="" autocomplete="new-password"></label>
+            <p class="hint">O banco será criado automaticamente se ainda não existir (utf8mb4).</p>
+            <label>E-mail do admin<input name="admin_email" type="email" value="<?= h((string) ($_POST['admin_email'] ?? '')) ?>" required autocomplete="username" placeholder="voce@empresa.com"></label>
+            <label>Senha do admin<input name="admin_pass" type="password" minlength="8" required autocomplete="new-password"></label>
+            <p class="hint">Use este mesmo e-mail e senha em /entrar.</p>
             <button class="btn" type="submit">Criar painel</button>
         </form>
-        <script>
-            (function () {
-                var sel = document.getElementById('db_driver');
-                var box = document.getElementById('mysql-fields');
-                if (!sel || !box) return;
-                sel.addEventListener('change', function () {
-                    box.style.display = sel.value === 'mysql' ? '' : 'none';
-                });
-            })();
-        </script>
     <?php endif; ?>
 </section>
 </body>

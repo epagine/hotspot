@@ -47,7 +47,7 @@ Rotas legadas `/admin/*` redirecionam para `/app` ou `/super`.
 
 ## 1. Painel na hospedagem (produção)
 
-PHP 8.1+ com PDO (SQLite ou MySQL). **HTTPS obrigatório** (webhooks de pagamento e sync do agente).
+PHP 8.1+ com PDO MySQL. **HTTPS obrigatório** (webhooks de pagamento e sync do agente).
 
 ### O que enviar
 
@@ -68,25 +68,28 @@ git clone -b master https://github.com/epagine/hotspot.git
 chmod -R u+rwX storage
 ```
 
-Extensões PHP: `pdo_sqlite` **ou** `pdo_mysql`, `gd`, `curl`, `session`.
+Extensões PHP: `pdo_mysql`, `gd`, `curl`, `session`.
 
 ### Banco de dados
 
-Na instalação (`/instalar`) escolha:
+O painel usa **apenas MySQL / MariaDB**. Na instalação (`/instalar`) informe host, porta, banco, usuário e senha. O database é criado automaticamente (`utf8mb4`) se ainda não existir.
 
-| Driver | Quando usar |
-|--------|-------------|
-| **SQLite** | Dev local, painel pequeno, um arquivo em `storage/hotspot.sqlite` |
-| **MySQL / MariaDB** | Produção, várias empresas, backup/rotinas do provedor |
+**Atualizações futuras:** ao subir código novo, o schema atualiza sozinho na próxima requisição. Opcional no deploy:
 
-No MySQL o instalador cria o database (`utf8mb4`) se ainda não existir e grava as credenciais em `app/config.php`. Migrations sobem as tabelas SaaS automaticamente.
+```bash
+php scripts/migrate.php
+php scripts/migrate.php status
+php scripts/migrate.php make minha_alteracao
+```
 
-Alternativa manual: copie `.env.example` → `.env` com `DB_DRIVER=mysql` **ou** edite `app/config.php` após o install.
+Detalhes em [`docs/MIGRATIONS.md`](docs/MIGRATIONS.md). Super Admin → **Configurações → Sistema**.
+
+Alternativa: `.env` com `DB_DRIVER=mysql` **ou** edite `app/config.php` após o install.
 
 ### Primeiro acesso
 
 1. Abra `https://seudominio.com/instalar`.
-2. Escolha SQLite ou MySQL e a conta de Super Admin.
+2. Configure o MySQL e a conta de Super Admin (e-mail + senha).
 3. Entre em `/entrar` e continue em `/super` (planos, pagamentos, WhatsApp).
 4. Empresas se cadastram em `/comecar` ou você cria em **Super → Empresas**.
 
@@ -173,9 +176,9 @@ powershell -ExecutionPolicy Bypass -File installer\compilar.ps1
 ## 6. Desenvolvimento local (Laragon)
 
 1. Clone em `C:\laragon\www\hotspot`.
-2. PHP 8.1+, SQLite e/ou MySQL, GD, curl.
+2. PHP 8.1+, MySQL (Laragon), GD, curl.
 3. Acesse `http://hotspot.test/instalar` (ou `http://127.0.0.1:8080/instalar`).
-4. Escolha SQLite (rápido) ou MySQL do Laragon (`root` sem senha, banco `wifidaloja`).
+4. MySQL: host `127.0.0.1`, usuário `root`, banco `wifidaloja` (criado automaticamente).
 5. Agente: ícone da bandeja ou `scripts\agente-hotspot.ps1` (administrador).
 
 ---
@@ -194,4 +197,4 @@ powershell -ExecutionPolicy Bypass -File installer\compilar.ps1
 
 ## Licença e dados
 
-Não versionar: `app/config.php`, `storage/hotspot.sqlite`, tokens e credenciais reais. Faça backup de `storage/` em produção.
+Não versionar: `app/config.php`, tokens e credenciais reais. Faça backup do MySQL em produção.

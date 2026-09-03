@@ -2,6 +2,8 @@
 
 declare(strict_types=1);
 
+require_database_or_install();
+
 $error = '';
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     csrf_verify();
@@ -9,15 +11,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $pass = (string) ($_POST['pass'] ?? '');
     $user = auth_attempt($email, $pass);
     if (!$user) {
+        // Compat: instalação antiga com "usuário" (sem @) ou e-mail gravado em settings.
+        $stored = strtolower(trim(setting('admin_user', 'admin')));
+        $storedEmail = str_contains($stored, '@') ? $stored : ($stored . '@wifidaloja.local');
+        $legacyLogin = strtolower(trim($email));
         $legacyUser = trim((string) ($_POST['user'] ?? ''));
-        if ($legacyUser === '') {
-            $legacyUser = trim(explode('@', $email)[0]);
+        if ($legacyUser === '' && str_contains($legacyLogin, '@')) {
+            $legacyUser = trim(explode('@', $legacyLogin)[0]);
+        } elseif ($legacyUser === '') {
+            $legacyUser = $legacyLogin;
         }
-        $legacyPass = $pass;
-        if ($legacyUser !== '' && hash_equals(setting('admin_user', 'admin'), $legacyUser)
-            && password_verify($legacyPass, setting('admin_pass_hash', ''))) {
+        $matchUser = hash_equals($stored, $legacyUser)
+            || hash_equals($stored, $legacyLogin)
+            || hash_equals($storedEmail, $legacyLogin);
+        if ($matchUser && password_verify($pass, setting('admin_pass_hash', ''))) {
+            $_SESSION['admin'] = true;
             ensure_legacy_admin_user();
-            $user = current_user();
+            $stmt = db()->prepare('SELECT * FROM users WHERE role = ? ORDER BY id ASC LIMIT 1');
+            $stmt->execute(['super_admin']);
+            $user = $stmt->fetch() ?: null;
             if ($user) {
                 auth_login($user);
             }
@@ -58,7 +70,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         <label>Senha<input name="pass" type="password" required autocomplete="current-password"></label>
         <button class="btn" type="submit">Entrar</button>
     </form>
-    <p class="hint" style="margin-top:16px">Ainda não tem conta? <a href="/comecar">Começar grátis</a></p>
+    <p class="hint" style="margin-top:16px">Use o e-mail e a senha definidos na instalação (ou em Começar grátis). <a href="/comecar">Ainda não tem conta?</a></p>
 </section>
 </body>
 </html>

@@ -1,10 +1,8 @@
+-- Referência legada (SQLite). Instalação atual usa MySQL via /instalar + ensure_core_schema() + migrations.
 CREATE TABLE IF NOT EXISTS settings (
   k TEXT NOT NULL PRIMARY KEY,
   v TEXT
 );
-
--- Schema base (SQLite). Em MySQL o bootstrap usa ensure_core_schema() + migrations.
--- Instalação: /instalar → escolha sqlite ou mysql.
 
 CREATE TABLE IF NOT EXISTS stores (
   id INTEGER PRIMARY KEY AUTOINCREMENT,

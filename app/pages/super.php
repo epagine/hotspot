@@ -284,8 +284,49 @@ $setupReady = $setupFile !== null && is_file($setupFile);
                 <a class="<?= $cfgSec === 'politicas' ? 'active' : '' ?>" href="/super?tab=configuracoes&sec=politicas">Políticas SaaS</a>
                 <a class="<?= $cfgSec === 'integracao' ? 'active' : '' ?>" href="/super?tab=configuracoes&sec=integracao">Pagamentos</a>
                 <a class="<?= $cfgSec === 'whatsapp' ? 'active' : '' ?>" href="/super?tab=configuracoes&sec=whatsapp">WhatsApp</a>
+                <a class="<?= $cfgSec === 'sistema' ? 'active' : '' ?>" href="/super?tab=configuracoes&sec=sistema">Sistema</a>
             </nav>
-            <?php if ($cfgSec === 'whatsapp'): ?>
+            <?php if ($cfgSec === 'sistema'): ?>
+            <?php
+                $migRows = migrations_status(db());
+                $migPending = migrations_pending_count(db());
+            ?>
+            <section class="card">
+                <h2>Migrations do banco</h2>
+                <p class="hint">Atualizações de schema rodam automaticamente ao abrir o painel. Use este painel ou <code>php scripts/migrate.php</code> no deploy.</p>
+                <p>Driver: <strong><?= h(db_driver()) ?></strong>
+                    · Pendentes: <strong><?= (int) $migPending ?></strong></p>
+                <?php if ($migPending > 0): ?>
+                    <form method="post" action="/super/migrations" class="form" style="margin:12px 0">
+                        <?= csrf_field() ?>
+                        <input type="hidden" name="return_to" value="/super?tab=configuracoes&sec=sistema">
+                        <button class="btn" type="submit">Aplicar pendentes agora</button>
+                    </form>
+                <?php else: ?>
+                    <p class="hint">Schema atualizado.</p>
+                <?php endif; ?>
+                <div class="table-wrap">
+                    <table class="table">
+                        <thead>
+                        <tr>
+                            <th>Migration</th>
+                            <th>Status</th>
+                            <th>Aplicada em</th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        <?php foreach ($migRows as $m): ?>
+                            <tr>
+                                <td><code><?= h($m['id']) ?></code></td>
+                                <td><?= $m['status'] === 'applied' ? 'Aplicada' : 'Pendente' ?></td>
+                                <td><?= h((string) ($m['applied_at'] ?? '—')) ?></td>
+                            </tr>
+                        <?php endforeach; ?>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+            <?php elseif ($cfgSec === 'whatsapp'): ?>
             <section class="card card-narrow">
                 <h2>WhatsApp (Evolution API)</h2>
                 <p class="hint">Envio automático de mensagens para empresas e lojas legadas. Placeholders: <?= h(notification_placeholder_help()) ?>.</p>

@@ -17,6 +17,21 @@ if (!is_installed() && !str_starts_with($path, '/instalar') && !str_starts_with(
     exit;
 }
 
+// Config existe, mas banco sumiu / inacessível → força reinstalação.
+if (
+    is_installed()
+    && !database_ready()
+    && !str_starts_with($path, '/instalar')
+    && !str_starts_with($path, '/install')
+    && !str_starts_with($path, '/assets')
+) {
+    if (session_status() === PHP_SESSION_ACTIVE && empty($_SESSION['install_reason'])) {
+        $_SESSION['install_reason'] = 'db_unavailable';
+    }
+    header('Location: /instalar');
+    exit;
+}
+
 if (is_installed()) {
     require_once __DIR__ . '/app/helpers.php';
 }
@@ -171,6 +186,13 @@ switch (true) {
             exit;
         }
         require __DIR__ . '/app/pages/super-whatsapp-save.php';
+        break;
+    case $path === '/super/migrations':
+        if (!is_http_post()) {
+            header('Location: /super?tab=configuracoes&sec=sistema', true, 301);
+            exit;
+        }
+        require __DIR__ . '/app/pages/super-migrate-run.php';
         break;
     case $path === '/admin/configuracoes/politicas':
         if (is_http_post()) {

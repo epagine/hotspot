@@ -43,9 +43,8 @@ function env(string $key, ?string $default = null): ?string
 
 function app_config(): array
 {
-    static $cfg = null;
-    if (is_array($cfg)) {
-        return $cfg;
+    if (array_key_exists('__app_config', $GLOBALS) && is_array($GLOBALS['__app_config'])) {
+        return $GLOBALS['__app_config'];
     }
     $path = dirname(__DIR__) . DIRECTORY_SEPARATOR . 'config.php';
     if (!is_file($path)) {
@@ -55,14 +54,31 @@ function app_config(): array
     if (!is_array($cfg)) {
         $cfg = [];
     }
-    return $cfg;
+    return $GLOBALS['__app_config'] = $cfg;
+}
+
+function app_config_reset(): void
+{
+    unset($GLOBALS['__app_config']);
 }
 
 function db_driver(): string
 {
     $cfg = app_config();
-    $driver = strtolower((string) ($cfg['driver'] ?? env('DB_DRIVER', 'sqlite')));
-    return in_array($driver, ['mysql', 'mariadb'], true) ? 'mysql' : 'sqlite';
+    $driver = strtolower(trim((string) ($cfg['driver'] ?? '')));
+    if ($driver === '') {
+        if (!empty($cfg['mysql_database']) || !empty($cfg['mysql_host'])) {
+            $driver = 'mysql';
+        } elseif (!empty($cfg['sqlite'])) {
+            $driver = 'sqlite';
+        } else {
+            $driver = strtolower((string) env('DB_DRIVER', 'mysql'));
+        }
+    }
+    if (!in_array($driver, ['mysql', 'mariadb'], true)) {
+        return 'sqlite';
+    }
+    return 'mysql';
 }
 
 function db_is_mysql(): bool

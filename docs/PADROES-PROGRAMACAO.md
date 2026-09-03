@@ -3,7 +3,7 @@
 Documento de referência para manter consistência no código PHP, nas rotas, no painel admin e nas integrações com o agente Windows.
 
 **Público:** desenvolvedores e assistentes de IA que alteram este repositório.  
-**Stack:** PHP 8.1+ procedural, SQLite, HTML/CSS/JS vanilla, sem framework.
+**Stack:** PHP 8.1+ procedural, MySQL, HTML/CSS/JS vanilla, sem framework.
 
 ---
 
@@ -37,7 +37,7 @@ app/
   pages/               # Páginas HTML e handlers POST do admin
   api/                 # Endpoints JSON (agente, portal, status)
 public/assets/         # app.css, admin.js, portal.js (servidos via router)
-storage/               # SQLite, imagens, downloads — NÃO versionar dados
+storage/               # imagens, downloads, logs — NÃO versionar dados
 scripts/               # Agente PowerShell — só ambiente Windows local
 installer/             # Instalador C# — não vai para hospedagem
 ```
@@ -164,27 +164,36 @@ O router preenche `$GLOBALS['route_id']` antes do `require`.
 
 ---
 
-## 5. Banco de dados (SQLite)
+## 5. Banco de dados (MySQL)
 
 ### Conexão
 
-- Singleton via `db(): PDO`.
-- `PRAGMA foreign_keys = ON`, `journal_mode = WAL`.
-- Migrações rodam em toda conexão via `migrate_multi_store()`.
+- Singleton via `db(): PDO` (apenas MySQL/MariaDB).
+- Em toda conexão: `migrate_multi_store()` + **`run_migrations()`** (automático).
 
-### Schema
+### Migrations versionadas (preferencial)
 
-1. **Instalação nova** — `app/schema.sql` aplicado em `install.php`.
-2. **Bancos existentes** — funções `ensure_*` com `PRAGMA table_info` + `ALTER TABLE` se coluna ausente.
+Arquivos em `app/migrations/NNN_nome.php`. Ver [MIGRATIONS.md](MIGRATIONS.md).
 
-Regra: toda coluna nova exige **duas** alterações:
-
-```php
-// 1) schema.sql — installs novos
-// 2) ensure_*_schema() — installs antigos
+```bash
+php scripts/migrate.php           # aplica pendentes
+php scripts/migrate.php status
+php scripts/migrate.php make nome
 ```
 
-Use flag estática `$done` para não repetir migração no mesmo request.
+Super Admin → Configurações → Sistema.
+
+### Schema legado (ensure_*)
+
+1. **Instalação nova** — `ensure_core_schema()` + migrations (instalador).
+2. **Bancos antigos** — `ensure_*` com `db_column_names()` + `db_add_column()`.
+
+Regra para mudanças novas:
+
+```php
+// Preferir: nova migration em app/migrations/
+// Opcional: espelhar coluna em ensure_core_schema só se for core de install
+```
 
 ### Settings (key-value)
 
@@ -449,7 +458,7 @@ Scripts PowerShell em `scripts/` — não referenciar do código PHP em produç�
 
 ### Ao adicionar features sensíveis
 
-- Nunca commitar `app/config.php`, `storage/hotspot.sqlite`, tokens reais
+- Nunca commitar `app/config.php`, tokens reais
 - Validar e sanitizar todo input POST/JSON
 - Redirecionar após mutação (evita re-submit)
 - Cron e webhooks: validar chave/assinatura quando disponível
@@ -468,11 +477,13 @@ Scripts PowerShell em `scripts/` — não referenciar do código PHP em produç�
 - [ ] Flash + redirect
 - [ ] `$pageTitle` / `$pageLead`
 
-### Nova coluna no banco
+### Nova coluna / tabela no banco
 
-- [ ] Coluna em `app/schema.sql`
-- [ ] Função `ensure_*` com migração incremental
-- [ ] Leitura/escrita no módulo de domínio (não só na page)
+- [ ] Criar migration: `php scripts/migrate.php make descricao`
+- [ ] DDL idempotente (`db_type_map`, `db_add_column`)
+- [ ] Rodar `php scripts/migrate.php` localmente
+- [ ] Leitura/escrita no módulo de domínio
+- [ ] Documentar em [MIGRATIONS.md](MIGRATIONS.md) se mudar o fluxo
 
 ### Nova rota pública/API
 

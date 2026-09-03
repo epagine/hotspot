@@ -5,7 +5,7 @@ alwaysApply: true
 
 # Wi-Fi da loja — regras gerais
 
-Stack: PHP 8.1+ procedural, SQLite, sem framework. Documentação completa: `docs/PADROES-PROGRAMACAO.md`.
+Stack: PHP 8.1+ procedural, MySQL, sem framework. Documentação completa: `docs/PADROES-PROGRAMACAO.md`.
 
 ## Domínios do painel (não misturar)
 
@@ -24,9 +24,9 @@ Stack: PHP 8.1+ procedural, SQLite, sem framework. Documentação completa: `doc
 - Mutations: POST handler → `flash_*` → redirect (nunca render HTML no POST)
 - Links admin: sempre `admin_url()`, nunca `?tab=`
 - HTML dinâmico: `h()`; JSON: `json_out()`
-- Nova coluna DB: `schema.sql` + `ensure_*` migration
+- Nova coluna DB: migration em `app/migrations/` (+ `ensure_*` se legado)
 - Nova seção admin: `index.php` + `admin_url()` + handler `admin-{x}.php` + nav em `admin.php`
 
 ## Não versionar
 
-`app/config.php`, `storage/hotspot.sqlite`, tokens e credenciais reais.
+`app/config.php`, tokens e credenciais reais.

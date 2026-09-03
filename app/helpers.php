@@ -14,27 +14,19 @@ function db(): PDO
         return $pdo;
     }
     $config = app_config();
-    $driver = db_driver();
-    if ($driver === 'mysql') {
-        $host = (string) ($config['mysql_host'] ?? env('DB_HOST', '127.0.0.1'));
-        $port = (string) ($config['mysql_port'] ?? env('DB_PORT', '3306'));
-        $name = (string) ($config['mysql_database'] ?? env('DB_DATABASE', 'wifidaloja'));
-        $user = (string) ($config['mysql_user'] ?? env('DB_USERNAME', 'root'));
-        $pass = (string) ($config['mysql_pass'] ?? env('DB_PASSWORD', ''));
-        $dsn = "mysql:host={$host};port={$port};dbname={$name};charset=utf8mb4";
-        $pdo = new PDO($dsn, $user, $pass, [
-            PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
-            PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
-        ]);
-    } else {
-        $sqlite = (string) ($config['sqlite'] ?? (storage_dir_path() . DIRECTORY_SEPARATOR . 'hotspot.sqlite'));
-        $pdo = new PDO('sqlite:' . $sqlite, null, null, [
-            PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
-            PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
-        ]);
-        $pdo->exec('PRAGMA foreign_keys = ON');
-        $pdo->exec('PRAGMA journal_mode = WAL');
+    if (db_driver() !== 'mysql') {
+        throw new RuntimeException('SQLite não é mais suportado. Configure o MySQL em /instalar.');
     }
+    $host = (string) ($config['mysql_host'] ?? env('DB_HOST', '127.0.0.1'));
+    $port = (string) ($config['mysql_port'] ?? env('DB_PORT', '3306'));
+    $name = (string) ($config['mysql_database'] ?? env('DB_DATABASE', 'wifidaloja'));
+    $user = (string) ($config['mysql_user'] ?? env('DB_USERNAME', 'root'));
+    $pass = (string) ($config['mysql_pass'] ?? env('DB_PASSWORD', ''));
+    $dsn = "mysql:host={$host};port={$port};dbname={$name};charset=utf8mb4";
+    $pdo = new PDO($dsn, $user, $pass, [
+        PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+        PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+    ]);
     migrate_multi_store($pdo);
     run_migrations($pdo);
     return $pdo;
@@ -469,6 +461,66 @@ function json_out(array $data, int $code = 200): void
 function is_installed(): bool
 {
     return is_file(__DIR__ . '/config.php');
+}
+
+/**
+ * Verifica se o MySQL configurado existe e responde (sem rodar migrations).
+ */
+function database_ready(): bool
+{
+    if (array_key_exists('__database_ready', $GLOBALS) && is_bool($GLOBALS['__database_ready'])) {
+        return $GLOBALS['__database_ready'];
+    }
+    if (!is_installed()) {
+        return $GLOBALS['__database_ready'] = false;
+    }
+    try {
+        $config = app_config();
+        if (db_driver() !== 'mysql') {
+            if (session_status() === PHP_SESSION_ACTIVE) {
+                $_SESSION['install_reason'] = 'sqlite_removed';
+            }
+            return $GLOBALS['__database_ready'] = false;
+        }
+        $host = (string) ($config['mysql_host'] ?? env('DB_HOST', '127.0.0.1'));
+        $port = (string) ($config['mysql_port'] ?? env('DB_PORT', '3306'));
+        $name = (string) ($config['mysql_database'] ?? env('DB_DATABASE', 'wifidaloja'));
+        $user = (string) ($config['mysql_user'] ?? env('DB_USERNAME', 'root'));
+        $pass = (string) ($config['mysql_pass'] ?? env('DB_PASSWORD', ''));
+        if ($name === '') {
+            return $GLOBALS['__database_ready'] = false;
+        }
+        $dsn = "mysql:host={$host};port={$port};dbname={$name};charset=utf8mb4";
+        $pdo = new PDO($dsn, $user, $pass, [
+            PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+            PDO::ATTR_TIMEOUT => 5,
+        ]);
+        $pdo->query('SELECT 1');
+        $pdo->query('SELECT 1 FROM settings LIMIT 1');
+        return $GLOBALS['__database_ready'] = true;
+    } catch (Throwable $e) {
+        return $GLOBALS['__database_ready'] = false;
+    }
+}
+
+function database_ready_reset(): void
+{
+    unset($GLOBALS['__database_ready']);
+}
+
+/**
+ * Se o banco sumiu ou está inacessível, força o instalador.
+ */
+function require_database_or_install(): void
+{
+    if (database_ready()) {
+        return;
+    }
+    if (session_status() === PHP_SESSION_ACTIVE && empty($_SESSION['install_reason'])) {
+        $_SESSION['install_reason'] = 'db_unavailable';
+    }
+    header('Location: /instalar');
+    exit;
 }
 
 function current_client(): ?array

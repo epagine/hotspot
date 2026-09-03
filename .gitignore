@@ -14,6 +14,8 @@ storage/php-path.txt
 storage/downloads/*.exe
 storage/agent.pid
 storage/panel.pid
+storage/migrations.lock
+storage/logs/
 dist/
 runtime/
 WiFiDaLoja-Setup.exe

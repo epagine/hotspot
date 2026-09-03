@@ -197,9 +197,12 @@ function ensure_legacy_admin_user(): void
         $stmt->execute([$email, 'super_admin']);
         $user = $stmt->fetch();
         if ($user) {
-            $_SESSION['user_id'] = (int) $user['id'];
-            if (empty($_SESSION['company_id'])) {
-                bootstrap_default_company_for_legacy((int) $user['id']);
+            // Só amarra sessão no bridge legado (já autenticado via $_SESSION['admin']).
+            if (!empty($_SESSION['admin'])) {
+                $_SESSION['user_id'] = (int) $user['id'];
+                if (empty($_SESSION['company_id'])) {
+                    bootstrap_default_company_for_legacy((int) $user['id']);
+                }
             }
             return;
         }
@@ -212,7 +215,9 @@ function ensure_legacy_admin_user(): void
             'INSERT INTO users (name, email, pass_hash, role, status, created_at) VALUES (?,?,?,?,?,?)'
         )->execute(['Administrador', $email, $hash, 'super_admin', 'active', $now]);
         $uid = (int) db()->lastInsertId();
-        $_SESSION['user_id'] = $uid;
+        if (!empty($_SESSION['admin'])) {
+            $_SESSION['user_id'] = $uid;
+        }
         bootstrap_default_company_for_legacy($uid);
     } catch (Throwable $e) {
         // tables may not exist yet during early boot
