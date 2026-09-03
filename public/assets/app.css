@@ -429,9 +429,13 @@ body.app-auth {
 .plan-features-field legend { padding: 0 4px; font-size: 14px; color: var(--app-muted); }
 .plan-features-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px 16px;
-  margin-top: 8px;
+  grid-template-columns: 1fr;
+  gap: 8px;
+  margin-top: 4px;
+}
+#plan-form input:not([type="checkbox"]):not([type="hidden"]):not([type="radio"]),
+#plan-form select {
+  padding: 8px 10px;
 }
 body.modal-open { overflow: hidden; }
 .app-modal {

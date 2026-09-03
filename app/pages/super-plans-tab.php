@@ -84,86 +84,86 @@ $featureCatalog = plan_feature_catalog();
     <?php endif; ?>
 </section>
 
-<div class="fixed inset-0 z-50 flex items-start justify-center p-6 overflow-y-auto" id="plan-modal" hidden aria-hidden="true">
-    <div class="fixed inset-0 bg-ink/40 backdrop-blur-sm" data-close-modal tabindex="-1"></div>
-    <div class="relative z-10 w-full max-w-2xl bg-white border border-line rounded-card p-6 shadow-xl my-auto" role="dialog" aria-modal="true" aria-labelledby="plan-modal-title">
-        <header class="flex justify-between items-start gap-3 mb-5">
-            <div>
-                <h2 id="plan-modal-title" class="text-lg font-bold">Novo plano</h2>
-                <p class="text-sm text-muted mt-1" id="plan-modal-lead">Defina limites, preço e recursos incluídos.</p>
+<div class="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4" id="plan-modal" hidden inert>
+    <div class="absolute inset-0 bg-ink/40 backdrop-blur-sm" data-close-modal></div>
+    <div class="relative z-10 w-full max-w-3xl max-h-[min(90vh,640px)] flex flex-col bg-white border border-line rounded-card shadow-xl overflow-hidden" role="dialog" aria-modal="true" aria-labelledby="plan-modal-title">
+        <header class="shrink-0 flex justify-between items-center gap-3 px-5 py-3 border-b border-line">
+            <div class="min-w-0">
+                <h2 id="plan-modal-title" class="text-base font-bold leading-tight">Novo plano</h2>
+                <p class="text-xs text-muted mt-0.5 truncate" id="plan-modal-lead">Limites, preço e recursos.</p>
             </div>
-            <button type="button" class="text-muted hover:text-ink text-2xl leading-none p-1 bg-transparent border-0 cursor-pointer" data-close-modal aria-label="Fechar">&times;</button>
+            <button type="button" class="text-muted hover:text-ink text-2xl leading-none p-1 bg-transparent border-0 cursor-pointer shrink-0" data-close-modal aria-label="Fechar">&times;</button>
         </header>
-        <form method="post" action="/super/planos" class="form app-modal-form" id="plan-form">
+        <form method="post" action="/super/planos" class="app-modal-form flex flex-col min-h-0 flex-1 m-0" id="plan-form">
             <?= csrf_field() ?>
             <input type="hidden" name="return_to" value="/super/planos">
             <input type="hidden" name="id" id="plan-id" value="0">
 
-            <div class="form-grid-2">
-                <label>Nome
-                    <input name="name" id="plan-name" required maxlength="120" placeholder="Profissional">
-                </label>
-                <label>Código
-                    <input name="code" id="plan-code" required maxlength="60" pattern="[a-z0-9_]+" placeholder="profissional">
-                    <small class="hint">Letras minúsculas, números e _ (único)</small>
-                </label>
-            </div>
-
-            <div class="form-grid-2">
-                <label>Preço (R$)
-                    <input name="price_reais" id="plan-price" inputmode="decimal" placeholder="49,90" value="0,00">
-                </label>
-                <label>Período de cobrança
-                    <select name="billing_period" id="plan-billing">
-                        <option value="mensal">Mensal</option>
-                        <option value="trimestral">Trimestral</option>
-                        <option value="anual">Anual</option>
-                    </select>
-                </label>
-            </div>
-
-            <div class="form-grid-3">
-                <label>Máx. hotspots
-                    <input name="max_hotspots" id="plan-hotspots" type="number" min="0" value="1">
-                    <small class="hint">0 = ilimitado</small>
-                </label>
-                <label>Máx. clientes
-                    <input name="max_clients" id="plan-clients" type="number" min="0" value="0">
-                    <small class="hint">0 = ilimitado</small>
-                </label>
-                <label>Máx. usuários
-                    <input name="max_users" id="plan-users" type="number" min="0" value="2">
-                    <small class="hint">0 = ilimitado</small>
-                </label>
-            </div>
-
-            <label>Ordem na listagem
-                <input name="sort_order" id="plan-sort" type="number" min="0" value="0">
-            </label>
-
-            <fieldset class="plan-features-field">
-                <legend>Recursos incluídos</legend>
-                <div class="plan-features-grid">
-                    <?php foreach ($featureCatalog as $key => $label): ?>
-                        <label class="check">
-                            <input type="checkbox" name="features[]" value="<?= h($key) ?>" class="plan-feature-cb">
-                            <?= h($label) ?>
+            <div class="flex-1 overflow-y-auto px-5 py-4 grid md:grid-cols-[1.15fr_0.85fr] gap-5">
+                <div class="grid gap-3 content-start">
+                    <div class="grid sm:grid-cols-2 gap-3">
+                        <label class="text-xs font-semibold text-muted">Nome
+                            <input name="name" id="plan-name" required maxlength="120" placeholder="Profissional">
                         </label>
-                    <?php endforeach; ?>
+                        <label class="text-xs font-semibold text-muted">Código
+                            <input name="code" id="plan-code" required maxlength="60" pattern="[a-z0-9_]+" placeholder="profissional" title="Letras minúsculas, números e _">
+                        </label>
+                    </div>
+                    <div class="grid sm:grid-cols-2 gap-3">
+                        <label class="text-xs font-semibold text-muted">Preço (R$)
+                            <input name="price_reais" id="plan-price" inputmode="decimal" placeholder="49,90" value="0,00">
+                        </label>
+                        <label class="text-xs font-semibold text-muted">Cobrança
+                            <select name="billing_period" id="plan-billing">
+                                <option value="mensal">Mensal</option>
+                                <option value="trimestral">Trimestral</option>
+                                <option value="anual">Anual</option>
+                            </select>
+                        </label>
+                    </div>
+                    <div>
+                        <p class="text-xs font-semibold text-muted mb-2">Limites <span class="font-normal">(0 = ilimitado)</span></p>
+                        <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                            <label class="text-[11px] text-muted">Hotspots
+                                <input name="max_hotspots" id="plan-hotspots" type="number" min="0" value="1">
+                            </label>
+                            <label class="text-[11px] text-muted">Clientes
+                                <input name="max_clients" id="plan-clients" type="number" min="0" value="0">
+                            </label>
+                            <label class="text-[11px] text-muted">Usuários
+                                <input name="max_users" id="plan-users" type="number" min="0" value="2">
+                            </label>
+                            <label class="text-[11px] text-muted">Ordem
+                                <input name="sort_order" id="plan-sort" type="number" min="0" value="0">
+                            </label>
+                        </div>
+                    </div>
+                    <p class="hint text-xs m-0" id="plan-subs-hint" hidden></p>
                 </div>
-            </fieldset>
 
-            <label class="check">
-                <input type="hidden" name="active" value="0">
-                <input type="checkbox" name="active" id="plan-active" value="1" checked>
-                Plano ativo (visível na landing e no painel)
-            </label>
+                <fieldset class="plan-features-field m-0 p-3 min-h-0">
+                    <legend class="text-xs font-semibold px-1">Recursos</legend>
+                    <div class="plan-features-grid">
+                        <?php foreach ($featureCatalog as $key => $label): ?>
+                            <label class="check text-sm">
+                                <input type="checkbox" name="features[]" value="<?= h($key) ?>" class="plan-feature-cb">
+                                <?= h($label) ?>
+                            </label>
+                        <?php endforeach; ?>
+                    </div>
+                </fieldset>
+            </div>
 
-            <p class="hint" id="plan-subs-hint" hidden></p>
-
-            <div class="flex justify-end gap-3 mt-4">
-                <button type="button" class="text-sm font-semibold text-ink border border-line bg-white px-4 py-2.5 rounded-btn hover:bg-hover transition" data-close-modal>Cancelar</button>
-                <button type="submit" class="text-sm font-bold bg-accent hover:bg-accent/90 text-white px-4 py-2.5 rounded-btn transition" id="plan-submit-btn">Salvar plano</button>
+            <div class="shrink-0 flex flex-wrap items-center justify-between gap-3 px-5 py-3 border-t border-line bg-surface/80">
+                <label class="check m-0 text-sm">
+                    <input type="hidden" name="active" value="0">
+                    <input type="checkbox" name="active" id="plan-active" value="1" checked>
+                    Plano ativo
+                </label>
+                <div class="flex gap-2 ml-auto">
+                    <button type="button" class="text-sm font-semibold text-ink border border-line bg-white px-4 py-2 rounded-btn hover:bg-hover transition" data-close-modal>Cancelar</button>
+                    <button type="submit" class="text-sm font-bold bg-accent hover:bg-accent/90 text-white px-4 py-2 rounded-btn transition" id="plan-submit-btn">Salvar plano</button>
+                </div>
             </div>
         </form>
     </div>
@@ -180,6 +180,7 @@ $featureCatalog = plan_feature_catalog();
     var submitBtn = document.getElementById('plan-submit-btn');
     var subsHint = document.getElementById('plan-subs-hint');
     var codeInput = document.getElementById('plan-code');
+    var lastOpener = null;
 
     function setFeatures(selected) {
         var set = {};
@@ -193,8 +194,8 @@ $featureCatalog = plan_feature_catalog();
         var isEdit = !!(plan && plan.id);
         title.textContent = isEdit ? 'Editar plano' : 'Novo plano';
         lead.textContent = isEdit
-            ? 'Alterações valem para novas assinaturas; empresas atuais mantêm o plano contratado até trocar.'
-            : 'Defina limites, preço e recursos incluídos.';
+            ? 'Vale para novas assinaturas.'
+            : 'Limites, preço e recursos.';
         submitBtn.textContent = isEdit ? 'Salvar alterações' : 'Criar plano';
 
         document.getElementById('plan-id').value = isEdit ? String(plan.id) : '0';
@@ -218,20 +219,29 @@ $featureCatalog = plan_feature_catalog();
             subsHint.textContent = '';
         }
 
+        modal.inert = false;
         modal.hidden = false;
-        modal.setAttribute('aria-hidden', 'false');
+        modal.removeAttribute('aria-hidden');
         document.body.classList.add('modal-open');
         document.getElementById('plan-name').focus();
     }
 
     function closeModal() {
+        var active = document.activeElement;
+        if (active && modal.contains(active) && typeof active.blur === 'function') {
+            active.blur();
+        }
+        if (lastOpener && document.contains(lastOpener) && typeof lastOpener.focus === 'function') {
+            lastOpener.focus();
+        }
         modal.hidden = true;
-        modal.setAttribute('aria-hidden', 'true');
+        modal.inert = true;
         document.body.classList.remove('modal-open');
         codeInput.readOnly = false;
     }
 
     document.getElementById('plan-add-btn')?.addEventListener('click', function () {
+        lastOpener = this;
         openModal(null);
     });
 
@@ -241,6 +251,7 @@ $featureCatalog = plan_feature_catalog();
 
     document.querySelectorAll('.plan-edit-btn').forEach(function (btn) {
         btn.addEventListener('click', function () {
+            lastOpener = btn;
             try {
                 openModal(JSON.parse(btn.getAttribute('data-plan') || '{}'));
             } catch (e) {}
