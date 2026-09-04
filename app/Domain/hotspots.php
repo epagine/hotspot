@@ -16,6 +16,23 @@ function set_setting_for_store(int $storeId, string $key, string $value): void
     db()->prepare($sql)->execute([$storeId, $key, $value]);
 }
 
+/** Limite de clientes Wi-Fi enviado ao agente (config do hotspot × plano da empresa). */
+function store_agent_max_clients(int $storeId): int
+{
+    $configured = max(1, (int) setting_for_store($storeId, 'max_clients', '8'));
+    $store = find_store($storeId);
+    $companyId = (int) ($store['company_id'] ?? 0);
+    if ($companyId <= 0) {
+        return max(1, min(8, $configured));
+    }
+    $planMax = (int) (company_plan_limits($companyId)['max_clients'] ?? 0);
+    if ($planMax <= 0) {
+        return $configured;
+    }
+
+    return max(1, min($configured, $planMax));
+}
+
 function portal_config_for(int $hotspotId): array
 {
     $stmt = db()->prepare('SELECT * FROM portal_configs WHERE hotspot_id = ?');

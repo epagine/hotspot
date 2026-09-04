@@ -418,14 +418,17 @@ Preferir URLs canônicas (`/admin/estado`, `/confirmar`, `/arte/{code}.png`). Se
 
 | Arquivo | Função |
 |---------|--------|
-| `cloud.json` | URL do painel + token |
-| `command.json` | Comando imediato ao hotspot |
-| `status.json` | Estado reportado pelo agente |
-| `authorized.json` | MACs autorizados |
+| `cloud.json` | URL do painel + token do hotspot |
+| `command.json` | Comando imediato (`start` / `stop` / `apply`) |
+| `status.json` | Telemetria reportada ao painel |
+| `authorized.json` | IPs autorizados + SSID/senha Wi-Fi |
+| `store-info.json` | Cache do sync (empresa, plano, URLs) |
+| `sync-error.json` | Último erro de sincronização (se houver) |
+| `brand/{store_id}.png` | Logo baixada do painel |
 
 ### Contrato agente ↔ painel
 
-POST `/agente/sincronizar` com body JSON:
+POST `/agente/sincronizar` (header `X-Agent-Token` ou body `token`):
 
 ```json
 {
@@ -436,7 +439,11 @@ POST `/agente/sincronizar` com body JSON:
 }
 ```
 
-Resposta inclui `config`, `command`, `authorized`, `patches`.
+Resposta inclui `company_id`, `company_name`, `hotspot_status`, `config`, `subscription` (`scope`: `company`|`store`), `links` (`admin` → `/app/hotspots/{id}`), `command`, `authorized`, `patches`, `has_brand`.
+
+Comandos remotos: `start`, `stop`, `apply` (reconfigura SSID/senha sem desligar). O painel enfileira `apply` ao salvar Wi-Fi e `stop`/`start` conforme assinatura e status do hotspot.
+
+Modo **nuvem** (PC vinculado a painel remoto): agente não sobe MySQL local nem painel `:8080`; portal cativo na nuvem.
 
 Scripts PowerShell em `scripts/` — não referenciar do código PHP em produção na hospedagem.
 

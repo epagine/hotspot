@@ -35,11 +35,11 @@ internal sealed class TrayApp : ApplicationContext
         {
             new MenuItem("Abrir status", delegate { ShowStatus(); }),
             new MenuItem("Abrir painel do cliente", delegate { OpenUrl(ClientPanelUrl()); }),
-            new MenuItem("Abrir painel da loja", delegate { OpenUrl(AdminPanelUrl()); }),
+            new MenuItem("Abrir hotspot no painel", delegate { OpenUrl(AdminPanelUrl()); }),
             new MenuItem("-"),
             new MenuItem("Ligar rede", delegate { WriteCommand("start"); }),
             new MenuItem("Desligar rede", delegate { WriteCommand("stop"); }),
-            new MenuItem("Vincular ao painel central", delegate { BindStore(); }),
+            new MenuItem("Vincular hotspot", delegate { BindStore(); }),
             new MenuItem("-"),
             new MenuItem("Encerrar", delegate { ExitApp(); })
         });
@@ -115,7 +115,7 @@ internal sealed class TrayApp : ApplicationContext
     {
         using (var f = new Form())
         {
-            f.Text = "Vincular loja";
+            f.Text = "Vincular hotspot";
             f.Width = 520;
             f.Height = 280;
             f.FormBorderStyle = FormBorderStyle.FixedDialog;
@@ -131,7 +131,7 @@ internal sealed class TrayApp : ApplicationContext
                 Top = 16,
                 Width = 460,
                 Height = 36,
-                Text = "Cole a URL do painel e o token da loja (aba Clientes no painel admin).",
+                Text = "Cole a URL do painel e o token do hotspot (Painel → Hotspots → Abrir).",
                 ForeColor = Muted
             };
             var url = new TextBox
@@ -159,7 +159,7 @@ internal sealed class TrayApp : ApplicationContext
             f.Controls.Add(lead);
             f.Controls.Add(new Label { Left = 20, Top = 56, Width = 420, Text = "Endereço do painel (https://...)", ForeColor = Muted });
             f.Controls.Add(url);
-            f.Controls.Add(new Label { Left = 20, Top = 116, Width = 420, Text = "Token da loja", ForeColor = Muted });
+            f.Controls.Add(new Label { Left = 20, Top = 116, Width = 420, Text = "Token do hotspot", ForeColor = Muted });
             f.Controls.Add(token);
             var ok = MakeGoldButton("Salvar", 290, 190, 90, 34);
             ok.DialogResult = DialogResult.OK;
@@ -174,13 +174,13 @@ internal sealed class TrayApp : ApplicationContext
             string t = token.Text.Trim();
             if (u.Length < 8 || t.Length < 8)
             {
-                MessageBox.Show("Informe o endereço do painel e o token da loja.", "Wi-Fi da loja");
+                MessageBox.Show("Informe o endereço do painel e o token do hotspot.", "Wi-Fi da Loja");
                 return;
             }
             string json = "{\n  \"panel_url\": \"" + EscapeJson(u) + "\",\n  \"token\": \"" + EscapeJson(t) + "\"\n}\n";
             Directory.CreateDirectory(Path.Combine(root, "storage"));
             File.WriteAllText(Storage("cloud.json"), json);
-            icon.ShowBalloonTip(2500, "Wi-Fi da loja", "Loja vinculada. Aguarde a sincronização.", ToolTipIcon.Info);
+            icon.ShowBalloonTip(2500, "Wi-Fi da Loja", "Hotspot vinculado. Aguarde a sincronização.", ToolTipIcon.Info);
             if (statusForm != null && !statusForm.IsDisposed)
             {
                 statusForm.RefreshData();
@@ -311,10 +311,14 @@ internal sealed class TrayApp : ApplicationContext
             string max = ReadInfo("max_clients");
             if (max.Length == 0) max = "8";
             if (clients.Length == 0) clients = "0";
-            string tip = (name.Length > 0 ? name : "Wi-Fi da loja");
+            string company = ReadInfo("company_name");
+            string tip = (name.Length > 0 ? name : "Wi-Fi da Loja");
+            if (company.Length > 0) tip = company + " · " + tip;
             tip += " · " + (on ? "Rede ligada" : "Rede desligada");
             tip += " · " + clients + "/" + max;
             if (bill.Length > 0) tip += " · " + bill;
+            string syncErr = JsonGet(ReadFileSafe(Storage("sync-error.json")), "error");
+            if (syncErr.Length > 0) tip += " · sync erro";
             if (tip.Length > 63) tip = tip.Substring(0, 60) + "...";
             icon.Text = tip;
         }
@@ -433,7 +437,7 @@ internal sealed class TrayApp : ApplicationContext
             Font = new Font("Segoe UI", 10f);
             Icon = MakeAppIcon();
 
-            var header = Section("Cliente", 16, 16, 512, 108);
+            var header = Section("Hotspot", 16, 16, 512, 108);
             storeNameLbl = Field(header, "—", 16, 36, 480, 28, new Font("Segoe UI", 16f, FontStyle.Bold), Ink);
             storeCityLbl = Field(header, "", 16, 68, 480, 22, Font, Muted);
 
@@ -447,7 +451,7 @@ internal sealed class TrayApp : ApplicationContext
             clientLink = MakeLink(links, "Abrir portal do cliente", 16, 56, 280, 22);
             clientLink.LinkClicked += delegate { app.OpenUrl(app.ClientPanelUrl()); };
             Field(links, "Painel da empresa (hotspots)", 16, 78, 300, 18, new Font("Segoe UI", 8.5f), Muted);
-            adminLink = MakeLink(links, "Abrir painel da loja", 300, 56, 180, 22);
+            adminLink = MakeLink(links, "Abrir hotspot no painel", 300, 56, 180, 22);
             adminLink.LinkClicked += delegate { app.OpenUrl(app.AdminPanelUrl()); };
 
             var hot = Section("Hotspot", 16, 388, 512, 150);
@@ -571,11 +575,27 @@ internal sealed class TrayApp : ApplicationContext
         public void RefreshData()
         {
             string name = app.ReadInfo("store_name");
-            if (name.Length == 0) name = "Loja ainda não sincronizada";
+            if (name.Length == 0) name = "Hotspot ainda não sincronizado";
             storeNameLbl.Text = name;
 
+            string company = app.ReadInfo("company_name");
             string city = app.ReadInfo("store_city");
-            storeCityLbl.Text = city.Length > 0 ? city : "Vincule o PC ao painel central para carregar os dados.";
+            if (company.Length > 0 && city.Length > 0)
+            {
+                storeCityLbl.Text = company + " · " + city;
+            }
+            else if (company.Length > 0)
+            {
+                storeCityLbl.Text = company;
+            }
+            else if (city.Length > 0)
+            {
+                storeCityLbl.Text = city;
+            }
+            else
+            {
+                storeCityLbl.Text = "Vincule o PC ao painel para carregar os dados.";
+            }
 
             string bill = app.ReadInfo("billing_label");
             string billKey = app.ReadInfo("billing_status");
@@ -600,10 +620,34 @@ internal sealed class TrayApp : ApplicationContext
                     : "PC ainda não vinculado ao painel.";
             }
 
+            string updated = app.ReadInfo("updated_at");
+            string syncErr = TrayApp.JsonGet(TrayApp.ReadFileSafe(app.Storage("sync-error.json")), "error");
+            if (syncErr.Length > 0)
+            {
+                syncLbl.Text = "Erro de sync";
+                syncLbl.ForeColor = Danger;
+                if (licenseDetail.Text.StartsWith("Aguardando") || licenseDetail.Text.StartsWith("PC ainda"))
+                {
+                    licenseDetail.Text = syncErr;
+                    licenseDetail.ForeColor = Danger;
+                }
+            }
+            else
+            {
+                syncLbl.ForeColor = Muted;
+                syncLbl.Text = updated.Length > 0 ? "Sync " + updated.Replace("T", " ") : "";
+                if (licenseDetail.ForeColor == Danger && (until.Length > 0 || trial.Length > 0))
+                {
+                    licenseDetail.ForeColor = Muted;
+                }
+            }
+
+            string scope = app.ReadInfo("subscription_scope");
             string plan = app.ReadInfo("plan_label");
             string amount = app.ReadInfo("cycle_amount");
             string active = app.ReadInfo("active");
             string planLine = plan.Length > 0 ? "Plano " + plan : "Plano —";
+            if (scope == "company") planLine += " (assinatura da empresa)";
             if (amount.Length > 0) planLine += " · R$ " + amount;
             if (active == "false") planLine += " · serviço suspenso";
             planLbl.Text = planLine;
@@ -633,13 +677,10 @@ internal sealed class TrayApp : ApplicationContext
             portalLbl.Text = "Portal: " + portal;
 
             string panel = app.ReadCloud("panel_url");
-            boundLbl.Text = panel.Length > 8 ? "Vinculado a " + panel : "Não vinculado ao painel central";
-
-            string updated = app.ReadInfo("updated_at");
-            syncLbl.Text = updated.Length > 0 ? "Sync " + updated.Replace("T", " ") : "";
+            boundLbl.Text = panel.Length > 8 ? "Vinculado a " + panel : "Não vinculado ao painel";
 
             clientLink.Text = "Abrir portal do cliente";
-            adminLink.Text = "Abrir painel admin";
+            adminLink.Text = "Abrir hotspot no painel";
         }
 
         private static Color LicenseColor(string status)

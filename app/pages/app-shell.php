@@ -245,7 +245,20 @@ function app_nav_tw(string $tab, array $items): void
                 $pc = portal_config_for((int) $hot['id']);
                 $health = store_connection_health($hot);
                 $setupFile = installer_setup_path();
+                $panelUrl = rtrim(guess_panel_url(), '/');
             ?>
+            <?php if ($setupFile): ?>
+            <section class="card card-narrow">
+                <h2>Instalar no PC Windows</h2>
+                <ol class="steps">
+                    <li>Baixe e execute o instalador como administrador<?php if ($setupFile): ?> — <a href="/app/instalador/baixar">Baixar agente Windows</a><?php endif; ?></li>
+                    <li>Informe a URL do painel: <code class="admin-code-break"><?= h($panelUrl) ?></code></li>
+                    <li>Cole o token do agente abaixo na instalação ou em <em>Vincular hotspot</em> na bandeja</li>
+                    <li>Aguarde o ícone na bandeja ficar sincronizado (status verde)</li>
+                </ol>
+                <p class="hint">Token: <code class="token"><?= h((string) $hot['token']) ?></code></p>
+            </section>
+            <?php endif; ?>
             <section class="card">
                 <h2><?= h((string) $hot['name']) ?></h2>
                 <p class="hint">
@@ -300,7 +313,7 @@ function app_nav_tw(string $tab, array $items): void
                         <button class="btn" type="submit">Salvar hotspot</button>
                     </div>
                 </form>
-                <form method="post" action="/app/hotspots" class="form-inline" style="margin-top:12px" onsubmit="return confirm('Gerar novo token? O PC da loja precisará ser reconfigurado.');">
+                <form method="post" action="/app/hotspots" class="form-inline" style="margin-top:12px" onsubmit="return confirm('Gerar novo token? O PC do hotspot precisará ser revinculado na bandeja.');">
                     <?= csrf_field() ?>
                     <input type="hidden" name="do" value="rotate">
                     <input type="hidden" name="id" value="<?= (int) $hot['id'] ?>">

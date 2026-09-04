@@ -118,18 +118,19 @@ Requisitos: administrador, adaptador Wi-Fi, internet (preferência Ethernet), [V
 
 ### Instalação
 
-1. Gere o setup (seção 5) ou baixe pelo Super Admin.
-2. Execute **`WiFiDaLoja-Setup.exe`** como administrador.
-3. Informe **URL do painel** (`https://seudominio.com`) e **token** do hotspot (`/app?tab=hotspots`).
-4. Ícone na bandeja: status da licença, links do painel, ligar/desligar rede.
+1. No painel da empresa, crie o hotspot em **Hotspots** e copie o **token** (`/app/hotspots/{id}`).
+2. Baixe o instalador em **Agente Windows** no menu ou em **Super → Instalador** (publique o `.exe` antes).
+3. Execute **`WiFiDaLoja-Setup.exe`** como administrador.
+4. Informe **URL do painel** (`https://seudominio.com`) e **token** do hotspot.
+5. Ícone na bandeja: status da assinatura, links do painel, ligar/desligar rede.
 
-Arquivo local: `storage\cloud.json` (URL + token).
+Arquivo local: `storage\cloud.json` (URL + token). Em modo nuvem o PHP local **não** sobe na porta 8080 — o portal cativo fica em `/portal/{token}` no painel central.
 
 ### Portal
 
-- LAN redireciona para `/portal/{token}`.
+- DNS cativo no PC redireciona clientes para `/portal/{token}` na nuvem.
 - Cliente se identifica (nome, WhatsApp, termos); campanhas aparecem no portal v2.
-- Assinatura suspensa **bloqueia** o portal e envia comando `stop` ao agente.
+- Assinatura suspensa ou hotspot inativo **bloqueia** o portal e envia comando `stop` ao agente.
 
 ---
 

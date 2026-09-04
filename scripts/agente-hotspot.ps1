@@ -6,8 +6,10 @@ $AuthFile = Join-Path $Storage "authorized.json"
 $CmdFile = Join-Path $Storage "command.json"
 $StatusFile = Join-Path $Storage "status.json"
 $PidFile = Join-Path $Storage "agent.pid"
+$SyncErrorFile = Join-Path $Storage "sync-error.json"
 $DnsProxy = Join-Path $Root "bin\dns-proxy.php"
 $MaxClients = 8
+$script:ServiceAllowed = $true
 
 if (-not (Test-Path $Storage)) {
     New-Item -ItemType Directory -Path $Storage | Out-Null
@@ -335,12 +337,35 @@ function Get-CloudCfg {
 }
 
 function Ensure-LocalDb {
+    if (Test-RemoteCloud) { return }
     $cfgPhp = Join-Path $Root "app\config.php"
     if (Test-Path $cfgPhp) { return }
     $php = Get-PhpExe
     $boot = Join-Path $Root "scripts\bootstrap-local.php"
     if ($php -and (Test-Path $boot)) {
         & $php $boot | Out-Null
+    }
+}
+
+function Test-RemoteCloud {
+    $cfg = Get-CloudCfg
+    if (-not $cfg -or -not $cfg.panel_url -or -not $cfg.token) { return $false }
+    $url = ([string]$cfg.panel_url).TrimEnd("/")
+    return $url -notmatch '^https?://(127\.0\.0\.1|localhost)(:\d+)?$'
+}
+
+function Write-SyncError {
+    param([string]$Message)
+    $payload = [ordered]@{
+        error      = $Message
+        updated_at = (Get-Date).ToString("s")
+    }
+    [System.IO.File]::WriteAllText($SyncErrorFile, ($payload | ConvertTo-Json -Compress), [System.Text.UTF8Encoding]::new($false))
+}
+
+function Clear-SyncError {
+    if (Test-Path $SyncErrorFile) {
+        Remove-Item $SyncErrorFile -Force -ErrorAction SilentlyContinue
     }
 }
 
@@ -352,7 +377,8 @@ function Sync-Cloud {
     $clients = @()
     $patchPath = Join-Path $Storage "client-patches.json"
     $clientScript = Join-Path $Root "scripts\agent-clients.php"
-    if ($php -and (Test-Path $clientScript)) {
+    $localCfg = Join-Path $Root "app\config.php"
+    if ($php -and (Test-Path $clientScript) -and (Test-Path $localCfg)) {
         try {
             $arg = if (Test-Path $patchPath) { $patchPath } else { "" }
             $raw = & $php $clientScript $arg 2>$null
@@ -377,6 +403,13 @@ function Sync-Cloud {
         $json = $payload | ConvertTo-Json -Depth 8 -Compress
         $headers = @{ "X-Agent-Token" = [string]$cfg.token }
         $resp = Invoke-RestMethod -Uri $url -Method Post -Headers $headers -Body $json -ContentType "application/json; charset=utf-8" -TimeoutSec 6
+        Clear-SyncError
+        if ($resp.config -and $resp.config.max_clients) {
+            $parsedMax = 0
+            if ([void][int]::TryParse([string]$resp.config.max_clients, [ref]$parsedMax) -and $parsedMax -gt 0) {
+                $MaxClients = $parsedMax
+            }
+        }
         if ($resp.config -and $resp.config.wifi_ssid) {
             $suffixes = @()
             if ($resp.config.dns_allowlist) {
@@ -394,10 +427,19 @@ function Sync-Cloud {
         }
         $sub = $resp.subscription
         $links = $resp.links
+        $serviceAllowed = $true
+        if ($null -ne $sub.service_allowed) {
+            $serviceAllowed = [bool]$sub.service_allowed
+        }
+        $script:ServiceAllowed = $serviceAllowed
         $info = [ordered]@{
             store_id         = [int]($resp.store_id)
             store_name       = [string]($(if ($resp.store) { $resp.store } elseif ($resp.config.store_name) { $resp.config.store_name } else { "" }))
             store_city       = [string]($(if ($resp.config.store_city) { $resp.config.store_city } else { "" }))
+            company_id       = [int]($(if ($resp.company_id) { $resp.company_id } else { 0 }))
+            company_name     = [string]($(if ($resp.company_name) { $resp.company_name } else { "" }))
+            hotspot_status   = [string]($(if ($resp.hotspot_status) { $resp.hotspot_status } else { "ativo" }))
+            subscription_scope = [string]($(if ($sub.scope) { $sub.scope } else { "" }))
             billing_status   = [string]($(if ($sub.billing_status) { $sub.billing_status } else { "" }))
             billing_label    = [string]($(if ($sub.billing_label) { $sub.billing_label } else { "" }))
             plan             = [string]($(if ($sub.plan) { $sub.plan } else { "" }))
@@ -406,13 +448,13 @@ function Sync-Cloud {
             trial_ends_at    = [string]($(if ($sub.trial_ends_at) { $sub.trial_ends_at } else { "" }))
             cycle_amount     = [string]($(if ($sub.cycle_amount) { $sub.cycle_amount } else { "" }))
             active           = [bool]($(if ($null -ne $sub.active) { [bool]$sub.active } else { $true }))
-            service_allowed  = [bool]($(if ($null -ne $sub.service_allowed) { [bool]$sub.service_allowed } else { $true }))
+            service_allowed  = [bool]$serviceAllowed
             wifi_ssid        = [string]($(if ($resp.config.wifi_ssid) { $resp.config.wifi_ssid } else { "" }))
             wifi_pass        = [string]($(if ($resp.config.wifi_pass) { $resp.config.wifi_pass } else { "" }))
             portal_ip        = [string]($(if ($resp.config.portal_ip) { $resp.config.portal_ip } else { "192.168.137.1" }))
-            max_clients      = [string]($(if ($resp.config.max_clients) { $resp.config.max_clients } else { "8" }))
+            max_clients      = [string]$MaxClients
             panel_url        = [string]($(if ($links.panel) { $links.panel } else { ([string]$cfg.panel_url).TrimEnd("/") }))
-            admin_url        = [string]($(if ($links.admin) { $links.admin } else { ([string]$cfg.panel_url).TrimEnd("/") + "/app" }))
+            admin_url        = [string]($(if ($links.admin) { $links.admin } else { ([string]$cfg.panel_url).TrimEnd("/") + "/app/hotspots/" + [string]$resp.store_id }))
             client_url       = [string]($(if ($links.client) { $links.client } else { ([string]$cfg.panel_url).TrimEnd("/") + "/cliente" }))
             portal_url       = [string]($(if ($links.portal) { $links.portal } else { ([string]$cfg.panel_url).TrimEnd("/") + "/portal/" + [uri]::EscapeDataString([string]$cfg.token) }))
             updated_at       = (Get-Date).ToString("s")
@@ -426,20 +468,43 @@ function Sync-Cloud {
                 at     = (Get-Date).ToString("o")
             }
             [System.IO.File]::WriteAllText($CmdFile, ($cmd | ConvertTo-Json), [System.Text.UTF8Encoding]::new($false))
-            $script:LastAck = [string]$resp.command.id
         }
         if ($resp.patches) {
             ($resp.patches | ForEach-Object { $_ }) | ConvertTo-Json -Depth 5 | Set-Content -Path $patchPath -Encoding UTF8
         }
-        if ($resp.has_brand) {
+        if ($resp.has_brand -and $resp.store_id) {
             $brandDir = Join-Path $Storage "brand"
             New-Item -ItemType Directory -Path $brandDir -Force | Out-Null
+            $brandFile = Join-Path $brandDir ([string]$resp.store_id + ".png")
             $brandUrl = ([string]$cfg.panel_url).TrimEnd("/") + "/agente/marca/" + [uri]::EscapeDataString([string]$cfg.token)
             try {
-                Invoke-WebRequest -Uri $brandUrl -OutFile (Join-Path $brandDir "1.png") -TimeoutSec 8 -UseBasicParsing | Out-Null
+                Invoke-WebRequest -Uri $brandUrl -OutFile $brandFile -TimeoutSec 8 -UseBasicParsing | Out-Null
             } catch {}
         }
-    } catch {}
+        if (-not $serviceAllowed) {
+            try {
+                $mgr = Get-TetheringManager
+                if ([int]$mgr.TetheringOperationalState -eq 1) {
+                    Set-Hotspot -On $false
+                }
+            } catch {}
+        }
+        $hotspotStatus = [string]($(if ($resp.hotspot_status) { $resp.hotspot_status } else { "ativo" }))
+        if ($hotspotStatus -ne "ativo") {
+            try {
+                $mgr = Get-TetheringManager
+                if ([int]$mgr.TetheringOperationalState -eq 1) {
+                    Set-Hotspot -On $false
+                }
+            } catch {}
+        }
+    } catch {
+        $msg = $_.Exception.Message
+        if ($_.Exception.Response -and [int]$_.Exception.Response.StatusCode -eq 401) {
+            $msg = "Token inválido ou expirado. Revincule o hotspot no painel."
+        }
+        Write-SyncError $msg
+    }
 }
 
 try {
@@ -452,14 +517,32 @@ try {
                     $script:LastError = $null
                     $script:TetheringMgr = $null
                     switch ([string]$cmd.action) {
-                        "start" { Set-Hotspot -On $true }
+                        "start" {
+                            if ($script:ServiceAllowed) {
+                                Set-Hotspot -On $true
+                            } else {
+                                $script:LastError = "Servico suspenso ou hotspot bloqueado no painel."
+                            }
+                        }
                         "stop" { Set-Hotspot -On $false }
-                        "apply" { Set-Hotspot -On $true -ApplyOnly $true }
+                        "apply" {
+                            if ($script:ServiceAllowed) {
+                                Set-Hotspot -On $true -ApplyOnly $true
+                            }
+                        }
                     }
+                    $script:LastAck = [string]$cmd.id
                 }
             } catch {
                 $script:LastError = $_.Exception.Message
             }
+        } elseif (-not $script:ServiceAllowed) {
+            try {
+                $mgr = Get-TetheringManager
+                if ([int]$mgr.TetheringOperationalState -eq 1) {
+                    Set-Hotspot -On $false
+                }
+            } catch {}
         }
         Write-Status
         Sync-Cloud

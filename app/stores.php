@@ -366,8 +366,11 @@ function update_store_saas(int $id, array $fields): void
     $nowActive = !empty($fields['active']);
     if ($wasActive && !$nowActive) {
         queue_store_command($id, 'stop');
-    } elseif (!$wasActive && $nowActive && subscription_service_allowed((string) ($store['billing_status'] ?? 'ativa'))) {
-        queue_store_command($id, 'start');
+    } elseif (!$wasActive && $nowActive) {
+        $store = find_store($id) ?? $store;
+        if (portal_access_allowed($store)) {
+            queue_store_command($id, 'start');
+        }
     }
 }
 

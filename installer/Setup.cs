@@ -48,7 +48,7 @@ internal sealed class SetupForm : Form
         Controls.Add(hero);
 
         var title = MakeLabel("Instalar neste computador", 268, 24, 460, 32, new Font("Segoe UI", 18f, FontStyle.Bold), Cream);
-        var lead = MakeLabel("O assistente copia o painel, o PHP e registra o atalho e o ícone na bandeja. É necessária uma conta de administrador e um adaptador Wi-Fi.", 268, 64, 460, 52, Font, Muted);
+        var lead = MakeLabel("Instala o agente Windows, o PHP embarcado e o ícone na bandeja. Você precisará do token do hotspot criado no painel (Hotspots → Abrir). Requer administrador e adaptador Wi-Fi.", 268, 64, 460, 52, Font, Muted);
 
         stepLabel = MakeLabel("Pasta de destino", 268, 128, 460, 20, new Font("Segoe UI", 9f, FontStyle.Bold), Gold);
         pathBox = new TextBox
@@ -65,7 +65,7 @@ internal sealed class SetupForm : Form
         browseBtn = MakeGhost("Procurar…", 624, 150, 104, 30);
         browseBtn.Click += delegate { PickFolder(); };
 
-        var urlLbl = MakeLabel("Painel central (outra loja)", 268, 188, 460, 18, new Font("Segoe UI", 9f), Muted);
+        var urlLbl = MakeLabel("Endereço do painel (https://...)", 268, 188, 460, 18, new Font("Segoe UI", 9f), Muted);
         urlBox = new TextBox
         {
             Left = 268,
@@ -77,7 +77,7 @@ internal sealed class SetupForm : Form
             ForeColor = Cream,
             Text = ""
         };
-        var tokenLbl = MakeLabel("Token da loja (deixe em branco neste PC do painel)", 268, 238, 460, 18, new Font("Segoe UI", 9f), Muted);
+        var tokenLbl = MakeLabel("Token do hotspot (Painel → Hotspots → Abrir)", 268, 238, 460, 18, new Font("Segoe UI", 9f), Muted);
         tokenBox = new TextBox
         {
             Left = 268,
@@ -295,7 +295,7 @@ internal sealed class SetupForm : Form
             {
                 string cloud = "{\"panel_url\":\"" + panelUrl.Replace("\\", "\\\\").Replace("\"", "\\\"") + "\",\"token\":\"" + token.Replace("\\", "\\\\").Replace("\"", "\\\"") + "\"}";
                 File.WriteAllText(Path.Combine(storage, "cloud.json"), cloud);
-                Log("Loja vinculada ao painel central.");
+                Log("Hotspot vinculado ao painel.");
             }
             SetStatus("3 de 3 · Windows", "Registrando atalho, firewall e tarefas…", 84);
             string setupPs1 = Path.Combine(dest, "scripts", "instalar-windows.ps1");
@@ -321,7 +321,7 @@ internal sealed class SetupForm : Form
             installBtn.Text = "Fechar";
             installBtn.Enabled = true;
             cancelBtn.Visible = false;
-            MessageBox.Show(this, "O Wi-Fi da loja está instalado.\nAbra o atalho ou o ícone na bandeja e complete a configuração inicial no painel.", "Instalação concluída", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            MessageBox.Show(this, "O Wi-Fi da Loja está instalado.\nAbra o ícone na bandeja. Se informou URL e token, aguarde a sincronização.", "Instalação concluída", MessageBoxButtons.OK, MessageBoxIcon.Information);
         }
         catch (Exception ex)
         {

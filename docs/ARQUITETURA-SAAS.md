@@ -114,8 +114,9 @@ Aba `/app?tab=relatorios` (feature `reports`):
 ## Instalador Windows
 
 - Gerar: `powershell -ExecutionPolicy Bypass -File installer\Empacotar.ps1`
-- Saída: `dist/WiFiDaLoja-Setup.exe` (cópia em `storage/downloads/` para download pelo Super Admin)
-- Inclui PHP embarcado, portal v2 (`/portal/{token}`) e sync com painel SaaS
+- Saída: `dist/WiFiDaLoja-Setup.exe` (cópia em `storage/downloads/` para download pelo Super Admin e `/app/instalador/baixar`)
+- Inclui PHP embarcado, agente, bandeja e sync com painel SaaS
+- **Modo nuvem:** URL + token remotos → agente sincroniza com `/agente/sincronizar`; portal cativo em `/portal/{token}`; MySQL local e painel `:8080` não são iniciados
 
 ## Migração de lojas legadas
 

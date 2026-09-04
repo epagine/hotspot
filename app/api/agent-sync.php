@@ -41,6 +41,11 @@ $command = peek_store_command($sid);
 $panelBase = rtrim(guess_panel_url(), '/');
 $subPayload = store_subscription_payload($store);
 $companyId = (int) ($store['company_id'] ?? 0);
+$companyName = '';
+if ($companyId > 0) {
+    $company = find_company($companyId);
+    $companyName = trim((string) ($company['trade_name'] ?? ''));
+}
 $appHotspotUrl = $panelBase . '/app/hotspots/' . $sid;
 $cfg = [
     'store_name' => trim((string) ($store['name'] ?? '')) !== ''
@@ -52,7 +57,7 @@ $cfg = [
     'wifi_ssid' => setting('wifi_ssid', 'WifiDaLoja'),
     'wifi_pass' => setting('wifi_pass', ''),
     'portal_ip' => setting('portal_ip', '192.168.137.1'),
-    'max_clients' => setting('max_clients', '8'),
+    'max_clients' => (string) store_agent_max_clients($sid),
     'dns_allowlist' => setting('dns_allowlist', default_dns_allowlist()),
     'session_hours' => setting('session_hours', '2'),
     'approval_mode' => setting('approval_mode', 'instant'),
@@ -73,6 +78,8 @@ json_out([
     'store_id' => $sid,
     'store' => (string) $store['name'],
     'company_id' => $companyId > 0 ? $companyId : null,
+    'company_name' => $companyName !== '' ? $companyName : null,
+    'hotspot_status' => (string) ($store['hotspot_status'] ?? 'ativo'),
     'config' => $cfg,
     'subscription' => [
         'scope' => $subPayload['scope'],

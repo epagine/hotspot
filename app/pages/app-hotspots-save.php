@@ -49,10 +49,16 @@ if (!$store || (int) ($store['company_id'] ?? 0) !== $companyId) {
 if ($do === 'rotate') {
     rotate_store_token($id);
     audit_log('hotspot.rotate_token', $companyId, null, ['id' => $id]);
-    $_SESSION['flash_ok'] = 'Token do agente renovado. Atualize o PC da loja.';
+    $_SESSION['flash_ok'] = 'Token do agente renovado. Revincule o PC em Agente Windows ou na bandeja.';
     header('Location: /app/hotspots/' . $id);
     exit;
 }
+
+$oldSsid = setting_for_store($id, 'wifi_ssid', 'WifiDaLoja');
+$oldPass = setting_for_store($id, 'wifi_pass', '');
+$oldStatus = (string) ($store['hotspot_status'] ?? 'ativo');
+$newStatus = (string) ($_POST['hotspot_status'] ?? 'ativo');
+$newProvider = (string) ($_POST['provider'] ?? $store['provider'] ?? 'windows');
 
 db()->prepare(
     'UPDATE stores SET name=?, description=?, location=?, provider=?, hotspot_status=?, terms_html=?, privacy_html=? WHERE id=?'
@@ -68,6 +74,7 @@ db()->prepare(
 ]);
 set_setting_for_store($id, 'wifi_ssid', trim((string) ($_POST['ssid'] ?? 'WifiDaLoja')));
 $wifiPass = trim((string) ($_POST['wifi_pass'] ?? ''));
+$newSsid = setting_for_store($id, 'wifi_ssid', 'WifiDaLoja');
 if ($wifiPass !== '') {
     set_setting_for_store($id, 'wifi_pass', $wifiPass);
 }
@@ -80,6 +87,20 @@ save_portal_config($id, [
     'require_phone' => 1,
     'require_terms' => 1,
 ]);
+$wifiChanged = $newSsid !== $oldSsid || ($wifiPass !== '' && $wifiPass !== $oldPass);
+if ($wifiChanged && $newProvider === 'windows') {
+    queue_store_command($id, 'apply');
+}
+if ($newStatus !== $oldStatus && $newProvider === 'windows') {
+    if ($newStatus === 'ativo') {
+        $updated = find_store($id);
+        if ($updated !== null && portal_access_allowed($updated)) {
+            queue_store_command($id, 'start');
+        }
+    } else {
+        queue_store_command($id, 'stop');
+    }
+}
 audit_log('hotspot.update', $companyId, null, ['id' => $id]);
 $_SESSION['flash_ok'] = 'Hotspot atualizado.';
 header('Location: /app/hotspots/' . $id);

@@ -2,7 +2,7 @@ param(
     [string]$PanelUrl = "",
     [string]$Token = ""
 )
-# Instalador do Wi-Fi da loja (administrador).
+# Instalador do agente Wi-Fi da Loja (administrador).
 $ErrorActionPreference = "Stop"
 $Root = Split-Path -Parent $PSScriptRoot
 $Storage = Join-Path $Root "storage"
@@ -106,8 +106,23 @@ Write-Log "PHP: $php"
 if ($PanelUrl -and $Token) {
     $cloud = @{ panel_url = $PanelUrl.TrimEnd("/"); token = $Token; updated_at = (Get-Date).ToString("s") } | ConvertTo-Json
     Set-Content -Path (Join-Path $Storage "cloud.json") -Value $cloud -Encoding UTF8
-    Write-Log "Vinculado ao painel $PanelUrl"
+    Write-Log "Hotspot vinculado ao painel $PanelUrl"
 }
+
+function Test-RemoteCloudInstall {
+    if ($PanelUrl -and $Token) { return $true }
+    $cloudPath = Join-Path $Storage "cloud.json"
+    if (-not (Test-Path $cloudPath)) { return $false }
+    try {
+        $c = Get-Content $cloudPath -Raw | ConvertFrom-Json
+        $u = ([string]$c.panel_url).TrimEnd("/")
+        return ($u -ne "" -and $u -notmatch '^https?://(127\.0\.0\.1|localhost)(:\d+)?$')
+    } catch {
+        return $false
+    }
+}
+
+$isRemoteCloud = Test-RemoteCloudInstall
 
 $oldPidPath = Join-Path $Storage "agent.pid"
 if (Test-Path $oldPidPath) {
@@ -174,6 +189,10 @@ if (Test-Path $bandeja) {
 }
 Write-Log "Agente e bandeja iniciados"
 
-& (Join-Path $Scripts "iniciar-painel.ps1")
+if ($isRemoteCloud) {
+    Write-Log "Modo nuvem: painel PHP local nao sera iniciado (portal em /portal/{token})."
+} else {
+    & (Join-Path $Scripts "iniciar-painel.ps1")
+}
 Write-Log "Instalacao concluida."
 exit 0
