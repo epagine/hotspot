@@ -792,6 +792,21 @@ function installer_setup_path(): ?string
     return null;
 }
 
+function stream_installer_setup(): bool
+{
+    $path = installer_setup_path();
+    if ($path === null) {
+        return false;
+    }
+    header('Content-Type: application/octet-stream');
+    header('Content-Disposition: attachment; filename="WiFiDaLoja-Setup.exe"');
+    header('Content-Length: ' . (string) filesize($path));
+    header('X-Content-Type-Options: nosniff');
+    header('Cache-Control: private, no-store');
+    readfile($path);
+    exit;
+}
+
 require_once __DIR__ . '/stores.php';
 require_once __DIR__ . '/subscription.php';
 require_once __DIR__ . '/client-portal.php';

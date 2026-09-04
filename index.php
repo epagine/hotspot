@@ -85,6 +85,9 @@ switch (true) {
         exit;
 
     // ── App panel (company) ──────────────────────────────
+    case $path === '/app/instalador/baixar':
+        require __DIR__ . '/app/pages/app-instalador.php';
+        break;
     case $path === '/app':
         if (!empty($_GET['tab'])) {
             header('Location: /app/' . urlencode($_GET['tab']) . (isset($_GET['id']) ? '/' . (int) $_GET['id'] : '') . (isset($_GET['novo']) ? '?novo=1' : '') . (isset($_GET['days']) ? '?days=' . (int) $_GET['days'] : ''), true, 301);

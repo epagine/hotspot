@@ -35,17 +35,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     safe_internal_redirect($returnTo, admin_url('instalador'));
 }
 
-$path = installer_setup_path();
-if ($path === null) {
+if (!stream_installer_setup()) {
     $_SESSION['flash_error'] = 'Ainda não há instalador neste painel. Envie o WiFiDaLoja-Setup.exe em Instalador.';
     $returnTo = trim((string) ($_GET['return_to'] ?? ''));
     safe_internal_redirect($returnTo, admin_url('instalador'));
 }
-
-header('Content-Type: application/octet-stream');
-header('Content-Disposition: attachment; filename="WiFiDaLoja-Setup.exe"');
-header('Content-Length: ' . (string) filesize($path));
-header('X-Content-Type-Options: nosniff');
-header('Cache-Control: private, no-store');
-readfile($path);
-exit;
