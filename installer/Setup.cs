@@ -1,6 +1,7 @@
 using System;
 using System.Diagnostics;
 using System.Drawing;
+using System.Drawing.Drawing2D;
 using System.IO;
 using System.IO.Compression;
 using System.Reflection;
@@ -10,8 +11,10 @@ internal sealed class SetupForm : Form
 {
     private static readonly Color Bg = Color.FromArgb(11, 15, 20);
     private static readonly Color Card = Color.FromArgb(20, 27, 34);
+    private static readonly Color FieldBg = Color.FromArgb(14, 20, 26);
     private static readonly Color Ink = Color.FromArgb(238, 243, 248);
     private static readonly Color Muted = Color.FromArgb(141, 154, 171);
+    private static readonly Color Line = Color.FromArgb(36, 48, 60);
     private static readonly Color Gold = Color.FromArgb(232, 176, 88);
 
     private readonly TextBox pathBox;
@@ -19,15 +22,15 @@ internal sealed class SetupForm : Form
     private readonly TextBox tokenBox;
     private readonly TextBox logBox;
     private readonly Label statusLabel;
-    private readonly ProgressBar bar;
+    private readonly ProgressPanel bar;
     private readonly Button installBtn;
     private bool installing;
 
     public SetupForm()
     {
-        Text = "Wi-Fi da Loja — Agente Windows";
-        Width = 720;
-        Height = 520;
+        Text = "WiFi da Loja — Agente Windows";
+        Width = 700;
+        Height = 600;
         StartPosition = FormStartPosition.CenterScreen;
         FormBorderStyle = FormBorderStyle.FixedSingle;
         MaximizeBox = false;
@@ -35,39 +38,28 @@ internal sealed class SetupForm : Form
         ForeColor = Ink;
         Font = new Font("Segoe UI", 10f);
 
-        Controls.Add(new Label
+        var logo = LoadEmbeddedLogo();
+        if (logo != null)
         {
-            Left = 24,
-            Top = 20,
-            Width = 660,
-            Height = 28,
-            Text = "Instalar agente (modo nuvem)",
-            Font = new Font("Segoe UI", 16f, FontStyle.Bold),
-            ForeColor = Ink
-        });
-        Controls.Add(new Label
-        {
-            Left = 24,
-            Top = 52,
-            Width = 660,
-            Height = 44,
-            Text = "Pacote leve: bandeja, hotspot e DNS cativo. Sem PHP ou MySQL local — o portal fica no painel central.",
-            ForeColor = Muted
-        });
+            Icon = IconFromImage(logo, 32);
+        }
 
-        Controls.Add(Lbl("Pasta de instalação", 24, 108));
-        pathBox = new TextBox
+        var header = new HeaderPanel(logo);
+        Controls.Add(header);
+
+        var card = new Panel
         {
             Left = 24,
-            Top = 128,
-            Width = 520,
-            Height = 28,
-            Text = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "WiFiDaLoja"),
-            BackColor = Card,
-            ForeColor = Ink,
-            BorderStyle = BorderStyle.FixedSingle
+            Top = 136,
+            Width = 652,
+            Height = 292,
+            BackColor = Card
         };
-        var browse = new Button { Left = 552, Top = 126, Width = 100, Height = 30, Text = "Procurar…" };
+        card.Controls.Add(SectionTitle(card, "Configuração", 16, 12));
+        card.Controls.Add(FieldLabel(card, "Pasta de instalação", 16, 44));
+        pathBox = MakeInput(16, 64, 468);
+        card.Controls.Add(pathBox);
+        var browse = MakeGhostButton("Procurar…", 492, 62, 144, 32);
         browse.Click += delegate
         {
             using (var dlg = new FolderBrowserDialog())
@@ -78,88 +70,99 @@ internal sealed class SetupForm : Form
                 }
             }
         };
+        card.Controls.Add(browse);
 
-        Controls.Add(Lbl("URL do painel (https://...)", 24, 168));
-        urlBox = new TextBox
+        card.Controls.Add(FieldLabel(card, "URL do painel", 16, 108));
+        urlBox = MakeInput(16, 128, 620);
+        card.Controls.Add(urlBox);
+
+        card.Controls.Add(FieldLabel(card, "Token do hotspot", 16, 172));
+        tokenBox = MakeInput(16, 192, 620);
+        card.Controls.Add(tokenBox);
+
+        card.Controls.Add(new Label
+        {
+            Left = 16,
+            Top = 232,
+            Width = 620,
+            Height = 48,
+            ForeColor = Muted,
+            Font = new Font("Segoe UI", 8.5f),
+            Text = "Copie URL e token em Painel → Hotspots → Abrir. O portal dos clientes fica na nuvem — sem PHP ou MySQL neste PC."
+        });
+        Controls.Add(card);
+
+        bar = new ProgressPanel { Left = 24, Top = 444, Width = 652, Height = 8 };
+        Controls.Add(bar);
+
+        statusLabel = new Label
         {
             Left = 24,
-            Top = 188,
-            Width = 628,
-            Height = 28,
-            BackColor = Card,
-            ForeColor = Ink,
-            BorderStyle = BorderStyle.FixedSingle
+            Top = 458,
+            Width = 652,
+            Height = 22,
+            ForeColor = Muted,
+            Font = new Font("Segoe UI", 9f),
+            Text = "Pronto para instalar."
         };
-
-        Controls.Add(Lbl("Token do hotspot (Painel → Hotspots → Abrir)", 24, 228));
-        tokenBox = new TextBox
-        {
-            Left = 24,
-            Top = 248,
-            Width = 628,
-            Height = 28,
-            BackColor = Card,
-            ForeColor = Ink,
-            BorderStyle = BorderStyle.FixedSingle
-        };
-
-        bar = new ProgressBar { Left = 24, Top = 292, Width = 628, Height = 10 };
-        statusLabel = new Label { Left = 24, Top = 308, Width = 628, Height = 22, ForeColor = Muted, Text = "Pronto para instalar." };
+        Controls.Add(statusLabel);
 
         logBox = new TextBox
         {
             Left = 24,
-            Top = 336,
-            Width = 628,
-            Height = 72,
+            Top = 484,
+            Width = 652,
+            Height = 56,
             Multiline = true,
             ReadOnly = true,
             ScrollBars = ScrollBars.Vertical,
-            BackColor = Card,
+            BackColor = FieldBg,
             ForeColor = Muted,
+            BorderStyle = BorderStyle.FixedSingle,
             Font = new Font("Consolas", 8.5f),
             Visible = false
         };
+        Controls.Add(logBox);
 
-        installBtn = new Button
-        {
-            Left = 24,
-            Top = 420,
-            Width = 140,
-            Height = 36,
-            Text = "Instalar",
-            FlatStyle = FlatStyle.Flat,
-            BackColor = Gold,
-            ForeColor = Color.FromArgb(26, 19, 8),
-            Font = new Font("Segoe UI", 9f, FontStyle.Bold)
-        };
+        pathBox.Text = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "WiFiDaLoja");
+
+        installBtn = MakeGoldButton("Instalar agente", 424, 512, 160, 40);
         installBtn.Click += delegate { RunInstall(); };
 
-        var cancel = new Button
-        {
-            Left = 172,
-            Top = 420,
-            Width = 100,
-            Height = 36,
-            Text = "Cancelar",
-            FlatStyle = FlatStyle.Flat,
-            BackColor = Card,
-            ForeColor = Ink
-        };
+        var cancel = MakeGhostButton("Cancelar", 592, 512, 84, 40);
         cancel.Click += delegate { Close(); };
 
-        Controls.Add(pathBox);
-        Controls.Add(browse);
-        Controls.Add(urlBox);
-        Controls.Add(tokenBox);
-        Controls.Add(bar);
-        Controls.Add(statusLabel);
-        Controls.Add(logBox);
         Controls.Add(installBtn);
         Controls.Add(cancel);
+
+        Controls.Add(new Label
+        {
+            Left = 24,
+            Top = 520,
+            Width = 380,
+            Height = 32,
+            ForeColor = Color.FromArgb(100, 112, 128),
+            Font = new Font("Segoe UI", 8f),
+            Text = "Windows 10/11 · execute como administrador"
+        });
     }
 
-    private static Label Lbl(string text, int x, int y)
+    private static Label SectionTitle(Control parent, string text, int x, int y)
+    {
+        var l = new Label
+        {
+            Left = x,
+            Top = y,
+            Width = 400,
+            Height = 20,
+            Text = text.ToUpperInvariant(),
+            Font = new Font("Segoe UI", 8f, FontStyle.Bold),
+            ForeColor = Gold
+        };
+        return l;
+    }
+
+    private static Label FieldLabel(Control parent, string text, int x, int y)
     {
         return new Label
         {
@@ -171,6 +174,95 @@ internal sealed class SetupForm : Form
             ForeColor = Muted,
             Font = new Font("Segoe UI", 9f)
         };
+    }
+
+    private TextBox MakeInput(int x, int y, int w)
+    {
+        return new TextBox
+        {
+            Left = x,
+            Top = y,
+            Width = w,
+            Height = 28,
+            BackColor = FieldBg,
+            ForeColor = Ink,
+            BorderStyle = BorderStyle.FixedSingle,
+            Font = new Font("Segoe UI", 10f)
+        };
+    }
+
+    private static Button MakeGoldButton(string text, int x, int y, int w, int h)
+    {
+        var b = new Button
+        {
+            Text = text,
+            Left = x,
+            Top = y,
+            Width = w,
+            Height = h,
+            FlatStyle = FlatStyle.Flat,
+            BackColor = Gold,
+            ForeColor = Color.FromArgb(26, 19, 8),
+            Font = new Font("Segoe UI", 9.5f, FontStyle.Bold),
+            Cursor = Cursors.Hand
+        };
+        b.FlatAppearance.BorderSize = 0;
+        return b;
+    }
+
+    private static Button MakeGhostButton(string text, int x, int y, int w, int h)
+    {
+        var b = new Button
+        {
+            Text = text,
+            Left = x,
+            Top = y,
+            Width = w,
+            Height = h,
+            FlatStyle = FlatStyle.Flat,
+            BackColor = Card,
+            ForeColor = Ink,
+            Font = new Font("Segoe UI", 9f),
+            Cursor = Cursors.Hand
+        };
+        b.FlatAppearance.BorderColor = Line;
+        b.FlatAppearance.BorderSize = 1;
+        return b;
+    }
+
+    private static Image LoadEmbeddedLogo()
+    {
+        try
+        {
+            var asm = Assembly.GetExecutingAssembly();
+            using (var stream = asm.GetManifestResourceStream("WiFiDaLoja.Logo"))
+            {
+                if (stream != null)
+                {
+                    return Image.FromStream(stream);
+                }
+            }
+        }
+        catch
+        {
+        }
+        return null;
+    }
+
+    private static Icon IconFromImage(Image source, int size)
+    {
+        var bmp = new Bitmap(size, size);
+        using (var g = Graphics.FromImage(bmp))
+        {
+            g.SmoothingMode = SmoothingMode.AntiAlias;
+            g.InterpolationMode = InterpolationMode.HighQualityBicubic;
+            g.Clear(Color.Transparent);
+            float scale = Math.Min((float)size / source.Width, (float)size / source.Height);
+            float w = source.Width * scale;
+            float h = source.Height * scale;
+            g.DrawImage(source, (size - w) / 2f, (size - h) / 2f, w, h);
+        }
+        return Icon.FromHandle(bmp.GetHicon());
     }
 
     private void Log(string msg)
@@ -190,12 +282,12 @@ internal sealed class SetupForm : Form
         string token = tokenBox.Text.Trim();
         if (dest.Length < 8)
         {
-            MessageBox.Show("Escolha uma pasta de instalação válida.", Text);
+            MessageBox.Show("Escolha uma pasta de instalação válida.", Text, MessageBoxButtons.OK, MessageBoxIcon.Warning);
             return;
         }
         if (panelUrl.Length < 8 || token.Length < 8)
         {
-            MessageBox.Show("Informe a URL do painel e o token do hotspot.", Text);
+            MessageBox.Show("Informe a URL do painel e o token do hotspot.", Text, MessageBoxButtons.OK, MessageBoxIcon.Warning);
             return;
         }
         installing = true;
@@ -203,6 +295,7 @@ internal sealed class SetupForm : Form
         try
         {
             statusLabel.Text = "Extraindo arquivos…";
+            statusLabel.ForeColor = Ink;
             bar.Value = 15;
             Application.DoEvents();
             Directory.CreateDirectory(dest);
@@ -250,6 +343,7 @@ internal sealed class SetupForm : Form
             string output = p.StandardOutput.ReadToEnd() + p.StandardError.ReadToEnd();
             p.WaitForExit();
             logBox.Visible = true;
+            Height = 640;
             Log(output);
             if (p.ExitCode != 0)
             {
@@ -257,16 +351,23 @@ internal sealed class SetupForm : Form
             }
             bar.Value = 100;
             statusLabel.Text = "Instalação concluída.";
+            statusLabel.ForeColor = Color.FromArgb(125, 186, 122);
             installBtn.Text = "Fechar";
             installBtn.Enabled = true;
-            MessageBox.Show("Agente instalado.\nO ícone na bandeja deve sincronizar com o painel em alguns segundos.", "Concluído", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            MessageBox.Show(
+                "Agente instalado com sucesso.\n\nO ícone na bandeja deve sincronizar com o painel em alguns segundos.",
+                "WiFi da Loja",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Information);
         }
         catch (Exception ex)
         {
             installing = false;
             logBox.Visible = true;
+            Height = 640;
             Log("Erro: " + ex.Message);
             statusLabel.Text = ex.Message;
+            statusLabel.ForeColor = Color.FromArgb(224, 112, 96);
             installBtn.Enabled = true;
             MessageBox.Show(ex.Message, Text, MessageBoxButtons.OK, MessageBoxIcon.Error);
         }
@@ -310,5 +411,120 @@ internal sealed class SetupForm : Form
         Application.EnableVisualStyles();
         Application.SetCompatibleTextRenderingDefault(false);
         Application.Run(new SetupForm());
+    }
+
+    private sealed class HeaderPanel : Panel
+    {
+        private readonly Image logo;
+
+        public HeaderPanel(Image logoImage)
+        {
+            logo = logoImage;
+            Left = 0;
+            Top = 0;
+            Width = 700;
+            Height = 120;
+            BackColor = Bg;
+            DoubleBuffered = true;
+        }
+
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            var g = e.Graphics;
+            g.SmoothingMode = SmoothingMode.AntiAlias;
+            g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.ClearTypeGridFit;
+
+            var rect = ClientRectangle;
+            using (var brush = new LinearGradientBrush(
+                rect,
+                Color.FromArgb(18, 26, 36),
+                Bg,
+                LinearGradientMode.Vertical))
+            {
+                g.FillRectangle(brush, rect);
+            }
+
+            using (var glow = new SolidBrush(Color.FromArgb(18, Gold)))
+            {
+                g.FillEllipse(glow, Width / 2 - 120, -40, 240, 100);
+            }
+
+            if (logo != null)
+            {
+                float maxW = 280f;
+                float maxH = 56f;
+                float scale = Math.Min(maxW / logo.Width, maxH / logo.Height);
+                float w = logo.Width * scale;
+                float h = logo.Height * scale;
+                float x = (Width - w) / 2f;
+                g.DrawImage(logo, x, 22, w, h);
+            }
+            else
+            {
+                using (var font = new Font("Segoe UI", 18f, FontStyle.Bold))
+                using (var brush = new SolidBrush(Ink))
+                {
+                    var sf = new StringFormat { Alignment = StringAlignment.Center };
+                    g.DrawString("WiFi da Loja", font, brush, new RectangleF(0, 28, Width, 32), sf);
+                }
+            }
+
+            using (var font = new Font("Segoe UI", 9f))
+            using (var brush = new SolidBrush(Muted))
+            {
+                var sf = new StringFormat { Alignment = StringAlignment.Center };
+                g.DrawString("Agente Windows · conecte o PC da loja ao painel na nuvem", font, brush, new RectangleF(0, 84, Width, 20), sf);
+            }
+
+            using (var pen = new Pen(Gold, 2f))
+            {
+                g.DrawLine(pen, 24, Height - 1, Width - 24, Height - 1);
+            }
+        }
+    }
+
+    private sealed class ProgressPanel : Control
+    {
+        private int value;
+
+        public ProgressPanel()
+        {
+            SetStyle(ControlStyles.AllPaintingInWmPaint | ControlStyles.UserPaint | ControlStyles.OptimizedDoubleBuffer, true);
+            BackColor = FieldBg;
+        }
+
+        public int Value
+        {
+            get { return value; }
+            set
+            {
+                this.value = Math.Max(0, Math.Min(100, value));
+                Invalidate();
+            }
+        }
+
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            var g = e.Graphics;
+            g.SmoothingMode = SmoothingMode.AntiAlias;
+            var rect = new Rectangle(0, 0, Width - 1, Height - 1);
+            using (var track = new SolidBrush(FieldBg))
+            {
+                g.FillRectangle(track, rect);
+            }
+            if (value > 0)
+            {
+                int fillW = Math.Max(4, (int)Math.Round(Width * (value / 100.0)));
+                var fillRect = new Rectangle(0, 0, fillW, Height);
+                using (var brush = new LinearGradientBrush(fillRect, Gold, Color.FromArgb(200, 150, 70), LinearGradientMode.Horizontal))
+                {
+                    g.FillRectangle(brush, fillRect);
+                }
+            }
+            using (var pen = new Pen(Line))
+            {
+                g.DrawRectangle(pen, rect);
+            }
+        }
     }
 }

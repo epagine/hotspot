@@ -50,7 +50,12 @@ if (-not (Test-Path $csc)) {
 Write-Host "Compilando instalador..."
 $manifest = Join-Path $PSScriptRoot "app.manifest"
 $setupCs = Join-Path $PSScriptRoot "Setup.cs"
-& $csc /nologo /optimize+ /target:winexe /win32manifest:$manifest /r:System.Windows.Forms.dll /r:System.Drawing.dll /r:System.IO.Compression.dll /r:System.IO.Compression.FileSystem.dll /out:$Stub $setupCs
+$logo = Join-Path $Root "public\assets\logo-wifidaloja.jpg"
+if (-not (Test-Path $logo)) {
+    throw "Logo nao encontrada: public\assets\logo-wifidaloja.jpg"
+}
+$resourceArg = "/resource:{0},WiFiDaLoja.Logo" -f $logo
+& $csc /nologo /optimize+ /target:winexe /win32manifest:$manifest /r:System.Windows.Forms.dll /r:System.Drawing.dll /r:System.IO.Compression.dll /r:System.IO.Compression.FileSystem.dll $resourceArg /out:$Stub $setupCs
 if ($LASTEXITCODE -ne 0) { throw "Falha ao compilar Setup.cs" }
 
 Write-Host "Montando WiFiDaLoja-Agent-Setup.exe ..."
@@ -69,7 +74,16 @@ try {
 Copy-Item $OutExe (Join-Path $Root "WiFiDaLoja-Agent-Setup.exe") -Force
 $dl = Join-Path $Root "storage\downloads"
 New-Item -ItemType Directory -Path $dl -Force | Out-Null
-Copy-Item $OutExe (Join-Path $dl "WiFiDaLoja-Agent-Setup.exe") -Force
+$published = Join-Path $dl "WiFiDaLoja-Agent-Setup.exe"
+try {
+    Copy-Item $OutExe $published -Force
+} catch {
+    Write-Host "Aviso: nao copiei para storage\downloads (arquivo em uso). Feche o .exe e copie de dist\ manualmente."
+}
 $kb = [math]::Round((Get-Item $OutExe).Length / 1KB, 0)
 Write-Host ("Pronto: " + $OutExe + " (" + $kb + " KB)")
-Write-Host "Publicado em storage\downloads\WiFiDaLoja-Agent-Setup.exe"
+if (Test-Path $published) {
+    Write-Host "Publicado em storage\downloads\WiFiDaLoja-Agent-Setup.exe"
+} else {
+    Write-Host "Saida em dist\WiFiDaLoja-Agent-Setup.exe (copie para storage\downloads quando puder)."
+}

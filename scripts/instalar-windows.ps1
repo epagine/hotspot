@@ -147,8 +147,8 @@ if (-not $isCloudAgent) {
 }
 
 if ($PanelUrl -and $Token) {
-    $cloud = @{ panel_url = $PanelUrl.TrimEnd("/"); token = $Token; updated_at = (Get-Date).ToString("s") } | ConvertTo-Json
-    Set-Content -Path (Join-Path $Storage "cloud.json") -Value $cloud -Encoding UTF8
+    $cloudJson = @{ panel_url = $PanelUrl.TrimEnd("/"); token = $Token; updated_at = (Get-Date).ToString("s") } | ConvertTo-Json
+    Set-Content -Path (Join-Path $Storage "cloud.json") -Value $cloudJson -Encoding UTF8
     Write-Log "Hotspot vinculado ao painel $PanelUrl"
 }
 
