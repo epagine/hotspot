@@ -13,7 +13,7 @@ require_post_csrf();
 
 $returnTo = trim((string) ($_POST['return_to'] ?? ''));
 $redirect = static function () use ($returnTo): void {
-    safe_internal_redirect($returnTo, '/super/configuracoes/integracao');
+    safe_internal_redirect($returnTo, '/super/financeiro/cobrancas');
 };
 
 $do = (string) ($_POST['do'] ?? 'save');
@@ -107,5 +107,5 @@ if ($do === 'run') {
     $redirect();
 }
 
-header('Location: /super/assinaturas');
+header('Location: /super/financeiro/cobrancas');
 exit;

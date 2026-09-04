@@ -14,7 +14,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $pass = (string) ($_POST['pass'] ?? '');
     $user = auth_attempt($email, $pass);
     if (!$user) {
-        // Compat: instalação antiga com "usuário" (sem @) ou e-mail gravado em settings.
         $stored = strtolower(trim(setting('admin_user', 'admin')));
         $storedEmail = str_contains($stored, '@') ? $stored : ($stored . '@wifidaloja.local');
         $legacyLogin = strtolower(trim($email));
@@ -60,33 +59,34 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Entrar · Wi-Fi da loja</title>
-    <?php require __DIR__ . '/../partials/tw-head.php'; ?>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/assets/app.css">
 </head>
-<body class="bg-gradient-to-b from-surface to-white min-h-screen flex items-center justify-center p-4 font-sans">
-<section class="w-full max-w-md bg-card border border-line rounded-2xl shadow-lg p-8">
-    <div class="flex flex-col items-center mb-6">
-        <img class="h-14 w-auto rounded-xl bg-white object-contain" src="<?= h(platform_logo_url()) ?>" alt="WiFi da Loja">
+<body class="saas-auth">
+<section class="saas-auth-card saas-auth">
+    <div class="saas-auth-brand">
+        <img class="saas-auth-logo" src="<?= h(platform_logo_url()) ?>" alt="WiFi da Loja">
     </div>
-    <h1 class="text-2xl font-bold text-ink text-center">Entrar</h1>
-    <p class="text-muted text-sm text-center mt-1 mb-6">Gerencie hotspots, clientes e assinatura.</p>
+    <h1 class="saas-auth-title">Entrar</h1>
+    <p class="saas-auth-lead">Gerencie hotspots, clientes e assinatura.</p>
     <?php if ($error): ?>
-        <div class="bg-danger-bg text-danger border border-danger/20 rounded-xl px-4 py-3 text-sm mb-4"><?= h($error) ?></div>
+        <div class="alert"><?= h($error) ?></div>
     <?php endif; ?>
-    <form method="post" action="/entrar" class="space-y-4">
+    <form method="post" action="/entrar" class="form">
         <?= csrf_field() ?>
-        <label class="block">
-            <span class="text-sm font-medium text-muted">E-mail</span>
-            <input name="email" type="email" required autofocus autocomplete="username"
-                   class="mt-1 block w-full rounded-btn border border-line bg-input px-4 py-3 text-ink placeholder:text-muted/60 focus:outline-none focus:ring-2 focus:ring-accent/30 focus:border-accent transition">
+        <label>
+            E-mail
+            <input name="email" type="email" required autofocus autocomplete="username">
         </label>
-        <label class="block">
-            <span class="text-sm font-medium text-muted">Senha</span>
-            <input name="pass" type="password" required autocomplete="current-password"
-                   class="mt-1 block w-full rounded-btn border border-line bg-input px-4 py-3 text-ink placeholder:text-muted/60 focus:outline-none focus:ring-2 focus:ring-accent/30 focus:border-accent transition">
+        <label>
+            Senha
+            <input name="pass" type="password" required autocomplete="current-password">
         </label>
-        <button type="submit" class="w-full bg-accent hover:bg-accent/90 text-white font-bold py-3 px-4 rounded-btn transition">Entrar</button>
+        <button type="submit" class="btn btn-block">Entrar</button>
     </form>
-    <p class="text-muted text-sm text-center mt-6">Use o e-mail e a senha definidos na instalação. <a href="/comecar" class="text-accent hover:underline font-semibold">Ainda não tem conta?</a></p>
+    <p class="saas-auth-footer">Use o e-mail e a senha definidos na instalação. <a href="/comecar">Ainda não tem conta?</a></p>
 </section>
 </body>
 </html>

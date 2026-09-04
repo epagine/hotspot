@@ -71,16 +71,16 @@ function app_nav_tw(string $tab, array $items): void
 {
     foreach ($items as $item) {
         if (isset($item['label'])) {
-            echo '<div class="text-[11px] tracking-wider uppercase text-muted px-3 pt-4 pb-1">' . h($item['label']) . '</div>';
+            echo '<div class="admin-nav-label">' . h($item['label']) . '</div>';
             continue;
         }
         [$key, $label, $href, $perm, $feature, $icon] = $item;
         if (!user_can($perm)) continue;
         if ($feature !== null && !company_has_feature(current_company_id(), $feature)) continue;
         $active = $tab === $key;
-        $cls = $active ? 'bg-accent/10 text-accent' : 'text-muted hover:bg-hover hover:text-ink';
-        echo '<a href="' . h($href) . '" class="flex items-center gap-2.5 px-3 py-2.5 rounded-[10px] text-sm font-semibold no-underline transition ' . $cls . '">'
-            . '<svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">' . $icon . '</svg>'
+        $cls = 'admin-nav-link' . ($active ? ' is-active' : '');
+        echo '<a href="' . h($href) . '" class="' . $cls . '">'
+            . '<svg fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">' . $icon . '</svg>'
             . h($label) . '</a>';
     }
 }
@@ -93,65 +93,61 @@ function app_nav_tw(string $tab, array $items): void
     <?php require __DIR__ . '/../partials/tw-head.php'; ?>
     <link rel="stylesheet" href="/assets/app.css">
 </head>
-<body class="font-sans bg-surface text-ink min-h-screen grid grid-cols-1 lg:grid-cols-[260px_1fr]">
-<aside id="app-sidebar" class="bg-white border-r border-line p-4 flex flex-col gap-6 sticky top-0 h-screen overflow-y-auto max-lg:h-auto max-lg:sticky max-lg:z-20 max-lg:flex-row max-lg:flex-wrap max-lg:items-center max-lg:gap-3 max-lg:p-3 max-lg:border-b max-lg:border-r-0 transition-all" data-sidebar>
-    <a class="flex items-center gap-3 no-underline text-inherit" href="/app">
-        <img class="w-10 h-10 rounded-[10px] bg-white object-cover object-left-center flex-shrink-0" src="<?= h(platform_logo_url()) ?>" alt="WiFi da Loja">
-        <div class="max-lg:hidden">
-            <strong class="block text-sm"><?= h((string) $company['trade_name']) ?></strong>
-            <span class="text-xs text-muted">Painel da empresa</span>
+<body class="admin-shell font-sans">
+<aside id="app-sidebar" data-sidebar>
+    <a class="admin-brand" href="/app">
+        <img src="<?= h(platform_logo_url()) ?>" alt="WiFi da Loja">
+        <div class="admin-brand-text">
+            <strong><?= h((string) $company['trade_name']) ?></strong>
+            <span>Painel da empresa</span>
         </div>
     </a>
-    <button type="button" id="app-hamburger" aria-label="Menu" aria-expanded="false"
-            class="hidden max-lg:flex ml-auto flex-col gap-[5px] items-center justify-center p-1.5 bg-transparent border-0 cursor-pointer">
-        <span class="block w-[22px] h-[2px] bg-ink rounded-sm transition-transform"></span>
-        <span class="block w-[22px] h-[2px] bg-ink rounded-sm transition-opacity"></span>
-        <span class="block w-[22px] h-[2px] bg-ink rounded-sm transition-transform"></span>
+    <button type="button" id="app-hamburger" aria-label="Menu" aria-expanded="false">
+        <span></span><span></span><span></span>
     </button>
-    <nav class="flex flex-col gap-1 flex-1 max-lg:hidden" data-nav>
+    <nav data-nav>
         <?php app_nav_tw($tab, $appNavItems); ?>
     </nav>
-    <div class="border-t border-line pt-3 max-lg:hidden" data-foot>
-        <div class="text-xs text-muted px-3 mb-2"><?= h((string) ($user['name'] ?? $user['email'] ?? '')) ?></div>
-        <a class="inline-block text-sm font-semibold text-muted border border-line rounded-btn px-3 py-2 hover:text-ink hover:border-ink/20 transition no-underline" href="/sair">Sair</a>
+    <div data-foot>
+        <div class="admin-user-label"><?= h((string) ($user['name'] ?? $user['email'] ?? '')) ?></div>
+        <a class="admin-signout" href="/sair">Sair</a>
     </div>
 </aside>
-<div class="min-w-0 flex flex-col">
-    <header class="px-8 pt-6 pb-0 max-md:px-4">
-        <h1 class="text-2xl font-bold tracking-tight"><?= h($pageTitle) ?></h1>
-        <p class="text-muted text-sm mt-1">
-            <?php if ($sub && ($sub['billing_status'] ?? $sub['status'] ?? '') === 'trial'): ?>
-                Trial até <?= h(date('d/m/Y', strtotime((string) $sub['trial_ends_at']) ?: time())) ?>
-                · plano <?= h((string) ($sub['plan_name'] ?? '')) ?>
+<div class="admin-main">
+    <header class="admin-top">
+        <h1 class="admin-page-title"><?= h($pageTitle) ?></h1>
+        <?php if ($sub): ?>
+        <p class="admin-page-lead">
+            <?php if (($sub['billing_status'] ?? $sub['status'] ?? '') === 'trial'): ?>
+                Trial até <?= h(date('d/m/Y', strtotime((string) $sub['trial_ends_at']) ?: time())) ?> · <?= h((string) ($sub['plan_name'] ?? '')) ?>
             <?php else: ?>
-                <?= h((string) ($sub['billing_label'] ?? company_subscription_label($sub))) ?>
-                <?php if ($sub): ?> · <?= h((string) ($sub['plan_name'] ?? '')) ?><?php endif; ?>
+                <?= h((string) ($sub['billing_label'] ?? company_subscription_label($sub))) ?> · <?= h((string) ($sub['plan_name'] ?? '')) ?>
             <?php endif; ?>
         </p>
+        <?php endif; ?>
     </header>
-    <main class="px-8 py-6 max-w-[1180px] w-full max-md:px-4">
-        <?php if ($flashErr): ?><div class="bg-danger-bg text-danger border border-danger/20 rounded-xl px-4 py-3 text-sm mb-4"><?= h($flashErr) ?></div><?php endif; ?>
-        <?php if ($flashOk): ?><div class="bg-ok-bg text-ok border border-ok/20 rounded-xl px-4 py-3 text-sm mb-4"><?= h($flashOk) ?></div><?php endif; ?>
+    <main class="admin-page">
+        <?php if ($flashErr): ?><div class="admin-alert admin-alert-error"><?= h($flashErr) ?></div><?php endif; ?>
+        <?php if ($flashOk): ?><div class="admin-alert admin-alert-success"><?= h($flashOk) ?></div><?php endif; ?>
         <?php if (!$serviceOk && $tab !== 'assinatura'): ?>
-            <div class="bg-danger-bg text-danger border border-danger/20 rounded-xl px-4 py-3 text-sm mb-4">Sua assinatura está <?= h((string) ($sub['billing_label'] ?? 'inativa')) ?>. Escolha um plano em <a href="/app/assinatura" class="font-semibold underline">Assinatura</a> para continuar usando o serviço.</div>
+            <div class="admin-alert admin-alert-error">Sua assinatura está <?= h((string) ($sub['billing_label'] ?? 'inativa')) ?>. Escolha um plano em <a href="/app/assinatura">Assinatura</a> para continuar.</div>
         <?php endif; ?>
 
         <?php if ($tab === 'dashboard'): ?>
-            <div class="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-3 mb-4">
+            <section class="admin-stat-panel">
                 <?php foreach ([
                     ['Clientes', plan_usage_label($limitUsage['clients']['used'], $limitUsage['clients']['max'])],
-                    ['Acessos hoje', (int) $kpis['access_today']],
-                    ['7 dias', (int) $kpis['access_7d']],
-                    ['30 dias', (int) $kpis['access_30d']],
+                    ['Acessos hoje', (string) (int) $kpis['access_today']],
+                    ['7 dias', (string) (int) $kpis['access_7d']],
                     ['Hotspots', plan_usage_label($limitUsage['hotspots']['used'], $limitUsage['hotspots']['max'])],
                     ['Usuários', plan_usage_label($limitUsage['users']['used'], $limitUsage['users']['max'])],
                 ] as [$kLabel, $kVal]): ?>
-                    <article class="bg-white border border-line rounded-xl p-4 shadow-sm">
-                        <span class="block text-xs text-muted mb-1"><?= h($kLabel) ?></span>
-                        <strong class="block text-xl font-bold tracking-tight"><?= h((string) $kVal) ?></strong>
-                    </article>
+                <div class="admin-stat-item">
+                    <span class="admin-stat-label"><?= h($kLabel) ?></span>
+                    <strong class="admin-stat-value"><?= h($kVal) ?></strong>
+                </div>
                 <?php endforeach; ?>
-            </div>
+            </section>
             <section class="card">
                 <h2>Acessos nos últimos 7 dias</h2>
                 <?php
@@ -829,21 +825,6 @@ function app_nav_tw(string $tab, array $items): void
         <?php endif; ?>
     </main>
 </div>
-<script>
-(function(){
-  var btn=document.getElementById('app-hamburger'),side=document.getElementById('app-sidebar');
-  if(!btn||!side)return;
-  var nav=side.querySelector('[data-nav]'),foot=side.querySelector('[data-foot]');
-  btn.addEventListener('click',function(){
-    var open=!nav.classList.contains('max-lg:hidden')||nav.classList.contains('!flex');
-    if(open){nav.classList.remove('!flex','!flex-col');nav.classList.add('max-lg:hidden');if(foot)foot.classList.add('max-lg:hidden');}
-    else{nav.classList.add('!flex','!flex-col');nav.classList.remove('max-lg:hidden');if(foot){foot.classList.remove('max-lg:hidden');}}
-    btn.setAttribute('aria-expanded',(!open)?'true':'false');
-  });
-  side.querySelectorAll('[data-nav] a').forEach(function(a){
-    a.addEventListener('click',function(){nav.classList.add('max-lg:hidden');if(foot)foot.classList.add('max-lg:hidden');btn.setAttribute('aria-expanded','false');});
-  });
-})();
-</script>
+<?php require __DIR__ . '/../partials/admin-shell.js.php'; ?>
 </body>
 </html>

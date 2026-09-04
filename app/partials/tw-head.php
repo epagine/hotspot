@@ -10,26 +10,26 @@ tailwind.config = {
   theme: {
     extend: {
       colors: {
-        accent: { DEFAULT: '#c8892a', light: 'rgba(200,137,42,.10)', mid: 'rgba(200,137,42,.45)' },
-        gold: '#e8b058',
-        ink: '#15202b',
-        muted: '#667788',
-        line: '#dde3ea',
-        surface: '#f3f5f8',
+        accent: { DEFAULT: '#18181b', light: 'rgba(24,24,27,.06)', mid: 'rgba(24,24,27,.18)' },
+        gold: '#27272a',
+        ink: '#18181b',
+        muted: '#71717a',
+        line: '#e4e4e7',
+        surface: '#fafafa',
         card: '#ffffff',
-        input: '#f8fafc',
-        hover: '#eef2f6',
-        ok: { DEFAULT: '#1f7a3a', bg: '#e8f6ea' },
-        warn: { DEFAULT: '#9a6b12', bg: '#fff4df' },
-        danger: { DEFAULT: '#b42318', bg: '#fdeceb' },
-        offline: { bg: '#eef1f4' },
+        input: '#fafafa',
+        hover: '#f4f4f5',
+        ok: { DEFAULT: '#15803d', bg: '#f0fdf4' },
+        warn: { DEFAULT: '#b45309', bg: '#fffbeb' },
+        danger: { DEFAULT: '#b91c1c', bg: '#fef2f2' },
+        offline: { bg: '#f4f4f5' },
       },
       fontFamily: {
-        sans: ['Figtree', 'Inter', 'system-ui', 'sans-serif']
+        sans: ['Inter', 'system-ui', '-apple-system', 'sans-serif']
       },
       borderRadius: {
-        card: '16px',
-        btn: '10px',
+        card: '6px',
+        btn: '6px',
         pill: '999px'
       }
     }
@@ -38,7 +38,7 @@ tailwind.config = {
 </script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
   html { color-scheme: light; }
 </style>

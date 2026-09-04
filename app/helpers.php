@@ -658,11 +658,13 @@ function admin_url(string $section = 'clientes', int $id = 0, string $sub = ''):
             'whatsapp' => '/super/configuracoes/whatsapp',
             default => '/super/configuracoes',
         },
-        'assinaturas' => '/super/assinaturas',
+        'assinaturas' => '/super/financeiro/assinaturas',
         'instalador' => $sub === 'baixar' ? '/super/instalador/baixar' : '/super/instalador',
         'financeiro' => match ($sub) {
             'pagseguro' => '/super/configuracoes/integracao',
-            default => '/cliente',
+            'assinaturas' => '/super/financeiro/assinaturas',
+            'cobrancas' => '/super/financeiro/cobrancas',
+            default => '/super/financeiro/cobrancas',
         },
         default => $id > 0 ? '/app/hotspots/' . $id : '/app/hotspots',
     };
@@ -695,7 +697,7 @@ function admin_legacy_url(): ?string
         return admin_url('instalador');
     }
     if ($tab === 'assinaturas') {
-        return admin_url('assinaturas', $id);
+        return admin_url('financeiro', 0, 'assinaturas');
     }
     if ($tab === 'conta') {
         return admin_url('conta');
@@ -733,11 +735,11 @@ function legacy_admin_route(string $path): void
                 exit;
             }
         }
-        header('Location: /super/assinaturas', true, 301);
+        header('Location: /super/financeiro/assinaturas', true, 301);
         exit;
     }
     if (preg_match('#^/admin/financeiro(?:/(\d+))?$#', $path, $m) === 1) {
-        header('Location: /cliente', true, 301);
+        header('Location: /super/financeiro/cobrancas', true, 301);
         exit;
     }
     if (str_starts_with($path, '/admin/configuracoes')) {
@@ -807,4 +809,5 @@ require_once __DIR__ . '/Domain/marketing.php';
 require_once __DIR__ . '/Domain/reports.php';
 require_once __DIR__ . '/Domain/hotspots.php';
 require_once __DIR__ . '/Domain/subscriptions.php';
+require_once __DIR__ . '/Domain/billing.php';
 require_once __DIR__ . '/Integrations/NetworkProviders/providers.php';

@@ -45,43 +45,46 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Começar grátis · Wi-Fi da loja</title>
-    <?php require __DIR__ . '/../partials/tw-head.php'; ?>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/assets/app.css">
 </head>
-<body class="bg-gradient-to-b from-surface to-white min-h-screen flex items-center justify-center p-4 font-sans">
-<section class="w-full max-w-md bg-card border border-line rounded-2xl shadow-lg p-8">
-    <div class="flex flex-col items-center mb-4">
-        <img class="h-14 w-auto rounded-xl bg-white object-contain" src="<?= h(platform_logo_url()) ?>" alt="WiFi da Loja">
-        <span class="mt-2 inline-block bg-accent/10 text-accent text-xs font-bold px-3 py-1 rounded-full">14 dias grátis</span>
+<body class="saas-auth">
+<section class="saas-auth-card saas-auth">
+    <div class="saas-auth-brand">
+        <img class="saas-auth-logo" src="<?= h(platform_logo_url()) ?>" alt="WiFi da Loja">
+        <span class="saas-auth-badge">14 dias grátis</span>
     </div>
-    <h1 class="text-2xl font-bold text-ink text-center">Criar conta</h1>
-    <p class="text-muted text-sm text-center mt-1 mb-6">Comece o trial e configure seu primeiro hotspot.</p>
+    <h1 class="saas-auth-title">Criar conta</h1>
+    <p class="saas-auth-lead">Comece o trial e configure seu primeiro hotspot.</p>
     <?php if ($error): ?>
-        <div class="bg-danger-bg text-danger border border-danger/20 rounded-xl px-4 py-3 text-sm mb-4"><?= h($error) ?></div>
+        <div class="alert"><?= h($error) ?></div>
     <?php endif; ?>
-    <form method="post" action="/comecar" class="space-y-4 relative">
+    <form method="post" action="/comecar" class="form" style="position:relative">
         <?= csrf_field() ?>
-        <div class="absolute -left-[9999px] h-0 overflow-hidden" aria-hidden="true">
+        <div class="hidden" aria-hidden="true">
             <label>Website<input name="website" tabindex="-1" autocomplete="off"></label>
         </div>
-        <label class="block">
-            <span class="text-sm font-medium text-muted">Seu nome</span>
-            <input name="name" required class="mt-1 block w-full rounded-btn border border-line bg-input px-4 py-3 text-ink focus:outline-none focus:ring-2 focus:ring-accent/30 focus:border-accent transition">
+        <label>
+            Seu nome
+            <input name="name" required>
         </label>
-        <label class="block">
-            <span class="text-sm font-medium text-muted">Nome da empresa</span>
-            <input name="company" required class="mt-1 block w-full rounded-btn border border-line bg-input px-4 py-3 text-ink focus:outline-none focus:ring-2 focus:ring-accent/30 focus:border-accent transition">
+        <label>
+            Nome da empresa
+            <input name="company" required>
         </label>
-        <label class="block">
-            <span class="text-sm font-medium text-muted">E-mail</span>
-            <input name="email" type="email" required autocomplete="username" class="mt-1 block w-full rounded-btn border border-line bg-input px-4 py-3 text-ink focus:outline-none focus:ring-2 focus:ring-accent/30 focus:border-accent transition">
+        <label>
+            E-mail
+            <input name="email" type="email" required autocomplete="username">
         </label>
-        <label class="block">
-            <span class="text-sm font-medium text-muted">Senha</span>
-            <input name="password" type="password" required minlength="8" autocomplete="new-password" class="mt-1 block w-full rounded-btn border border-line bg-input px-4 py-3 text-ink focus:outline-none focus:ring-2 focus:ring-accent/30 focus:border-accent transition">
+        <label>
+            Senha
+            <input name="password" type="password" required minlength="8" autocomplete="new-password">
         </label>
-        <button type="submit" class="w-full bg-accent hover:bg-accent/90 text-white font-bold py-3 px-4 rounded-btn transition">Começar grátis</button>
+        <button type="submit" class="btn btn-block">Começar grátis</button>
     </form>
-    <p class="text-muted text-sm text-center mt-6">Já tem conta? <a href="/entrar" class="text-accent hover:underline font-semibold">Entrar</a></p>
+    <p class="saas-auth-footer">Já tem conta? <a href="/entrar">Entrar</a></p>
 </section>
 </body>
 </html>

@@ -129,16 +129,22 @@ switch (true) {
         $_GET['tab'] = 'dashboard';
         require __DIR__ . '/app/pages/super.php';
         break;
-    case preg_match('#^/super/(empresas|planos|assinaturas|usuarios|logs|instalador|configuracoes)(?:/([\w-]+))?$#', $path, $m) === 1:
+    case preg_match('#^/super/assinaturas(?:/([\w-]+))?$#', $path) === 1:
+        header('Location: /super/financeiro/assinaturas', true, 301);
+        exit;
+    case preg_match('#^/super/(empresas|planos|financeiro|usuarios|logs|instalador|configuracoes)(?:/([\w-]+))?$#', $path, $m) === 1:
         $_GET['tab'] = $m[1];
         if (!empty($m[2])) {
             $_GET['sec'] = $m[2];
+        } elseif ($m[1] === 'financeiro') {
+            $_GET['sec'] = 'cobrancas';
         }
         if (is_http_post()) {
             $superPost = [
                 'empresas'  => 'super-companies.php',
                 'planos'    => 'super-plans.php',
                 'instalador' => 'admin-instalador.php',
+                'financeiro' => 'super-pagseguro-save.php',
             ];
             if (isset($superPost[$m[1]])) {
                 require __DIR__ . '/app/pages/' . $superPost[$m[1]];
@@ -255,7 +261,7 @@ switch (true) {
             require __DIR__ . '/app/pages/super-pagseguro-save.php';
             break;
         }
-        header('Location: /cliente', true, 301);
+        header('Location: /super/financeiro/cobrancas', true, 301);
         exit;
     case preg_match('#^/admin/clientes(?:/(\d+))?$#', $path, $m) === 1:
         if (is_http_post()) {
