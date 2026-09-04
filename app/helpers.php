@@ -776,39 +776,27 @@ function installer_downloads_dir(): string
     return $dir;
 }
 
-function installer_setup_path(?string $variant = null): ?string
+function installer_agent_filename(): string
 {
-    $names = match ($variant) {
-        'full' => ['WiFiDaLoja-Setup.exe', 'WiFiDaLoja-Agent-Setup.exe'],
-        default => ['WiFiDaLoja-Agent-Setup.exe', 'WiFiDaLoja-Setup.exe'],
-    };
-    $root = dirname(__DIR__);
-    foreach ($names as $name) {
-        foreach ([
-            installer_downloads_dir() . DIRECTORY_SEPARATOR . $name,
-            $root . DIRECTORY_SEPARATOR . $name,
-            $root . DIRECTORY_SEPARATOR . 'dist' . DIRECTORY_SEPARATOR . $name,
-            $root . DIRECTORY_SEPARATOR . 'dist-cloud' . DIRECTORY_SEPARATOR . $name,
-        ] as $path) {
-            if (is_file($path) && filesize($path) > 100000) {
-                return $path;
-            }
-        }
-    }
-
-    return null;
+    return 'WiFiDaLoja-Agent-Setup.exe';
 }
 
-function installer_named_path(string $filename): ?string
+function installer_min_bytes(): int
 {
+    return 8000;
+}
+
+function installer_setup_path(): ?string
+{
+    $name = installer_agent_filename();
     $root = dirname(__DIR__);
     foreach ([
-        installer_downloads_dir() . DIRECTORY_SEPARATOR . $filename,
-        $root . DIRECTORY_SEPARATOR . $filename,
-        $root . DIRECTORY_SEPARATOR . 'dist' . DIRECTORY_SEPARATOR . $filename,
-        $root . DIRECTORY_SEPARATOR . 'dist-cloud' . DIRECTORY_SEPARATOR . $filename,
+        installer_downloads_dir() . DIRECTORY_SEPARATOR . $name,
+        $root . DIRECTORY_SEPARATOR . $name,
+        $root . DIRECTORY_SEPARATOR . 'dist' . DIRECTORY_SEPARATOR . $name,
+        $root . DIRECTORY_SEPARATOR . 'dist-cloud' . DIRECTORY_SEPARATOR . $name,
     ] as $path) {
-        if (is_file($path) && filesize($path) > 100000) {
+        if (is_file($path) && filesize($path) >= installer_min_bytes()) {
             return $path;
         }
     }
@@ -816,9 +804,9 @@ function installer_named_path(string $filename): ?string
     return null;
 }
 
-function stream_installer_setup(?string $variant = null): bool
+function stream_installer_setup(): bool
 {
-    $path = installer_setup_path($variant);
+    $path = installer_setup_path();
     if ($path === null) {
         return false;
     }

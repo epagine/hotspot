@@ -63,7 +63,7 @@ Defina `APP_URL=https://seu-dominio` no `.env` ou em Super → Configurações �
 
 **Não envie:** `installer/`, `scripts/`, `bin/`, `dist/`, `runtime/`, `*.exe`, `app/config.php`, dados em `storage/`.
 
-O instalador Windows (`WiFiDaLoja-Setup.exe`) **não vai no Git**. Publique em **Super → Instalador** ou copie para `storage/downloads/`.
+O instalador Windows (`WiFiDaLoja-Agent-Setup.exe`) **não vai no Git**. Publique em **Super → Instalador** ou copie para `storage/downloads/`.
 
 ```bash
 git clone -b master https://github.com/epagine/hotspot.git
@@ -116,17 +116,12 @@ Alternativa: `.env` com `DB_DRIVER=mysql` **ou** edite `app/config.php` após o 
 
 Requisitos: administrador, adaptador Wi-Fi, internet (preferência Ethernet), [VC++ Redistributable x64](https://learn.microsoft.com/pt-br/cpp/windows/latest-supported-vc-redist) se necessário.
 
-### Instalação (produção — agente cloud)
+### Instalação (PC da loja)
 
-1. Gere o agente: `powershell -ExecutionPolicy Bypass -File installer\Empacotar-Cloud.ps1`
+1. Gere o agente: `powershell -ExecutionPolicy Bypass -File installer\Empacotar.ps1`
 2. Publique `WiFiDaLoja-Agent-Setup.exe` em **Super → Instalador** (ou baixe pelo painel da empresa).
 3. No painel, crie o hotspot e copie URL + token.
 4. Execute o setup como administrador — **sem PHP/MySQL local**; portal em `/portal/{token}` na nuvem.
-
-### Instalação completa (dev/Laragon)
-
-1. `powershell -ExecutionPolicy Bypass -File installer\Empacotar.ps1` — inclui PHP embarcado.
-2. Execute **`WiFiDaLoja-Setup.exe`** para ambiente local com painel `:8080`.
 
 ### Portal
 
@@ -162,13 +157,13 @@ Limites por plano: hotspots, clientes cadastrados, usuários.
 
 ---
 
-## 5. Gerar o Setup.exe
+## 5. Gerar o instalador do agente
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File installer\Empacotar.ps1
 ```
 
-Saída: `dist\WiFiDaLoja-Setup.exe` (+ cópia em `storage/downloads/` para download pelo Super).
+Saída: `dist\WiFiDaLoja-Agent-Setup.exe` (+ cópia em `storage/downloads/` para download pelo Super e pelo painel da empresa).
 
 Compilar só auxiliares (bandeja, instalar):
 

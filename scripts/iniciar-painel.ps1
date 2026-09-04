@@ -41,7 +41,7 @@ $php = Find-Php
 if (-not $php) {
     if (-not $NoBrowser) {
         Add-Type -AssemblyName System.Windows.Forms
-        [System.Windows.Forms.MessageBox]::Show("PHP nao encontrado. Use o instalador WiFiDaLoja-Setup.exe.", "Wi-Fi da loja")
+        [System.Windows.Forms.MessageBox]::Show("PHP nao encontrado. Instale PHP (ex.: Laragon) ou use o agente WiFiDaLoja-Agent-Setup.exe no PC da loja.", "Wi-Fi da loja")
     }
     exit 1
 }

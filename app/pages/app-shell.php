@@ -56,10 +56,8 @@ $appNavItems = [
     ['label' => 'Principal'],
     ['dashboard', 'Dashboard', '/app/dashboard', 'dashboard', null, '<path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6A2.25 2.25 0 0 1 6 3.75h2.25A2.25 2.25 0 0 1 10.5 6v2.25a2.25 2.25 0 0 1-2.25 2.25H6a2.25 2.25 0 0 1-2.25-2.25V6ZM3.75 15.75A2.25 2.25 0 0 1 6 13.5h2.25a2.25 2.25 0 0 1 2.25 2.25V18a2.25 2.25 0 0 1-2.25 2.25H6A2.25 2.25 0 0 1 3.75 18v-2.25ZM13.5 6a2.25 2.25 0 0 1 2.25-2.25H18A2.25 2.25 0 0 1 20.25 6v2.25A2.25 2.25 0 0 1 18 10.5h-2.25a2.25 2.25 0 0 1-2.25-2.25V6ZM13.5 15.75a2.25 2.25 0 0 1 2.25-2.25H18a2.25 2.25 0 0 1 2.25 2.25V18A2.25 2.25 0 0 1 18 20.25h-2.25a2.25 2.25 0 0 1-2.25-2.25v-2.25Z"/>'],
     ['hotspots', 'Hotspots', '/app/hotspots', 'hotspots', null, '<path stroke-linecap="round" stroke-linejoin="round" d="M8.288 15.038a5.25 5.25 0 0 1 7.424 0M5.106 11.856c3.807-3.808 9.98-3.808 13.788 0M1.924 8.674c5.565-5.565 14.587-5.565 20.152 0M12.53 18.22l-.53.53-.53-.53a.75.75 0 0 1 1.06 0Z"/>'],
+    ['agente', 'Agente Windows', '/app/instalador/baixar', 'hotspots', null, '<path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3"/>'],
 ];
-if (installer_setup_path() !== null) {
-    $appNavItems[] = ['agente', 'Agente Windows', '/app/instalador/baixar', 'hotspots', null, '<path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3"/>'];
-}
 $appNavItems = array_merge($appNavItems, [
     ['clientes', 'Clientes', '/app/clientes', 'clients', null, '<path stroke-linecap="round" stroke-linejoin="round" d="M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.501 20.118a7.5 7.5 0 0 1 14.998 0A17.933 17.933 0 0 1 12 21.75c-2.676 0-5.216-.584-7.499-1.632Z"/>'],
     ['acessos', 'Acessos', '/app/acessos', 'access', null, '<path stroke-linecap="round" stroke-linejoin="round" d="M3.75 12h16.5m-16.5 3.75h16.5M3.75 19.5h16.5M5.625 4.5h12.75a1.875 1.875 0 0 1 0 3.75H5.625a1.875 1.875 0 0 1 0-3.75Z"/>'],
@@ -244,21 +242,19 @@ function app_nav_tw(string $tab, array $items): void
             if ($hot && (int) ($hot['company_id'] ?? 0) === $companyId):
                 $pc = portal_config_for((int) $hot['id']);
                 $health = store_connection_health($hot);
-                $setupFile = installer_setup_path();
+                $setupReady = installer_setup_path() !== null;
                 $panelUrl = rtrim(guess_panel_url(), '/');
             ?>
-            <?php if ($setupFile): ?>
             <section class="card card-narrow">
                 <h2>Instalar no PC Windows</h2>
                 <ol class="steps">
-                    <li>Baixe e execute o instalador como administrador — <a href="/app/instalador/baixar">Baixar agente Windows</a> (pacote cloud, ~1–3 MB)</li>
+                    <li>Baixe e execute o instalador como administrador — <?php if ($setupReady): ?><a href="/app/instalador/baixar">Baixar agente Windows</a><?php else: ?><span class="hint">instalador indisponível — contate o suporte</span><?php endif; ?></li>
                     <li>Informe a URL do painel: <code class="admin-code-break"><?= h($panelUrl) ?></code></li>
                     <li>Cole o token do agente abaixo na instalação ou em <em>Vincular hotspot</em> na bandeja</li>
                     <li>Aguarde o ícone na bandeja ficar sincronizado (status verde)</li>
                 </ol>
                 <p class="hint">Token: <code class="token"><?= h((string) $hot['token']) ?></code></p>
             </section>
-            <?php endif; ?>
             <section class="card">
                 <h2><?= h((string) $hot['name']) ?></h2>
                 <p class="hint">

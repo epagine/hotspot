@@ -113,12 +113,9 @@ Aba `/app?tab=relatorios` (feature `reports`):
 
 ## Instalador Windows
 
-| Pacote | Comando | Uso |
-|--------|---------|-----|
-| **Agente cloud** | `installer\Empacotar-Cloud.ps1` | Produção SaaS (~40 KB) — bandeja, hotspot, `DnsProxy.exe`, sync |
-| **Completo** | `installer\Empacotar.ps1` | Dev/Laragon (~40 MB) — PHP embarcado + painel local |
+Comando: `installer\Empacotar.ps1` — gera `WiFiDaLoja-Agent-Setup.exe` (~40 KB): bandeja, hotspot, `DnsProxy.exe`, sync com o painel SaaS.
 
-Saídas: `WiFiDaLoja-Agent-Setup.exe`, `WiFiDaLoja-Setup.exe` (cópia em `storage/downloads/`).
+Saída copiada para `storage/downloads/` para download pelo Super e pelo painel da empresa (`/app/instalador/baixar`).
 
 Modo cloud: sem PHP/MySQL local; DNS cativo via `DnsProxy.exe`; portal em `/portal/{token}`.
 
