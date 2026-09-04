@@ -3,9 +3,14 @@ RewriteEngine On
 # Arquivos e pastas que não devem ser servidos pela web
 RewriteRule ^\.env - [F,L]
 RewriteRule ^\.git - [F,L]
-RewriteRule ^(app|storage|scripts|docs|installer)(/|$) - [F,L]
+RewriteRule ^(storage|scripts|docs|installer)(/|$) - [F,L]
 RewriteRule ^(composer\.(json|lock))$ - [F,L]
 RewriteRule \.md$ - [F,L]
+
+# Código em app/ — bloqueia acesso direto ao fonte, mas /app (painel) vai ao index.php
+RewriteRule ^app/(Domain|Support|migrations|Integrations|partials|api|pages)/ - [F,L]
+RewriteRule ^app/.+\.php$ - [F,L]
+RewriteRule ^app/(config\.php|helpers\.php|schema\.sql)$ - [F,L]
 
 # Só arquivos públicos em /public/ (CSS legado, imagens)
 RewriteCond %{REQUEST_FILENAME} -f

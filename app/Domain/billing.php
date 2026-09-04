@@ -167,3 +167,57 @@ function dashboard_finance_kpis(): array
         'suspended_subscriptions' => (int) ($subs['kpis']['suspensas'] ?? 0),
     ];
 }
+
+/** Agrupa cobranças da listagem por empresa ou loja legada. */
+function platform_payments_grouped(array $rows): array
+{
+    $groups = [];
+    foreach ($rows as $row) {
+        $companyId = (int) ($row['company_id'] ?? 0);
+        $storeId = (int) ($row['store_id'] ?? 0);
+        if ($companyId > 0) {
+            $key = 'company:' . $companyId;
+            if (!isset($groups[$key])) {
+                $groups[$key] = [
+                    'key' => $key,
+                    'company_id' => $companyId,
+                    'store_id' => 0,
+                    'label' => trim((string) ($row['company_name'] ?? '')) ?: ('Empresa #' . $companyId),
+                    'subtitle' => '',
+                    'legacy' => false,
+                    'payments' => [],
+                ];
+            }
+        } elseif ($storeId > 0) {
+            $key = 'store:' . $storeId;
+            if (!isset($groups[$key])) {
+                $storeName = trim((string) ($row['store_name'] ?? '')) ?: ('Loja #' . $storeId);
+                $groups[$key] = [
+                    'key' => $key,
+                    'company_id' => 0,
+                    'store_id' => $storeId,
+                    'label' => $storeName,
+                    'subtitle' => 'Loja legada',
+                    'legacy' => true,
+                    'payments' => [],
+                ];
+            }
+        } else {
+            $key = 'other:0';
+            if (!isset($groups[$key])) {
+                $groups[$key] = [
+                    'key' => $key,
+                    'company_id' => 0,
+                    'store_id' => 0,
+                    'label' => 'Sem vínculo',
+                    'subtitle' => '',
+                    'legacy' => false,
+                    'payments' => [],
+                ];
+            }
+        }
+        $groups[$key]['payments'][] = $row;
+    }
+    usort($groups, static fn (array $a, array $b): int => strcasecmp($a['label'], $b['label']));
+    return array_values($groups);
+}

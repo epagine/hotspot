@@ -439,71 +439,103 @@ $superNavItems = [
             </section>
             <?php endif; ?>
             <?php elseif ($cfgSec === 'integracao'): ?>
-            <?php $payProvider = payment_provider(); ?>
-            <section class="card card-narrow">
-                <h2>Pagamentos online</h2>
-                <p class="hint">Provedor ativo: <strong><?= h(payment_provider_label($payProvider)) ?></strong></p>
-                <form method="post" action="/super/pagseguro" class="form">
-                    <?= csrf_field() ?>
-                    <input type="hidden" name="do" value="save">
-                    <input type="hidden" name="return_to" value="/super/configuracoes/integracao">
-                    <label>Provedor ativo
-                        <select name="payment_provider">
-                            <option value="pagseguro" <?= $payProvider === 'pagseguro' ? 'selected' : '' ?>>PagSeguro / PagBank</option>
-                            <option value="picpay" <?= $payProvider === 'picpay' ? 'selected' : '' ?>>PicPay</option>
-                        </select>
-                    </label>
-                    <label class="check"><input type="hidden" name="payment_auto" value="0"><input type="checkbox" name="payment_auto" value="1" <?= payment_auto_enabled() ? 'checked' : '' ?>> Cobrança automática (empresas SaaS + lojas legadas)</label>
-                    <p class="hint">O cron gera links de pagamento antes do vencimento; o cliente paga manualmente a cada ciclo. A assinatura renova quando o webhook confirma o pagamento.</p>
-                    <label>Antecedência (dias)
-                        <input name="payment_advance_days" type="number" min="0" max="30" value="<?= (int) payment_advance_days() ?>">
-                    </label>
+            <?php
+            $payProvider = payment_provider();
+            $pagseguroOk = pagseguro_configured();
+            $picpayOk = picpay_configured();
+            ?>
+            <form method="post" action="/super/pagseguro" class="admin-pay-config-form">
+                <?= csrf_field() ?>
+                <input type="hidden" name="do" value="save">
+                <input type="hidden" name="return_to" value="/super/configuracoes/integracao">
 
-                    <h3 style="margin-top:24px">PagSeguro / PagBank</h3>
+                <section class="card">
+                    <h2>Operação</h2>
+                    <p class="hint">Provedor em uso: <strong><?= h(payment_provider_label($payProvider)) ?></strong><?php if (payment_configured()): ?> · integração pronta<?php else: ?> · pendente de credenciais<?php endif; ?></p>
+                    <div class="form form-grid-2" style="margin-top:0">
+                        <label>Provedor ativo
+                            <select name="payment_provider">
+                                <option value="pagseguro" <?= $payProvider === 'pagseguro' ? 'selected' : '' ?>>PagSeguro / PagBank</option>
+                                <option value="picpay" <?= $payProvider === 'picpay' ? 'selected' : '' ?>>PicPay</option>
+                            </select>
+                        </label>
+                        <label>Antecedência (dias)
+                            <input name="payment_advance_days" type="number" min="0" max="30" value="<?= (int) payment_advance_days() ?>">
+                        </label>
+                    </div>
+                    <label class="check"><input type="hidden" name="payment_auto" value="0"><input type="checkbox" name="payment_auto" value="1" <?= payment_auto_enabled() ? 'checked' : '' ?>> Cobrança automática (empresas SaaS + lojas legadas)</label>
+                    <p class="hint">O cron gera links antes do vencimento; a assinatura renova quando o webhook confirma o pagamento.</p>
+                    <?php if (payment_configured()): ?>
+                        <p class="hint">Webhook ativo: <code class="admin-code-break"><?= h(payment_webhook_url()) ?></code></p>
+                        <p class="hint">Cron e testes em <a href="/super/financeiro/cobrancas">Financeiro → Cobranças</a>.</p>
+                    <?php endif; ?>
+                </section>
+
+                <section class="card admin-pay-provider-card<?= $payProvider === 'pagseguro' ? ' is-active' : '' ?>">
+                    <header class="admin-pay-provider-head">
+                        <div>
+                            <h2>PagSeguro / PagBank</h2>
+                            <p class="hint">Checkout via token da API PagSeguro.</p>
+                        </div>
+                        <span class="badge <?= $pagseguroOk ? 'badge-ok' : 'badge-muted' ?>"><?= $pagseguroOk ? 'Configurado' : 'Pendente' ?></span>
+                    </header>
                     <ol class="steps">
-                        <li>Token em PagSeguro / PagBank (sandbox ou produção).</li>
-                        <li>Webhook: <code><?= h(pagseguro_webhook_url()) ?></code></li>
+                        <li>Gere o token em PagSeguro / PagBank (sandbox ou produção).</li>
+                        <li>Webhook: <code class="admin-code-break"><?= h(pagseguro_webhook_url()) ?></code></li>
                         <li>Cobranças SaaS usam referência <code>wlc-{empresa}-…</code></li>
                     </ol>
-                    <label>Ambiente PagSeguro
-                        <select name="pagseguro_env">
-                            <option value="sandbox" <?= pagseguro_env() === 'sandbox' ? 'selected' : '' ?>>Sandbox</option>
-                            <option value="production" <?= pagseguro_env() === 'production' ? 'selected' : '' ?>>Produção</option>
-                        </select>
-                    </label>
-                    <label>Token da API
-                        <input name="pagseguro_token" type="password" autocomplete="off" placeholder="<?= pagseguro_configured() ? h(pagseguro_mask_token()) : 'Cole o token' ?>">
-                    </label>
-                    <p class="hint"><?= pagseguro_configured() ? 'Token salvo (' . h(pagseguro_mask_token()) . ').' : 'O token não aparece inteiro depois de salvar.' ?></p>
+                    <div class="form form-grid-2" style="margin-top:0">
+                        <label>Ambiente
+                            <select name="pagseguro_env">
+                                <option value="sandbox" <?= pagseguro_env() === 'sandbox' ? 'selected' : '' ?>>Sandbox</option>
+                                <option value="production" <?= pagseguro_env() === 'production' ? 'selected' : '' ?>>Produção</option>
+                            </select>
+                        </label>
+                        <label>Token da API
+                            <input name="pagseguro_token" type="password" autocomplete="off" placeholder="<?= $pagseguroOk ? h(pagseguro_mask_token()) : 'Cole o token' ?>">
+                        </label>
+                    </div>
+                    <p class="hint"><?= $pagseguroOk ? 'Token salvo (' . h(pagseguro_mask_token()) . ').' : 'O token não aparece inteiro depois de salvar.' ?></p>
+                </section>
 
-                    <h3 style="margin-top:24px">PicPay E-commerce</h3>
+                <section class="card admin-pay-provider-card<?= $payProvider === 'picpay' ? ' is-active' : '' ?>">
+                    <header class="admin-pay-provider-head">
+                        <div>
+                            <h2>PicPay E-commerce</h2>
+                            <p class="hint">Carteira E-commerce com client_id, secret e seller token.</p>
+                        </div>
+                        <span class="badge <?= $picpayOk ? 'badge-ok' : 'badge-muted' ?>"><?= $picpayOk ? 'Configurado' : 'Pendente' ?></span>
+                    </header>
                     <ol class="steps">
                         <li>Ative Carteira E-commerce no painel PicPay e gere credenciais.</li>
-                        <li>Webhook (callback): <code><?= h(picpay_webhook_url()) ?></code></li>
+                        <li>Webhook (callback): <code class="admin-code-break"><?= h(picpay_webhook_url()) ?></code></li>
                         <li>Use o mesmo <code>x-seller-token</code> no campo abaixo.</li>
                     </ol>
-                    <label>Ambiente PicPay
-                        <select name="picpay_env">
-                            <option value="sandbox" <?= picpay_env() === 'sandbox' ? 'selected' : '' ?>>Sandbox</option>
-                            <option value="production" <?= picpay_env() === 'production' ? 'selected' : '' ?>>Produção</option>
-                        </select>
-                    </label>
-                    <label>Client ID
-                        <input name="picpay_client_id" value="<?= h(picpay_client_id()) ?>" autocomplete="off">
-                    </label>
-                    <label>Client secret
-                        <input name="picpay_client_secret" type="password" autocomplete="off" placeholder="<?= picpay_client_secret() !== '' ? h(picpay_mask_secret(picpay_client_secret())) : 'Cole o secret' ?>">
-                    </label>
-                    <label>x-seller-token (webhook)
-                        <input name="picpay_seller_token" type="password" autocomplete="off" placeholder="<?= picpay_seller_token() !== '' ? h(picpay_mask_secret(picpay_seller_token())) : 'Token do callback' ?>">
-                    </label>
+                    <div class="form" style="margin-top:0">
+                        <label>Ambiente
+                            <select name="picpay_env">
+                                <option value="sandbox" <?= picpay_env() === 'sandbox' ? 'selected' : '' ?>>Sandbox</option>
+                                <option value="production" <?= picpay_env() === 'production' ? 'selected' : '' ?>>Produção</option>
+                            </select>
+                        </label>
+                        <div class="form-grid-2">
+                            <label>Client ID
+                                <input name="picpay_client_id" value="<?= h(picpay_client_id()) ?>" autocomplete="off">
+                            </label>
+                            <label>Client secret
+                                <input name="picpay_client_secret" type="password" autocomplete="off" placeholder="<?= picpay_client_secret() !== '' ? h(picpay_mask_secret(picpay_client_secret())) : 'Cole o secret' ?>">
+                            </label>
+                        </div>
+                        <label>x-seller-token (webhook)
+                            <input name="picpay_seller_token" type="password" autocomplete="off" placeholder="<?= picpay_seller_token() !== '' ? h(picpay_mask_secret(picpay_seller_token())) : 'Token do callback' ?>">
+                        </label>
+                    </div>
+                </section>
+
+                <div class="form-actions">
                     <button class="btn" type="submit">Salvar integração</button>
-                </form>
-                <?php if (payment_configured()): ?>
-                    <p class="hint">Webhook: <code><?= h(payment_webhook_url()) ?></code></p>
-                    <p class="hint">Operações de cobrança (cron, teste, gerar links) ficam em <a href="/super/financeiro/cobrancas">Financeiro → Cobranças</a>.</p>
-                <?php endif; ?>
-            </section>
+                </div>
+            </form>
             <?php else: ?>
             <section class="card card-narrow">
                 <h2>Políticas SaaS</h2>
