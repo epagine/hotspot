@@ -33,7 +33,9 @@ $pageTitle = match ($tab) {
     default => 'Dashboard',
 };
 $setupFile = installer_setup_path();
-$setupReady = $setupFile !== null && is_file($setupFile);
+$setupReady = $setupFile !== null;
+$agentSetupFile = installer_named_path('WiFiDaLoja-Agent-Setup.exe');
+$fullSetupFile = installer_named_path('WiFiDaLoja-Setup.exe');
 ?><!doctype html>
 <html lang="pt-BR">
 <head>
@@ -280,21 +282,41 @@ $superNavItems = [
 
         <?php elseif ($tab === 'instalador'): ?>
             <section class="card card-narrow">
-                <?php if ($setupReady): ?>
+                <h2>Agente cloud (recomendado)</h2>
+                <p class="hint">Pacote leve para produção SaaS — sem PHP/MySQL local. Gere com <code>installer\Empacotar-Cloud.ps1</code>.</p>
+                <?php if ($agentSetupFile): ?>
                     <div class="actions row">
-                        <a class="btn" href="/super/instalador/baixar">Baixar WiFiDaLoja-Setup.exe</a>
+                        <a class="btn" href="/super/instalador/baixar">Baixar WiFiDaLoja-Agent-Setup.exe</a>
                     </div>
-                    <p class="hint"><?= h(basename($setupFile)) ?> · <?= h((string) round((int) filesize($setupFile) / 1048576, 1)) ?> MB</p>
+                    <p class="hint"><?= h(basename($agentSetupFile)) ?> · <?= h((string) round((int) filesize($agentSetupFile) / 1048576, 1)) ?> MB</p>
                 <?php else: ?>
-                    <p class="hint">Ainda não há arquivo publicado. Envie o .exe gerado com <code>installer\Empacotar.ps1</code>.</p>
+                    <p class="hint">Ainda não publicado.</p>
                 <?php endif; ?>
-                <form method="post" action="/super/instalador" class="form" enctype="multipart/form-data">
+
+                <h2 style="margin-top:24px">Instalador completo (dev/Laragon)</h2>
+                <p class="hint">Inclui PHP embarcado e painel local. Gere com <code>installer\Empacotar.ps1</code>.</p>
+                <?php if ($fullSetupFile): ?>
+                    <div class="actions row">
+                        <a class="btn ghost" href="/super/instalador/baixar?kind=full">Baixar WiFiDaLoja-Setup.exe</a>
+                    </div>
+                    <p class="hint"><?= h(basename($fullSetupFile)) ?> · <?= h((string) round((int) filesize($fullSetupFile) / 1048576, 1)) ?> MB</p>
+                <?php else: ?>
+                    <p class="hint">Opcional — não publicado.</p>
+                <?php endif; ?>
+
+                <form method="post" action="/super/instalador" class="form" enctype="multipart/form-data" style="margin-top:20px">
                     <?= csrf_field() ?>
                     <input type="hidden" name="return_to" value="/super/instalador">
+                    <label>Tipo
+                        <select name="setup_kind">
+                            <option value="agent">Agente cloud (WiFiDaLoja-Agent-Setup.exe)</option>
+                            <option value="full">Completo (WiFiDaLoja-Setup.exe)</option>
+                        </select>
+                    </label>
                     <label>Publicar .exe
                         <input name="setup" type="file" accept=".exe,application/vnd.microsoft-portable-executable" required>
                     </label>
-                    <button class="btn <?= $setupReady ? 'ghost' : '' ?>" type="submit"><?= $setupReady ? 'Substituir arquivo' : 'Enviar arquivo' ?></button>
+                    <button class="btn ghost" type="submit">Enviar arquivo</button>
                 </form>
                 <p class="hint">URL do painel: <code><?= h(guess_panel_url()) ?></code></p>
             </section>

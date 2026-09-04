@@ -21,4 +21,6 @@ if ($LASTEXITCODE -ne 0) {
         throw "Falha ao gerar HotspotBandeja.exe"
     }
 }
-Write-Host "Gerados: Instalar-Hotspot.exe, Desinstalar-Hotspot.exe e HotspotBandeja.exe"
+& $csc /nologo /target:exe /optimize+ /out:"$root\DnsProxy.exe" "$src\DnsProxy.cs"
+if ($LASTEXITCODE -ne 0) { throw "Falha ao gerar DnsProxy.exe" }
+Write-Host "Gerados: Instalar-Hotspot.exe, Desinstalar-Hotspot.exe, HotspotBandeja.exe e DnsProxy.exe"

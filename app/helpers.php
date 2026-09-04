@@ -776,30 +776,55 @@ function installer_downloads_dir(): string
     return $dir;
 }
 
-function installer_setup_path(): ?string
+function installer_setup_path(?string $variant = null): ?string
 {
-    $name = 'WiFiDaLoja-Setup.exe';
+    $names = match ($variant) {
+        'full' => ['WiFiDaLoja-Setup.exe', 'WiFiDaLoja-Agent-Setup.exe'],
+        default => ['WiFiDaLoja-Agent-Setup.exe', 'WiFiDaLoja-Setup.exe'],
+    };
+    $root = dirname(__DIR__);
+    foreach ($names as $name) {
+        foreach ([
+            installer_downloads_dir() . DIRECTORY_SEPARATOR . $name,
+            $root . DIRECTORY_SEPARATOR . $name,
+            $root . DIRECTORY_SEPARATOR . 'dist' . DIRECTORY_SEPARATOR . $name,
+            $root . DIRECTORY_SEPARATOR . 'dist-cloud' . DIRECTORY_SEPARATOR . $name,
+        ] as $path) {
+            if (is_file($path) && filesize($path) > 100000) {
+                return $path;
+            }
+        }
+    }
+
+    return null;
+}
+
+function installer_named_path(string $filename): ?string
+{
     $root = dirname(__DIR__);
     foreach ([
-        installer_downloads_dir() . DIRECTORY_SEPARATOR . $name,
-        $root . DIRECTORY_SEPARATOR . $name,
-        $root . DIRECTORY_SEPARATOR . 'dist' . DIRECTORY_SEPARATOR . $name,
+        installer_downloads_dir() . DIRECTORY_SEPARATOR . $filename,
+        $root . DIRECTORY_SEPARATOR . $filename,
+        $root . DIRECTORY_SEPARATOR . 'dist' . DIRECTORY_SEPARATOR . $filename,
+        $root . DIRECTORY_SEPARATOR . 'dist-cloud' . DIRECTORY_SEPARATOR . $filename,
     ] as $path) {
         if (is_file($path) && filesize($path) > 100000) {
             return $path;
         }
     }
+
     return null;
 }
 
-function stream_installer_setup(): bool
+function stream_installer_setup(?string $variant = null): bool
 {
-    $path = installer_setup_path();
+    $path = installer_setup_path($variant);
     if ($path === null) {
         return false;
     }
+    $filename = basename($path);
     header('Content-Type: application/octet-stream');
-    header('Content-Disposition: attachment; filename="WiFiDaLoja-Setup.exe"');
+    header('Content-Disposition: attachment; filename="' . $filename . '"');
     header('Content-Length: ' . (string) filesize($path));
     header('X-Content-Type-Options: nosniff');
     header('Cache-Control: private, no-store');

@@ -113,10 +113,14 @@ Aba `/app?tab=relatorios` (feature `reports`):
 
 ## Instalador Windows
 
-- Gerar: `powershell -ExecutionPolicy Bypass -File installer\Empacotar.ps1`
-- Saída: `dist/WiFiDaLoja-Setup.exe` (cópia em `storage/downloads/` para download pelo Super Admin e `/app/instalador/baixar`)
-- Inclui PHP embarcado, agente, bandeja e sync com painel SaaS
-- **Modo nuvem:** URL + token remotos → agente sincroniza com `/agente/sincronizar`; portal cativo em `/portal/{token}`; MySQL local e painel `:8080` não são iniciados
+| Pacote | Comando | Uso |
+|--------|---------|-----|
+| **Agente cloud** | `installer\Empacotar-Cloud.ps1` | Produção SaaS (~40 KB) — bandeja, hotspot, `DnsProxy.exe`, sync |
+| **Completo** | `installer\Empacotar.ps1` | Dev/Laragon (~40 MB) — PHP embarcado + painel local |
+
+Saídas: `WiFiDaLoja-Agent-Setup.exe`, `WiFiDaLoja-Setup.exe` (cópia em `storage/downloads/`).
+
+Modo cloud: sem PHP/MySQL local; DNS cativo via `DnsProxy.exe`; portal em `/portal/{token}`.
 
 ## Migração de lojas legadas
 

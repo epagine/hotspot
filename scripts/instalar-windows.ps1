@@ -1,6 +1,7 @@
 param(
     [string]$PanelUrl = "",
-    [string]$Token = ""
+    [string]$Token = "",
+    [switch]$Cloud
 )
 # Instalador do agente Wi-Fi da Loja (administrador).
 $ErrorActionPreference = "Stop"
@@ -79,37 +80,20 @@ function New-AppShortcut {
     $lnk.Save()
 }
 
-if (-not (Test-Admin)) {
-    Write-Host "Este instalador precisa ser executado como administrador."
-    exit 1
-}
-
-if (-not (Test-Path (Join-Path $Root "index.php"))) {
-    Write-Host "Pasta invalida: nao achei index.php em $Root"
-    exit 1
-}
-
-if (-not (Test-Path $Storage)) {
-    New-Item -ItemType Directory -Path $Storage | Out-Null
-}
-
-Write-Log "Instalando em $Root"
-
-$php = Find-Php
-if (-not $php) {
-    Write-Log "PHP nao encontrado. Instale o Laragon ou coloque o php.exe no PATH."
-    exit 1
-}
-Set-Content -Path (Join-Path $Storage "php-path.txt") -Value $php -Encoding ASCII
-Write-Log "PHP: $php"
-
-if ($PanelUrl -and $Token) {
-    $cloud = @{ panel_url = $PanelUrl.TrimEnd("/"); token = $Token; updated_at = (Get-Date).ToString("s") } | ConvertTo-Json
-    Set-Content -Path (Join-Path $Storage "cloud.json") -Value $cloud -Encoding UTF8
-    Write-Log "Hotspot vinculado ao painel $PanelUrl"
+function Test-CloudAgentInstall {
+    if (Test-Path (Join-Path $Root "CLOUD_AGENT")) { return $true }
+    $modeFile = Join-Path $Storage "install-mode.json"
+    if (Test-Path $modeFile) {
+        try {
+            $raw = Get-Content $modeFile -Raw -ErrorAction SilentlyContinue
+            if ($raw -match '"mode"\s*:\s*"cloud"') { return $true }
+        } catch {}
+    }
+    return $false
 }
 
 function Test-RemoteCloudInstall {
+    param([string]$PanelUrl = "", [string]$Token = "")
     if ($PanelUrl -and $Token) { return $true }
     $cloudPath = Join-Path $Storage "cloud.json"
     if (-not (Test-Path $cloudPath)) { return $false }
@@ -122,7 +106,53 @@ function Test-RemoteCloudInstall {
     }
 }
 
-$isRemoteCloud = Test-RemoteCloudInstall
+if (-not (Test-Admin)) {
+    Write-Host "Este instalador precisa ser executado como administrador."
+    exit 1
+}
+
+$isCloudAgent = $Cloud -or (Test-CloudAgentInstall)
+
+if (-not $isCloudAgent -and -not (Test-Path (Join-Path $Root "index.php"))) {
+    Write-Host "Pasta invalida: nao achei index.php em $Root"
+    exit 1
+}
+if ($isCloudAgent -and -not (Test-Path (Join-Path $Scripts "agente-hotspot.ps1"))) {
+    Write-Host "Pacote cloud invalido: falta scripts\agente-hotspot.ps1"
+    exit 1
+}
+if ($isCloudAgent -and -not (Test-Path (Join-Path $Root "DnsProxy.exe"))) {
+    Write-Host "Pacote cloud invalido: falta DnsProxy.exe"
+    exit 1
+}
+
+if (-not (Test-Path $Storage)) {
+    New-Item -ItemType Directory -Path $Storage | Out-Null
+}
+
+Write-Log "Instalando em $Root$(if ($isCloudAgent) { ' (modo cloud)' } else { '' })"
+
+$php = $null
+if (-not $isCloudAgent) {
+    $php = Find-Php
+    if (-not $php) {
+        Write-Log "PHP nao encontrado. Instale o Laragon ou coloque o php.exe no PATH."
+        exit 1
+    }
+    Set-Content -Path (Join-Path $Storage "php-path.txt") -Value $php -Encoding ASCII
+    Write-Log "PHP: $php"
+} else {
+    Set-Content -Path (Join-Path $Storage "install-mode.json") -Value '{"mode":"cloud"}' -Encoding UTF8
+    Write-Log "Modo cloud: sem PHP/MySQL local."
+}
+
+if ($PanelUrl -and $Token) {
+    $cloud = @{ panel_url = $PanelUrl.TrimEnd("/"); token = $Token; updated_at = (Get-Date).ToString("s") } | ConvertTo-Json
+    Set-Content -Path (Join-Path $Storage "cloud.json") -Value $cloud -Encoding UTF8
+    Write-Log "Hotspot vinculado ao painel $PanelUrl"
+}
+
+$isRemoteCloud = (Test-RemoteCloudInstall -PanelUrl $PanelUrl -Token $Token) -or $isCloudAgent
 
 $oldPidPath = Join-Path $Storage "agent.pid"
 if (Test-Path $oldPidPath) {
@@ -146,9 +176,11 @@ Write-Log "Tarefas agendadas registradas"
 foreach ($rule in @("HotspotLoja-Painel-8080", "HotspotLoja-DNS-53")) {
     Get-NetFirewallRule -DisplayName $rule -ErrorAction SilentlyContinue | Remove-NetFirewallRule -ErrorAction SilentlyContinue
 }
-New-NetFirewallRule -DisplayName "HotspotLoja-Painel-8080" -Direction Inbound -Protocol TCP -LocalPort 8080 -Action Allow -Profile Any | Out-Null
+if (-not $isCloudAgent) {
+    New-NetFirewallRule -DisplayName "HotspotLoja-Painel-8080" -Direction Inbound -Protocol TCP -LocalPort 8080 -Action Allow -Profile Any | Out-Null
+}
 New-NetFirewallRule -DisplayName "HotspotLoja-DNS-53" -Direction Inbound -Protocol UDP -LocalPort 53 -Action Allow -Profile Any | Out-Null
-Write-Log "Regras de firewall (8080 TCP, 53 UDP)"
+Write-Log $(if ($isCloudAgent) { "Regra de firewall (53 UDP)" } else { "Regras de firewall (8080 TCP, 53 UDP)" })
 
 $desktop = [Environment]::GetFolderPath("Desktop")
 $programs = Join-Path ([Environment]::GetFolderPath("StartMenu")) "Programs\Wi-Fi da loja"

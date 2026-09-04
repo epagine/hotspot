@@ -7,7 +7,8 @@ $CmdFile = Join-Path $Storage "command.json"
 $StatusFile = Join-Path $Storage "status.json"
 $PidFile = Join-Path $Storage "agent.pid"
 $SyncErrorFile = Join-Path $Storage "sync-error.json"
-$DnsProxy = Join-Path $Root "bin\dns-proxy.php"
+$DnsProxy = Join-Path $Root "DnsProxy.exe"
+$DnsProxyPhp = Join-Path $Root "bin\dns-proxy.php"
 $MaxClients = 8
 $script:ServiceAllowed = $true
 
@@ -154,11 +155,29 @@ function Get-WifiConfig {
     return @{ Ssid = $ssid; Pass = $pass }
 }
 
+function Test-CloudAgent {
+    if (Test-Path (Join-Path $Root "CLOUD_AGENT")) { return $true }
+    $modeFile = Join-Path $Storage "install-mode.json"
+    if (Test-Path $modeFile) {
+        try {
+            $raw = Get-Content $modeFile -Raw -ErrorAction SilentlyContinue
+            if ($raw -match '"mode"\s*:\s*"cloud"') { return $true }
+        } catch {}
+    }
+    return $false
+}
+
 function Start-DnsProxy {
     if ($script:DnsProc -and -not $script:DnsProc.HasExited) { return }
+    if (Test-Path $DnsProxy) {
+        $script:DnsProc = Start-Process -FilePath $DnsProxy -WorkingDirectory $Root -WindowStyle Hidden -PassThru
+        return
+    }
     $php = Get-PhpExe
-    if (-not $php) { throw "PHP nao encontrado no PATH nem no Laragon." }
-    $script:DnsProc = Start-Process -FilePath $php -ArgumentList @($DnsProxy) -WindowStyle Hidden -PassThru
+    if (-not $php -or -not (Test-Path $DnsProxyPhp)) {
+        throw "DNS cativo indisponivel (DnsProxy.exe ou PHP)."
+    }
+    $script:DnsProc = Start-Process -FilePath $php -ArgumentList @($DnsProxyPhp) -WindowStyle Hidden -PassThru
 }
 
 function Stop-DnsProxy {
@@ -166,8 +185,11 @@ function Stop-DnsProxy {
         Stop-Process -Id $script:DnsProc.Id -Force -ErrorAction SilentlyContinue
     }
     $script:DnsProc = $null
-    Get-CimInstance Win32_Process -Filter "Name='php.exe'" -ErrorAction SilentlyContinue |
-        Where-Object { $_.CommandLine -and $_.CommandLine -like "*dns-proxy.php*" } |
+    Get-CimInstance Win32_Process -ErrorAction SilentlyContinue |
+        Where-Object {
+            ($_.Name -eq "DnsProxy.exe") -or
+            ($_.Name -eq "php.exe" -and $_.CommandLine -and $_.CommandLine -like "*dns-proxy.php*")
+        } |
         ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
 }
 
@@ -337,6 +359,7 @@ function Get-CloudCfg {
 }
 
 function Ensure-LocalDb {
+    if (Test-CloudAgent) { return }
     if (Test-RemoteCloud) { return }
     $cfgPhp = Join-Path $Root "app\config.php"
     if (Test-Path $cfgPhp) { return }
@@ -378,7 +401,7 @@ function Sync-Cloud {
     $patchPath = Join-Path $Storage "client-patches.json"
     $clientScript = Join-Path $Root "scripts\agent-clients.php"
     $localCfg = Join-Path $Root "app\config.php"
-    if ($php -and (Test-Path $clientScript) -and (Test-Path $localCfg)) {
+    if ($php -and (Test-Path $clientScript) -and (Test-Path $localCfg) -and -not (Test-CloudAgent)) {
         try {
             $arg = if (Test-Path $patchPath) { $patchPath } else { "" }
             $raw = & $php $clientScript $arg 2>$null

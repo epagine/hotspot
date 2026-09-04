@@ -17,5 +17,7 @@ storage/panel.pid
 storage/migrations.lock
 storage/logs/
 dist/
+dist-cloud/
 runtime/
 WiFiDaLoja-Setup.exe
+WiFiDaLoja-Agent-Setup.exe

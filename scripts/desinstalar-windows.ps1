@@ -30,8 +30,11 @@ foreach ($pidFile in @("agent.pid", "panel.pid")) {
     }
 }
 
-Get-CimInstance Win32_Process -Filter "Name='php.exe'" -ErrorAction SilentlyContinue |
-    Where-Object { $_.CommandLine -and ($_.CommandLine -like "*dns-proxy.php*" -or $_.CommandLine -like "*0.0.0.0:8080*") } |
+Get-CimInstance Win32_Process -ErrorAction SilentlyContinue |
+    Where-Object {
+        ($_.Name -eq "DnsProxy.exe") -or
+        ($_.Name -eq "php.exe" -and $_.CommandLine -and ($_.CommandLine -like "*dns-proxy.php*" -or $_.CommandLine -like "*0.0.0.0:8080*"))
+    } |
     ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
 
 foreach ($rule in @("HotspotLoja-Painel-8080", "HotspotLoja-DNS-53")) {

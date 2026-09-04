@@ -116,15 +116,17 @@ Alternativa: `.env` com `DB_DRIVER=mysql` **ou** edite `app/config.php` após o 
 
 Requisitos: administrador, adaptador Wi-Fi, internet (preferência Ethernet), [VC++ Redistributable x64](https://learn.microsoft.com/pt-br/cpp/windows/latest-supported-vc-redist) se necessário.
 
-### Instalação
+### Instalação (produção — agente cloud)
 
-1. No painel da empresa, crie o hotspot em **Hotspots** e copie o **token** (`/app/hotspots/{id}`).
-2. Baixe o instalador em **Agente Windows** no menu ou em **Super → Instalador** (publique o `.exe` antes).
-3. Execute **`WiFiDaLoja-Setup.exe`** como administrador.
-4. Informe **URL do painel** (`https://seudominio.com`) e **token** do hotspot.
-5. Ícone na bandeja: status da assinatura, links do painel, ligar/desligar rede.
+1. Gere o agente: `powershell -ExecutionPolicy Bypass -File installer\Empacotar-Cloud.ps1`
+2. Publique `WiFiDaLoja-Agent-Setup.exe` em **Super → Instalador** (ou baixe pelo painel da empresa).
+3. No painel, crie o hotspot e copie URL + token.
+4. Execute o setup como administrador — **sem PHP/MySQL local**; portal em `/portal/{token}` na nuvem.
 
-Arquivo local: `storage\cloud.json` (URL + token). Em modo nuvem o PHP local **não** sobe na porta 8080 — o portal cativo fica em `/portal/{token}` no painel central.
+### Instalação completa (dev/Laragon)
+
+1. `powershell -ExecutionPolicy Bypass -File installer\Empacotar.ps1` — inclui PHP embarcado.
+2. Execute **`WiFiDaLoja-Setup.exe`** para ambiente local com painel `:8080`.
 
 ### Portal
 

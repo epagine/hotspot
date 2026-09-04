@@ -251,7 +251,7 @@ function app_nav_tw(string $tab, array $items): void
             <section class="card card-narrow">
                 <h2>Instalar no PC Windows</h2>
                 <ol class="steps">
-                    <li>Baixe e execute o instalador como administrador<?php if ($setupFile): ?> — <a href="/app/instalador/baixar">Baixar agente Windows</a><?php endif; ?></li>
+                    <li>Baixe e execute o instalador como administrador — <a href="/app/instalador/baixar">Baixar agente Windows</a> (pacote cloud, ~1–3 MB)</li>
                     <li>Informe a URL do painel: <code class="admin-code-break"><?= h($panelUrl) ?></code></li>
                     <li>Cole o token do agente abaixo na instalação ou em <em>Vincular hotspot</em> na bandeja</li>
                     <li>Aguarde o ícone na bandeja ficar sincronizado (status verde)</li>
