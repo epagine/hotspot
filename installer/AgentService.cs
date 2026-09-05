@@ -378,8 +378,11 @@ internal sealed class AgentEngine
         }
         _adapters.PrepareAdapters(_config, wifiCards, _log);
         _state.SetStarting();
-        _hotspot.ApplyConfiguration(_config, _maxClients, applyOnly, _log);
-        if (!applyOnly)
+        if (applyOnly)
+        {
+            _hotspot.ApplyConfiguration(_config, _maxClients, true, _log);
+        }
+        else
         {
             _hotspot.StartHotspot(_config, _maxClients, _log);
             _supervisor.StartDns();
@@ -1143,8 +1146,10 @@ internal static class NetShHelper
 
 internal sealed class HotspotController
 {
-    private object _manager;
     private string _activeGuid;
+    private string _lastSsid;
+    private bool _lastOn;
+    private DateTime _statusCacheAt = DateTime.MinValue;
     public bool ManualHotspotRequired { get; private set; }
     public int ClientCount { get; private set; }
 
@@ -1155,87 +1160,74 @@ internal sealed class HotspotController
 
     public string CurrentSsid(AgentRuntimeConfig config)
     {
-        try
-        {
-            if (_manager != null)
-            {
-                object cfg = _manager.GetType().InvokeMember("GetCurrentAccessPointConfiguration", BindingFlags.InvokeMethod, null, _manager, null);
-                if (cfg != null)
-                {
-                    return Convert.ToString(cfg.GetType().GetProperty("Ssid").GetValue(cfg, null));
-                }
-            }
-        }
-        catch
-        {
-        }
-        return config.Ssid;
+        RefreshStatusCache(config, false);
+        return string.IsNullOrEmpty(_lastSsid) ? config.Ssid : _lastSsid;
     }
 
     public bool IsOperational()
     {
-        try
+        // Avoid spawning PowerShell on every heartbeat while a command runs.
+        if ((DateTime.Now - _statusCacheAt).TotalSeconds < 8)
         {
-            if (_manager == null)
-            {
-                return false;
-            }
-            object state = _manager.GetType().GetProperty("TetheringOperationalState").GetValue(_manager, null);
-            return Convert.ToInt32(state) == 1;
+            return _lastOn;
         }
-        catch
-        {
-            return false;
-        }
+        RefreshStatusCache(null, false);
+        return _lastOn;
     }
 
     public void ApplyConfiguration(AgentRuntimeConfig config, int maxClients, bool applyOnly, AgentLog log)
     {
-        EnsureManager(config, log);
-        object apCfg = _manager.GetType().InvokeMember("GetCurrentAccessPointConfiguration", BindingFlags.InvokeMethod, null, _manager, null);
-        apCfg.GetType().GetProperty("Ssid").SetValue(apCfg, config.Ssid, null);
-        apCfg.GetType().GetProperty("Passphrase").SetValue(apCfg, config.WifiPass, null);
-        try
+        _activeGuid = config.WifiAdapterGuid ?? "";
+        var result = HotspotPsBridge.Run("apply", config, maxClients, log);
+        if (!result.Ok)
         {
-            apCfg.GetType().GetProperty("MaxClientCount").SetValue(apCfg, (uint)maxClients, null);
+            ThrowFriendly(result.Error);
         }
-        catch
-        {
-        }
-        object op = _manager.GetType().InvokeMember("ConfigureAccessPointAsync", BindingFlags.InvokeMethod, null, _manager, new object[] { apCfg });
-        WinRtHelper.WaitAction(op, log);
-        if (applyOnly)
-        {
-            return;
-        }
+        _lastSsid = config.Ssid;
+        _statusCacheAt = DateTime.MinValue;
     }
 
     public void StartHotspot(AgentRuntimeConfig config, int maxClients, AgentLog log)
     {
-        EnsureManager(config, log);
-        if (IsOperational())
+        _activeGuid = config.WifiAdapterGuid ?? "";
+        log.Info("Iniciando hotspot via WinRT/PowerShell...");
+        var result = HotspotPsBridge.Run("start", config, maxClients, log);
+        _statusCacheAt = DateTime.MinValue;
+        if (!result.Ok)
         {
-            return;
+            if ((result.Error ?? "").IndexOf("Ponto de acesso movel", StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                ManualHotspotRequired = true;
+            }
+            ThrowFriendly(result.Error);
         }
-        ApplyConfiguration(config, maxClients, false, log);
-        StartTetheringSafe(log);
+        ManualHotspotRequired = false;
+        _lastOn = result.HotspotOn;
+        _lastSsid = string.IsNullOrEmpty(result.Ssid) ? config.Ssid : result.Ssid;
+        if (!_lastOn)
+        {
+            throw new InvalidOperationException("Hotspot nao ficou operacional. Abra Configuracoes > Rede > Ponto de acesso movel e ligue uma vez manualmente.");
+        }
+        log.Info("Hotspot ligado (" + _lastSsid + ")");
     }
 
     public void StopHotspot(ProcessSupervisor supervisor, AgentLog log)
     {
         try
         {
-            if (_manager != null && IsOperational())
+            var cfg = AgentConfigStore.Load();
+            var result = HotspotPsBridge.Run("stop", cfg, 8, log);
+            if (!result.Ok)
             {
-                object op = _manager.GetType().InvokeMember("StopTetheringAsync", BindingFlags.InvokeMethod, null, _manager, null);
-                WinRtHelper.WaitOperation(op, log);
+                log.Warn("Stop hotspot: " + result.Error);
             }
+            _lastOn = false;
+            _statusCacheAt = DateTime.MinValue;
         }
         catch (Exception ex)
         {
             log.Warn("Stop hotspot: " + ex.Message);
         }
-        _manager = null;
         _activeGuid = null;
         supervisor.StopAll();
     }
@@ -1261,7 +1253,6 @@ internal sealed class HotspotController
         catch
         {
         }
-        _manager = null;
     }
 
     public string GetHotspotIp()
@@ -1298,101 +1289,148 @@ internal sealed class HotspotController
 
     public List<Dictionary<string, object>> GetTetheringClientsFast()
     {
-        var list = new List<Dictionary<string, object>>();
-        try
-        {
-            if (_manager == null)
-            {
-                return list;
-            }
-            object op = _manager.GetType().InvokeMember("GetTetheringClientsAsync", BindingFlags.InvokeMethod, null, _manager, null);
-            object clients = WinRtHelper.WaitOperation(op, null, 3000);
-            ClientCount = 0;
-            var arr = clients as Array;
-            if (arr != null)
-            {
-                ClientCount = arr.Length;
-                foreach (var c in arr)
-                {
-                    string mac = Convert.ToString(c.GetType().GetProperty("MacAddress").GetValue(c, null));
-                    var d = new Dictionary<string, object>();
-                    d["mac"] = mac;
-                    list.Add(d);
-                }
-            }
-        }
-        catch
-        {
-        }
-        return list;
+        return new List<Dictionary<string, object>>();
     }
 
-    private void EnsureManager(AgentRuntimeConfig config, AgentLog log)
+    private void RefreshStatusCache(AgentRuntimeConfig config, bool force)
     {
-        if (_manager != null)
+        if (!force && (DateTime.Now - _statusCacheAt).TotalSeconds < 3)
         {
             return;
         }
-        var catalog = new AdapterCatalog();
-        var adapters = catalog.ListWifiAdapters();
-        var selected = catalog.ResolveHotspotAdapter(config, adapters);
-        if (selected == null)
+        try
         {
-            throw new InvalidOperationException("Nenhum adaptador Wi-Fi disponivel para hotspot.");
+            var cfg = config ?? AgentConfigStore.Load();
+            var result = HotspotPsBridge.Run("status", cfg, 8, null);
+            if (result.Ok)
+            {
+                _lastOn = result.HotspotOn;
+                if (!string.IsNullOrEmpty(result.Ssid))
+                {
+                    _lastSsid = result.Ssid;
+                }
+                ClientCount = result.Clients;
+            }
+            _statusCacheAt = DateTime.Now;
         }
-        _activeGuid = selected.Guid;
-        object internetProfile = WinRtHelper.GetInternetConnectionProfile(log);
-        object wifiAdapter = selected.WinRtAdapter ?? WinRtHelper.FindNetworkAdapterByGuid(selected.Guid, log);
-        if (internetProfile == null)
+        catch
         {
-            throw new InvalidOperationException("Nao foi possivel detectar a conexao de internet (Ethernet/Wi-Fi).");
-        }
-        if (wifiAdapter == null)
-        {
-            _manager = WinRtHelper.CreateTetheringManager(internetProfile, log);
-        }
-        else
-        {
-            _manager = WinRtHelper.CreateTetheringManager(internetProfile, wifiAdapter, log);
-        }
-        if (_manager == null)
-        {
-            throw new InvalidOperationException("Windows nao permitiu criar o hotspot neste adaptador.");
+            _statusCacheAt = DateTime.Now;
         }
     }
 
-    private void StartTetheringSafe(AgentLog log)
+    private static void ThrowFriendly(string error)
     {
-        bool retriedIcs = false;
-        for (int attempt = 1; attempt <= 3; attempt++)
+        string msg = error ?? "Falha ao controlar o hotspot.";
+        if (msg.IndexOf("IDispatch", StringComparison.OrdinalIgnoreCase) >= 0)
         {
-            object op = _manager.GetType().InvokeMember("StartTetheringAsync", BindingFlags.InvokeMethod, null, _manager, null);
-            object result = WinRtHelper.WaitOperation(op, log);
-            int code = WinRtHelper.ReadTetheringStatus(result);
-            if (code == 0 || code == 9)
-            {
-                ManualHotspotRequired = false;
-                return;
-            }
-            if (code == 1 && !retriedIcs)
-            {
-                ManualHotspotRequired = true;
-                RestartIcs();
-                retriedIcs = true;
-                continue;
-            }
-            if (code == 6 && attempt < 3)
-            {
-                Thread.Sleep(3000);
-                continue;
-            }
-            string hint = TetheringHints.ForCode(code);
-            if (!string.IsNullOrEmpty(hint))
-            {
-                throw new InvalidOperationException(hint);
-            }
-            throw new InvalidOperationException("Codigo Windows " + code + " ao ligar hotspot.");
+            msg = "Falha ao controlar o hotspot do Windows. Reinstale o agente v2.0.5.";
         }
+        throw new InvalidOperationException(msg);
+    }
+}
+
+internal sealed class HotspotPsResult
+{
+    public bool Ok { get; set; }
+    public bool HotspotOn { get; set; }
+    public string Ssid { get; set; }
+    public string Error { get; set; }
+    public int Clients { get; set; }
+}
+
+internal static class HotspotPsBridge
+{
+    public static HotspotPsResult Run(string action, AgentRuntimeConfig config, int maxClients, AgentLog log)
+    {
+        string script = Path.Combine(AgentPaths.InstallRoot, "scripts", "hotspot-winrt.ps1");
+        if (!File.Exists(script))
+        {
+            return new HotspotPsResult { Ok = false, Error = "Script hotspot-winrt.ps1 ausente. Reinstale o agente." };
+        }
+        var args = new StringBuilder();
+        args.Append("-NoProfile -ExecutionPolicy Bypass -File \"").Append(script).Append("\"");
+        args.Append(" -Action ").Append(action);
+        args.Append(" -Ssid \"").Append(EscapePs(config.Ssid)).Append("\"");
+        args.Append(" -Pass \"").Append(EscapePs(config.WifiPass)).Append("\"");
+        args.Append(" -MaxClients ").Append(maxClients);
+        if (!string.IsNullOrWhiteSpace(config.WifiAdapterGuid))
+        {
+            args.Append(" -AdapterGuid \"").Append(EscapePs(config.WifiAdapterGuid)).Append("\"");
+        }
+        try
+        {
+            var psi = new ProcessStartInfo
+            {
+                FileName = "powershell.exe",
+                Arguments = args.ToString(),
+                WorkingDirectory = AgentPaths.InstallRoot,
+                UseShellExecute = false,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                CreateNoWindow = true
+            };
+            using (var proc = Process.Start(psi))
+            {
+                if (proc == null)
+                {
+                    return new HotspotPsResult { Ok = false, Error = "Nao foi possivel iniciar PowerShell." };
+                }
+                string stdout = proc.StandardOutput.ReadToEnd();
+                string stderr = proc.StandardError.ReadToEnd();
+                if (!proc.WaitForExit(60000))
+                {
+                    try { proc.Kill(); } catch { }
+                    return new HotspotPsResult { Ok = false, Error = "Tempo esgotado ao controlar o hotspot." };
+                }
+                string json = (stdout ?? "").Trim();
+                if (string.IsNullOrEmpty(json))
+                {
+                    return new HotspotPsResult
+                    {
+                        Ok = false,
+                        Error = string.IsNullOrWhiteSpace(stderr) ? "Sem resposta do controle WinRT." : stderr.Trim()
+                    };
+                }
+                var lines = json.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
+                json = lines[lines.Length - 1];
+                var ser = new JavaScriptSerializer();
+                var raw = ser.DeserializeObject(json) as Dictionary<string, object>;
+                if (raw == null)
+                {
+                    return new HotspotPsResult { Ok = false, Error = "Resposta invalida do hotspot: " + json };
+                }
+                var result = new HotspotPsResult();
+                result.Ok = raw.ContainsKey("ok") && Convert.ToBoolean(raw["ok"]);
+                result.HotspotOn = raw.ContainsKey("hotspot_on") && Convert.ToBoolean(raw["hotspot_on"]);
+                result.Ssid = raw.ContainsKey("ssid") ? Convert.ToString(raw["ssid"]) : "";
+                result.Error = raw.ContainsKey("error") ? Convert.ToString(raw["error"]) : "";
+                if (raw.ContainsKey("clients"))
+                {
+                    int clients = 0;
+                    int.TryParse(Convert.ToString(raw["clients"]), out clients);
+                    result.Clients = clients;
+                }
+                if (!result.Ok && string.IsNullOrEmpty(result.Error) && !string.IsNullOrWhiteSpace(stderr))
+                {
+                    result.Error = stderr.Trim();
+                }
+                if (log != null && !result.Ok)
+                {
+                    log.Error("hotspot-winrt: " + result.Error);
+                }
+                return result;
+            }
+        }
+        catch (Exception ex)
+        {
+            return new HotspotPsResult { Ok = false, Error = ex.Message };
+        }
+    }
+
+    private static string EscapePs(string value)
+    {
+        return (value ?? "").Replace("`", "``").Replace("\"", "`\"");
     }
 }
 
@@ -1403,19 +1441,15 @@ internal static class TetheringHints
         switch (code)
         {
             case 1:
-                return "Ponto de acesso movel nao iniciou. Abra Configuracoes > Rede > Ponto de acesso movel, ligue uma vez manualmente.";
-            case 2:
-                return "Modem movel desligado. Verifique Ethernet/Wi-Fi de internet.";
+                return "Ponto de acesso movel nao iniciou. Abra Configuracoes > Rede > Ponto de acesso movel e ligue uma vez manualmente.";
             case 3:
                 return "Wi-Fi desligado. Ative o adaptador Wi-Fi de transmissao.";
             case 5:
                 return "Esta conexao nao permite ponto de acesso movel.";
             case 8:
                 return "Wi-Fi ocupado. Desconecte o adaptador USB de outras redes Wi-Fi.";
-            case 10:
-                return "Restricao de radio/banda no adaptador Wi-Fi.";
             case 11:
-                return "Interferencia de banda. Use o seletor de adaptador no painel ou desconecte Wi-Fi interno.";
+                return "Interferencia de banda. Use o seletor de adaptador no painel.";
             default:
                 return code > 0 ? "Codigo Windows " + code + " ao ligar hotspot." : "";
         }
@@ -1456,7 +1490,19 @@ internal static class WinRtHelper
         }
         try
         {
-            object profiles = _infoType.InvokeMember("GetConnectionProfiles", BindingFlags.InvokeMethod, null, null, null);
+            object profiles = null;
+            try
+            {
+                MethodInfo getProfiles = _infoType.GetMethod("GetConnectionProfiles", Type.EmptyTypes);
+                if (getProfiles != null)
+                {
+                    profiles = getProfiles.Invoke(null, null);
+                }
+            }
+            catch
+            {
+                return list;
+            }
             var arr = profiles as Array;
             if (arr != null)
             {

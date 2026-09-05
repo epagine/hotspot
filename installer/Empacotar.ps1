@@ -21,7 +21,8 @@ New-Item -ItemType Directory -Path (Join-Path $Stage "scripts") | Out-Null
 $scriptFiles = @(
     "instalar-windows.ps1",
     "desinstalar-windows.ps1",
-    "agent-storage.ps1"
+    "agent-storage.ps1",
+    "hotspot-winrt.ps1"
 )
 foreach ($name in $scriptFiles) {
     Copy-Item (Join-Path (Join-Path $Root "scripts") $name) (Join-Path (Join-Path $Stage "scripts") $name) -Force
