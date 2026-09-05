@@ -244,6 +244,8 @@ function app_nav_tw(string $tab, array $items): void
                 $health = store_connection_health($hot);
                 $agentStatus = store_status_payload($hot);
                 $agentVer = agent_version_info((string) ($agentStatus['agent_version'] ?? ''));
+                $agentDiag = store_agent_diagnostic_summary($hot);
+                $agentLog = store_agent_event_log($hot);
                 $setupReady = installer_setup_path() !== null;
                 $panelUrl = rtrim(guess_panel_url(), '/');
             ?>
@@ -267,6 +269,30 @@ function app_nav_tw(string $tab, array $items): void
                         · último contato <?= h((string) $hot['last_seen_at']) ?>
                     <?php endif; ?>
                 </p>
+                <details class="agent-diag" <?= ($health['key'] !== 'ok' || !empty($agentStatus['sync_error'] ?? '') || !empty($agentStatus['error'] ?? '')) ? 'open' : '' ?>>
+                    <summary>Diagnóstico do PC<?php if ($health['key'] !== 'ok'): ?> — atenção<?php endif; ?></summary>
+                    <div class="agent-diag-grid">
+                        <?php foreach ($agentDiag as $row): ?>
+                            <div class="agent-diag-row">
+                                <span class="agent-diag-label"><?= h((string) $row['label']) ?></span>
+                                <span class="agent-diag-value<?= ($row['ok'] === false) ? ' agent-diag-bad' : (($row['ok'] === true) ? ' agent-diag-ok' : '') ?>"><?= h((string) $row['value']) ?></span>
+                            </div>
+                        <?php endforeach; ?>
+                    </div>
+                    <?php if ($agentLog): ?>
+                        <h3 class="agent-diag-log-title">Log recente do agente</h3>
+                        <ul class="agent-diag-log">
+                            <?php foreach ($agentLog as $ev): ?>
+                                <li class="agent-diag-log-<?= h((string) $ev['level']) ?>">
+                                    <?php if ($ev['at'] !== ''): ?><time><?= h(str_replace('T', ' ', $ev['at'])) ?></time><?php endif; ?>
+                                    <?= h((string) $ev['msg']) ?>
+                                </li>
+                            <?php endforeach; ?>
+                        </ul>
+                    <?php elseif (!$agentStatus['agent_alive']): ?>
+                        <p class="hint">Nenhum log recebido — o agente ainda não sincronizou com o painel ou está parado no PC.</p>
+                    <?php endif; ?>
+                </details>
                 <form method="post" action="/app/hotspots" class="form">
                     <?= csrf_field() ?>
                     <input type="hidden" name="do" value="save">
@@ -303,7 +329,20 @@ function app_nav_tw(string $tab, array $items): void
                             <legend>Portal</legend>
                             <label>Título<input name="portal_title" value="<?= h((string) ($pc['title'] ?? 'Bem-vindo')) ?>"></label>
                             <label>Descrição<textarea name="portal_subtitle" rows="3"><?= h((string) ($pc['subtitle'] ?? '')) ?></textarea></label>
-                            <label>Texto do botão<input name="portal_button" value="<?= h((string) ($pc['button_label'] ?? 'Conectar à internet')) ?>"></label>
+                            <label>Texto do botão<input name="portal_button" value="<?= h((string) ($pc['button_label'] ?? 'Continuar')) ?>"></label>
+                            <label>Modo de aprovação
+                                <select name="approval_mode">
+                                    <?php
+                                    $approval = setting_for_store((int) $hot['id'], 'approval_mode', 'instant');
+                                    foreach (['instant' => 'Automático (cliente confirma após publicar)', 'manual' => 'Manual (balcão aprova no painel)'] as $v => $l):
+                                    ?>
+                                        <option value="<?= h($v) ?>" <?= $approval === $v ? 'selected' : '' ?>><?= h($l) ?></option>
+                                    <?php endforeach; ?>
+                                </select>
+                            </label>
+                            <label>Texto do status WhatsApp<textarea name="status_template" rows="3" placeholder="Estou na {loja}! Código {codigo}"><?= h(setting_for_store((int) $hot['id'], 'status_template', 'Estou na {loja} agora! 🔥 Venha conferir. Código {codigo}')) ?></textarea></label>
+                            <p class="hint">Variáveis: {loja}, {codigo}, {cidade}</p>
+                            <label>Duração do acesso (horas)<input name="session_hours" type="number" min="1" max="24" value="<?= h(setting_for_store((int) $hot['id'], 'session_hours', '2')) ?>"></label>
                             <label>Termos<textarea name="terms_html" rows="3"><?= h((string) ($hot['terms_html'] ?? '')) ?></textarea></label>
                             <label>Privacidade<textarea name="privacy_html" rows="3"><?= h((string) ($hot['privacy_html'] ?? '')) ?></textarea></label>
                         </fieldset>
@@ -345,18 +384,29 @@ function app_nav_tw(string $tab, array $items): void
                 </form>
                 <div class="table-wrap">
                     <table class="saas-table">
-                        <thead><tr><th>Cliente</th><th>WhatsApp</th><th>Acessos</th><th>Último</th><th>Status</th></tr></thead>
+                        <thead><tr><th>Cliente</th><th>WhatsApp</th><th>Código</th><th>Acessos</th><th>Último</th><th>Status</th><th></th></tr></thead>
                         <tbody>
                         <?php foreach ($clients as $c): ?>
                             <tr>
                                 <td><strong><?= h((string) ($c['name'] ?: '—')) ?></strong></td>
                                 <td><?= h((string) ($c['phone'] ?? '')) ?></td>
+                                <td><?= h((string) ($c['status_code'] ?? '')) ?></td>
                                 <td><?= (int) ($c['access_count'] ?? 1) ?></td>
                                 <td><?= h((string) ($c['last_access_at'] ?: $c['created_at'] ?? '')) ?></td>
                                 <td><?= !empty($c['blocked']) ? 'Bloqueado' : h((string) ($c['state'] ?? '')) ?></td>
+                                <td>
+                                    <?php if (($c['state'] ?? '') === 'awaiting_approval'): ?>
+                                        <form method="post" action="/app/clientes" class="form-inline">
+                                            <?= csrf_field() ?>
+                                            <input type="hidden" name="do" value="approve">
+                                            <input type="hidden" name="client_id" value="<?= (int) $c['id'] ?>">
+                                            <button class="btn btn-sm" type="submit">Aprovar Wi-Fi</button>
+                                        </form>
+                                    <?php endif; ?>
+                                </td>
                             </tr>
                         <?php endforeach; ?>
-                        <?php if (!$clients): ?><tr class="empty"><td colspan="5">Nenhum cliente ainda.</td></tr><?php endif; ?>
+                        <?php if (!$clients): ?><tr class="empty"><td colspan="7">Nenhum cliente ainda.</td></tr><?php endif; ?>
                         </tbody>
                     </table>
                 </div>

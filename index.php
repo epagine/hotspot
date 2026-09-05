@@ -105,6 +105,7 @@ switch (true) {
             $postHandlers = [
                 'empresa'    => 'app-company-save.php',
                 'hotspots'   => 'app-hotspots-save.php',
+                'clientes'   => 'app-clients-save.php',
                 'usuarios'   => 'app-users-save.php',
                 'campanhas'  => 'app-campaigns-save.php',
                 'cupons'     => 'app-coupons-save.php',
@@ -180,9 +181,23 @@ switch (true) {
         }
         require __DIR__ . '/app/pages/super-migrate-run.php';
         break;
+    case preg_match('#^/portal/([a-fA-F0-9]+)/confirmar$#', $path, $m) === 1:
+        $GLOBALS['portal_token'] = $m[1];
+        require __DIR__ . '/app/api/confirm.php';
+        break;
+    case preg_match('#^/portal/([a-fA-F0-9]+)/arte/([A-Z0-9]+)\.png$#', $path, $m) === 1:
+        $GLOBALS['portal_token'] = $m[1];
+        $store = portal_store_from_token($m[1]);
+        if (!$store) {
+            http_response_code(404);
+            break;
+        }
+        require __DIR__ . '/app/pages/story.php';
+        render_story($m[2], (int) $store['id']);
+        break;
     case preg_match('#^/portal/([a-fA-F0-9]+)$#', $path, $m) === 1:
         $GLOBALS['portal_token'] = $m[1];
-        require __DIR__ . '/app/pages/portal-v2.php';
+        require __DIR__ . '/app/pages/portal.php';
         break;
     case preg_match('#^/api/v1(/.*)?$#', $path, $m) === 1:
         $GLOBALS['api_path'] = $m[1] ?? '';
@@ -191,13 +206,14 @@ switch (true) {
         }
         require __DIR__ . '/app/api/v1.php';
         break;
-    case $path === '/sessao':
-    case $path === '/api/session':
-        require __DIR__ . '/app/api/session.php';
-        break;
     case $path === '/confirmar':
     case $path === '/api/confirm':
-        require __DIR__ . '/app/api/confirm.php';
+        $portalUrl = local_store_portal_url();
+        if ($portalUrl !== null) {
+            header('Location: ' . $portalUrl, true, 301);
+            exit;
+        }
+        json_out(['ok' => false, 'error' => 'token'], 400);
         break;
     case $path === '/agente/sincronizar':
     case $path === '/agent/sync':
@@ -357,8 +373,6 @@ switch (true) {
                 header('Location: ' . $portalUrl);
                 exit;
             }
-            require __DIR__ . '/app/pages/portal.php';
-            break;
         }
         require __DIR__ . '/app/pages/landing.php';
         break;
@@ -373,17 +387,9 @@ switch (true) {
             header('Location: ' . $portalUrl);
             exit;
         }
-        require __DIR__ . '/app/pages/portal.php';
-        break;
+        header('Location: /');
+        exit;
     default:
-        if (!is_hotspot_lan()) {
-            header('Location: /');
-            exit;
-        }
-        $portalUrl = local_store_portal_url();
-        if ($portalUrl !== null) {
-            header('Location: ' . $portalUrl);
-            exit;
-        }
-        require __DIR__ . '/app/pages/portal.php';
+        http_response_code(404);
+        echo 'Página não encontrada.';
 }

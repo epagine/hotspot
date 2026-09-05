@@ -2,11 +2,19 @@
 
 declare(strict_types=1);
 
-function render_story(string $code): void
+function render_story(string $code, ?int $storeId = null): void
 {
+    if ($storeId !== null && $storeId > 0) {
+        $GLOBALS['force_store_id'] = $storeId;
+    }
     $code = strtoupper($code);
-    $store = setting('store_name', 'Loja');
-    $city = setting('store_city', '');
+    $sid = current_store_id();
+    $store = setting_for_store($sid, 'store_name', 'Loja');
+    $city = setting_for_store($sid, 'store_city', '');
+    if ($city === '') {
+        $row = find_store($sid);
+        $city = trim((string) ($row['city'] ?? ''));
+    }
     $w = 1080;
     $h = 1920;
     $im = imagecreatetruecolor($w, $h);

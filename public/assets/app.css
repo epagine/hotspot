@@ -2334,3 +2334,64 @@ body.page.portal .card { text-align: center; }
   .saas-auth-grid-2 { grid-template-columns: 1fr; }
   .saas-auth-card { padding: 22px 18px; }
 }
+
+.agent-diag {
+  margin: 16px 0 20px;
+  padding: 12px 14px;
+  border: 1px solid var(--app-line, #24303c);
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.15);
+}
+.agent-diag summary {
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 14px;
+}
+.agent-diag-grid {
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+}
+.agent-diag-row {
+  display: grid;
+  grid-template-columns: 160px 1fr;
+  gap: 10px;
+  font-size: 13px;
+  align-items: start;
+}
+@media (max-width: 560px) {
+  .agent-diag-row { grid-template-columns: 1fr; gap: 2px; }
+}
+.agent-diag-label { color: var(--app-muted); }
+.agent-diag-value { color: var(--app-ink); word-break: break-word; }
+.agent-diag-ok { color: #7dba7a; }
+.agent-diag-bad { color: #e07060; }
+.agent-diag-log-title {
+  margin: 16px 0 8px;
+  font-size: 13px;
+  font-weight: 600;
+}
+.agent-diag-log {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 220px;
+  overflow-y: auto;
+  font-size: 12px;
+  line-height: 1.45;
+}
+.agent-diag-log li {
+  padding: 6px 0;
+  border-bottom: 1px solid var(--app-line, #24303c);
+  color: var(--app-muted);
+}
+.agent-diag-log li:last-child { border-bottom: 0; }
+.agent-diag-log time {
+  display: block;
+  font-size: 11px;
+  opacity: 0.75;
+  margin-bottom: 2px;
+}
+.agent-diag-log-error { color: #e07060; }
+.agent-diag-log-warn { color: #e8b058; }
+.agent-diag-log-info { color: var(--app-muted); }

@@ -27,7 +27,7 @@ foreach ($name in $scriptFiles) {
     Copy-Item (Join-Path (Join-Path $Root "scripts") $name) (Join-Path (Join-Path $Stage "scripts") $name) -Force
 }
 
-foreach ($exe in @("HotspotBandeja.exe", "Desinstalar-Hotspot.exe", "DnsProxy.exe")) {
+foreach ($exe in @("HotspotBandeja.exe", "Desinstalar-Hotspot.exe", "DnsProxy.exe", "CaptiveHttp.exe")) {
     $p = Join-Path $Root $exe
     if (-not (Test-Path $p)) {
         throw "Faltando $exe. Rode installer\compilar.ps1 antes."

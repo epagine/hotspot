@@ -1,11 +1,12 @@
 const shareBtn = document.getElementById('share');
 const confirmBtn = document.getElementById('confirm');
 const refreshBtn = document.getElementById('refresh');
+const portalRoot = (document.body && document.body.dataset.portalRoot) || '';
 
 async function shareStatus() {
   const text = shareBtn.dataset.text;
   const code = shareBtn.dataset.code;
-  const imageUrl = `/arte/${code}.png`;
+  const imageUrl = `${portalRoot}/arte/${code}.png`;
   try {
     const res = await fetch(imageUrl);
     const blob = await res.blob();
@@ -28,15 +29,20 @@ async function shareStatus() {
 
 async function confirmPosted() {
   confirmBtn.disabled = true;
-  const phone = (document.getElementById('phone') || {}).value || '';
-  const res = await fetch('/confirmar', {
+  const phoneEl = document.getElementById('phone');
+  const phone = phoneEl ? phoneEl.value : '';
+  const res = await fetch(`${portalRoot}/confirmar`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ phone }),
   });
   const data = await res.json();
+  if (!data.ok) {
+    confirmBtn.disabled = false;
+    alert(data.message || 'Não foi possível liberar o Wi-Fi.');
+    return;
+  }
   window.location.reload();
-  return data;
 }
 
 if (shareBtn) {

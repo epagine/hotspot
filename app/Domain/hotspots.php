@@ -45,7 +45,7 @@ function portal_config_for(int $hotspotId): array
         'hotspot_id' => $hotspotId,
         'title' => 'Bem-vindo',
         'subtitle' => 'Conecte-se gratuitamente ao Wi-Fi',
-        'button_label' => 'Conectar à internet',
+        'button_label' => 'Continuar',
         'require_name' => 1,
         'require_phone' => 1,
         'require_email' => 0,
@@ -153,10 +153,63 @@ function find_company_client_by_phone(int $companyId, string $phone): ?array
     return $row ?: null;
 }
 
+function portal_bind_store(array $store): string
+{
+    $hotspotId = (int) $store['id'];
+    $GLOBALS['force_store_id'] = $hotspotId;
+    $GLOBALS['portal_token'] = trim((string) ($store['token'] ?? ''));
+    return (string) $GLOBALS['portal_token'];
+}
+
+function portal_store_from_token(string $token): ?array
+{
+    $store = find_store_by_token(trim($token));
+    if (!$store) {
+        return null;
+    }
+    portal_bind_store($store);
+    return $store;
+}
+
+function status_message_for_store(int $storeId, string $code): string
+{
+    $tpl = setting_for_store(
+        $storeId,
+        'status_template',
+        'Estou na {loja} agora! 🔥 Venha conferir. Código {codigo}'
+    );
+    $storeName = setting_for_store($storeId, 'store_name', 'nossa loja');
+    $city = setting_for_store($storeId, 'store_city', '');
+    if ($city === '') {
+        $row = find_store($storeId);
+        $city = trim((string) ($row['city'] ?? ''));
+    }
+    return strtr($tpl, [
+        '{loja}' => $storeName,
+        '{codigo}' => $code,
+        '{cidade}' => $city,
+    ]);
+}
+
+function portal_store_max_clients(int $hotspotId): int
+{
+    return store_agent_max_clients($hotspotId);
+}
+
+function portal_store_online_count(int $hotspotId): int
+{
+    expire_overdue_clients();
+    $stmt = db()->prepare(
+        "SELECT COUNT(*) FROM clients WHERE store_id = ? AND state = 'online' AND ip NOT LIKE '127.%' AND ip != '::1'"
+    );
+    $stmt->execute([$hotspotId]);
+    return (int) $stmt->fetchColumn();
+}
+
 /**
- * @return array{client_id:int,campaign:?array}
+ * @return array{client_id:int}
  */
-function portal_register_guest(
+function portal_begin_guest(
     array $store,
     int $companyId,
     int $hotspotId,
@@ -170,48 +223,49 @@ function portal_register_guest(
     if (!portal_access_allowed($store)) {
         throw new RuntimeException('Wi-Fi indisponível no momento. Serviço suspenso.');
     }
+    if ($companyId > 0 && !company_within_client_limit($companyId)) {
+        throw new RuntimeException(company_limit_error('clients'));
+    }
     $now = date('Y-m-d H:i:s');
-    $expires = date('Y-m-d H:i:s', time() + 2 * 3600);
-    $existing = $companyId > 0 ? find_company_client_by_phone($companyId, $phone) : null;
+    $code = random_code();
+    $text = status_message_for_store($hotspotId, $code);
+    $existing = $companyId > 0 && strlen($phone) >= 10 ? find_company_client_by_phone($companyId, $phone) : null;
 
     if ($existing) {
         $clientId = (int) $existing['id'];
         db()->prepare(
-            'UPDATE clients SET store_id = ?, ip = ?, name = ?, email = ?, state = ?, user_agent = ?, authorized_at = ?, expires_at = ?, access_count = access_count + 1, last_access_at = ? WHERE id = ?'
+            'UPDATE clients SET store_id = ?, ip = ?, mac = ?, name = ?, email = ?, phone = ?, status_code = ?, status_text = ?, state = ?, user_agent = ?, authorized_at = NULL, expires_at = NULL, created_at = ? WHERE id = ?'
         )->execute([
             $hotspotId,
             $ip,
+            lookup_mac($ip),
             $name !== '' ? $name : (string) ($existing['name'] ?? ''),
             $email !== '' ? $email : (string) ($existing['email'] ?? ''),
-            'online',
+            $phone !== '' ? $phone : (string) ($existing['phone'] ?? ''),
+            $code,
+            $text,
+            'pending',
             $ua,
-            $now,
-            $expires,
             $now,
             $clientId,
         ]);
     } else {
-        if ($companyId > 0 && !company_within_client_limit($companyId)) {
-            throw new RuntimeException(company_limit_error('clients'));
-        }
-        $code = strtoupper(substr(bin2hex(random_bytes(3)), 0, 6));
         db()->prepare(
-            'INSERT INTO clients (store_id, company_id, ip, phone, name, email, status_code, status_text, state, user_agent, created_at, authorized_at, expires_at, access_count, first_access_at, last_access_at)
-             VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)'
+            'INSERT INTO clients (store_id, company_id, ip, mac, phone, name, email, status_code, status_text, state, user_agent, created_at, access_count, first_access_at, last_access_at)
+             VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)'
         )->execute([
             $hotspotId,
             $companyId > 0 ? $companyId : null,
             $ip,
+            lookup_mac($ip),
             $phone,
             $name,
             $email,
             $code,
-            'portal',
-            'online',
+            $text,
+            'pending',
             $ua,
             $now,
-            $now,
-            $expires,
             1,
             $now,
             $now,
@@ -226,25 +280,116 @@ function portal_register_guest(
         )->execute([$clientId, $companyId, 'terms', 1, $ip, $ua, $now]);
     }
 
+    return ['client_id' => $clientId];
+}
+
+/**
+ * @return array{state:string,expires_at:?string,campaign:?array}
+ */
+function portal_confirm_guest(array $store, int $hotspotId, int $companyId, ?array $client, ?string $phone, string $ip, string $ua): array
+{
+    if (!$client) {
+        throw new RuntimeException('Sessão não encontrada. Recarregue a página.');
+    }
+    if (client_is_online($client)) {
+        return [
+            'state' => 'online',
+            'expires_at' => (string) ($client['expires_at'] ?? ''),
+            'campaign' => portal_guest_campaign($companyId, $hotspotId, (int) $client['id']),
+        ];
+    }
+    if (($client['state'] ?? '') !== 'pending') {
+        throw new RuntimeException('Este acesso não pode ser confirmado agora.');
+    }
+
+    $mode = setting_for_store($hotspotId, 'approval_mode', 'instant');
+    $maxClients = portal_store_max_clients($hotspotId);
+    if ($mode !== 'manual' && portal_store_online_count($hotspotId) >= $maxClients) {
+        throw new RuntimeException('Rede cheia (' . $maxClients . ' aparelhos). Tente de novo daqui a pouco.');
+    }
+
+    $hours = max(1, (int) setting_for_store($hotspotId, 'session_hours', '2'));
+    $next = $mode === 'manual' ? 'awaiting_approval' : 'online';
+    $now = date('Y-m-d H:i:s');
+    $expires = date('Y-m-d H:i:s', time() + $hours * 3600);
+
+    db()->prepare(
+        'UPDATE clients SET phone = COALESCE(?, phone), state = ?, authorized_at = ?, expires_at = ?, mac = COALESCE(?, mac), access_count = access_count + 1, last_access_at = ? WHERE id = ?'
+    )->execute([
+        $phone,
+        $next,
+        $next === 'online' ? $now : null,
+        $next === 'online' ? $expires : null,
+        lookup_mac($ip),
+        $now,
+        $client['id'],
+    ]);
+
+    $campaign = null;
+    if ($next === 'online') {
+        $campaign = portal_finalize_online_guest($store, $companyId, $hotspotId, (int) $client['id'], $ip, $ua);
+    }
+
+    if (function_exists('sync_authorized_file') && is_local_store($hotspotId)) {
+        sync_authorized_file();
+    }
+
+    return ['state' => $next, 'expires_at' => $next === 'online' ? $expires : null, 'campaign' => $campaign];
+}
+
+function portal_finalize_online_guest(array $store, int $companyId, int $hotspotId, int $clientId, string $ip, string $ua): ?array
+{
     $campaign = null;
     if ($companyId > 0) {
         $sessionId = record_access_session($companyId, $hotspotId, $clientId, $ip, $ua);
-        $client = ['id' => $clientId, 'name' => $name, 'phone' => $phone];
+        $row = db()->prepare('SELECT name, phone FROM clients WHERE id = ?');
+        $row->execute([$clientId]);
+        $guest = $row->fetch() ?: [];
         $provider = network_provider((string) ($store['provider'] ?? 'windows'));
-        $provider->authorizeClient($store, $client, ['id' => $sessionId]);
+        $provider->authorizeClient($store, ['id' => $clientId, 'name' => $guest['name'] ?? '', 'phone' => $guest['phone'] ?? ''], ['id' => $sessionId]);
         $campaign = active_campaign_for_hotspot($companyId, $hotspotId);
         if ($campaign) {
             record_campaign_view((int) $campaign['id'], $companyId, $clientId, $hotspotId);
         }
     }
+    return $campaign;
+}
 
-    if (function_exists('sync_authorized_file') && (int) local_store_id() === $hotspotId) {
-        try {
-            db()->prepare("UPDATE clients SET state='online' WHERE id=?")->execute([$clientId]);
-            sync_authorized_file();
-        } catch (Throwable $e) {
-        }
+function portal_guest_campaign(int $companyId, int $hotspotId, int $clientId): ?array
+{
+    if ($companyId <= 0) {
+        return null;
     }
+    return active_campaign_for_hotspot($companyId, $hotspotId);
+}
 
-    return ['client_id' => $clientId, 'campaign' => $campaign];
+/**
+ * @return array{state:string,expires_at:string}
+ */
+function portal_approve_guest(int $hotspotId, int $clientId, int $companyId): array
+{
+    $stmt = db()->prepare('SELECT * FROM clients WHERE id = ? AND store_id = ?');
+    $stmt->execute([$clientId, $hotspotId]);
+    $client = $stmt->fetch();
+    if (!$client || ($client['state'] ?? '') !== 'awaiting_approval') {
+        throw new RuntimeException('Cliente não encontrado ou já processado.');
+    }
+    if (portal_store_online_count($hotspotId) >= portal_store_max_clients($hotspotId)) {
+        throw new RuntimeException('Rede cheia. Desconecte alguém antes de aprovar.');
+    }
+    $hours = max(1, (int) setting_for_store($hotspotId, 'session_hours', '2'));
+    $now = date('Y-m-d H:i:s');
+    $expires = date('Y-m-d H:i:s', time() + $hours * 3600);
+    db()->prepare(
+        'UPDATE clients SET state = ?, authorized_at = ?, expires_at = ?, last_access_at = ? WHERE id = ?'
+    )->execute(['online', $now, $expires, $now, $clientId]);
+
+    $store = find_store($hotspotId);
+    if ($store) {
+        portal_finalize_online_guest($store, $companyId, $hotspotId, $clientId, (string) ($client['ip'] ?? ''), (string) ($client['user_agent'] ?? ''));
+    }
+    if (function_exists('sync_authorized_file') && is_local_store($hotspotId)) {
+        sync_authorized_file();
+    }
+    return ['state' => 'online', 'expires_at' => $expires];
 }

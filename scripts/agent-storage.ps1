@@ -105,14 +105,27 @@ function Test-AgentProcessAlive {
     return $null -ne (Get-Process -Id $oldPid -ErrorAction SilentlyContinue)
 }
 
+function Test-AgentProcessElevated {
+    $id = [Security.Principal.WindowsIdentity]::GetCurrent()
+    $p = New-Object Security.Principal.WindowsPrincipal($id)
+    return $p.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+}
+
 function Start-AgentProcess {
     param([string]$InstallRoot)
-    $agent = Join-Path $InstallRoot "scripts\agente-hotspot.ps1"
-    if (-not (Test-Path $agent)) {
-        return $false
+    $storage = Get-AgentStorageDir -InstallRoot $InstallRoot
+    foreach ($taskName in @("HotspotLoja")) {
+        try {
+            Start-ScheduledTask -TaskName $taskName -ErrorAction Stop
+        } catch {
+            & schtasks.exe /Run /TN $taskName 2>$null | Out-Null
+        }
+        for ($i = 0; $i -lt 8; $i++) {
+            Start-Sleep -Milliseconds 500
+            if (Test-AgentProcessAlive -StorageDir $storage) {
+                return $true
+            }
+        }
     }
-    Start-Process powershell.exe -ArgumentList @(
-        "-NoProfile", "-ExecutionPolicy", "Bypass", "-WindowStyle", "Hidden", "-File", $agent
-    ) -WorkingDirectory $InstallRoot -WindowStyle Hidden | Out-Null
-    return $true
+    return $false
 }

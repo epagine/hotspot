@@ -264,10 +264,15 @@ function store_connection_health(array $store): array
     $alive = !empty($status['agent_alive']);
     $seen = (string) ($store['last_seen_at'] ?? '');
     if (!$alive) {
+        $syncErr = trim((string) ($status['sync_error'] ?? ''));
+        $detail = $seen !== '' ? 'Sem contato recente' : 'PC ainda não vinculou';
+        if ($syncErr !== '') {
+            $detail = $syncErr;
+        }
         return [
             'key' => 'offline',
             'label' => 'Offline',
-            'detail' => $seen !== '' ? 'Sem contato recente' : 'PC ainda não vinculou',
+            'detail' => $detail,
         ];
     }
     if ($error !== '') {
@@ -602,7 +607,124 @@ function store_status_payload(array $store): array
     $data['neighbors'] = json_list($data['neighbors'] ?? []);
     $data['ips'] = json_list($data['ips'] ?? []);
     $data['tethering_clients'] = json_list($data['tethering_clients'] ?? []);
+    $data['agent_log'] = json_list($data['agent_log'] ?? []);
     return $data;
+}
+
+/** @return list<array{label:string,value:string,ok:?bool}> */
+function store_agent_diagnostic_summary(array $store): array
+{
+    $status = store_status_payload($store);
+    $lines = [];
+    $lines[] = [
+        'label' => 'Contato com painel',
+        'value' => !empty($status['agent_alive'])
+            ? ('OK · ' . (string) ($store['last_seen_at'] ?? ''))
+            : ('Sem resposta · ' . ((string) ($store['last_seen_at'] ?? '') ?: 'nunca')),
+        'ok' => !empty($status['agent_alive']),
+    ];
+    $syncOk = array_key_exists('sync_ok', $status) ? !empty($status['sync_ok']) : null;
+    $syncErr = trim((string) ($status['sync_error'] ?? ''));
+    $syncAt = trim((string) ($status['sync_at'] ?? ''));
+    if ($syncOk !== null || $syncErr !== '') {
+        $lines[] = [
+            'label' => 'Sync com painel',
+            'value' => $syncOk
+                ? ('OK' . ($syncAt !== '' ? ' · ' . $syncAt : ''))
+                : ($syncErr !== '' ? $syncErr : 'Falhou'),
+            'ok' => $syncOk,
+        ];
+    }
+    $lines[] = [
+        'label' => 'Hotspot Windows',
+        'value' => !empty($status['hotspot_on']) ? 'Ligado' : 'Desligado',
+        'ok' => !empty($status['hotspot_on']) ? true : null,
+    ];
+    $lines[] = [
+        'label' => 'DNS cativo (DnsProxy)',
+        'value' => !empty($status['dns_up']) ? 'Ativo' : 'Parado',
+        'ok' => !empty($status['dns_up']),
+    ];
+    if (array_key_exists('captive_http_up', $status)) {
+        $lines[] = [
+            'label' => 'Portal cativo (HTTP :80)',
+            'value' => !empty($status['captive_http_up']) ? 'Ativo' : 'Parado (popup Wi-Fi pode nao abrir)',
+            'ok' => !empty($status['captive_http_up']),
+        ];
+    }
+    if (array_key_exists('elevated', $status)) {
+        $lines[] = [
+            'label' => 'Privilégio admin',
+            'value' => !empty($status['elevated']) ? 'Sim' : 'Não — hotspot pode falhar',
+            'ok' => !empty($status['elevated']),
+        ];
+    }
+    if (array_key_exists('task_registered', $status)) {
+        $lines[] = [
+            'label' => 'Tarefa HotspotLoja',
+            'value' => !empty($status['task_registered']) ? 'Registrada' : 'Ausente — reinstale o agente',
+            'ok' => !empty($status['task_registered']),
+        ];
+    }
+    if (array_key_exists('cloud_linked', $status)) {
+        $lines[] = [
+            'label' => 'Vínculo cloud.json',
+            'value' => !empty($status['cloud_linked']) ? 'OK' : 'Ausente',
+            'ok' => !empty($status['cloud_linked']),
+        ];
+    }
+    $err = trim((string) ($status['error'] ?? ''));
+    if ($err !== '') {
+        $lines[] = [
+            'label' => 'Erro do hotspot',
+            'value' => $err,
+            'ok' => false,
+        ];
+    }
+    $ver = trim((string) ($status['agent_version'] ?? ''));
+    if ($ver !== '') {
+        $lines[] = [
+            'label' => 'Versão do agente',
+            'value' => $ver,
+            'ok' => null,
+        ];
+    }
+    $inet = trim((string) ($status['internet_ip'] ?? ''));
+    if ($inet !== '') {
+        $alias = trim((string) ($status['internet_alias'] ?? ''));
+        $lines[] = [
+            'label' => 'Internet do PC',
+            'value' => $inet . ($alias !== '' ? ' · ' . $alias : ''),
+            'ok' => true,
+        ];
+    }
+    return $lines;
+}
+
+/** @return list<array{at:string,level:string,msg:string}> */
+function store_agent_event_log(array $store, int $limit = 25): array
+{
+    $status = store_status_payload($store);
+    $log = $status['agent_log'] ?? [];
+    if (!is_array($log)) {
+        return [];
+    }
+    $out = [];
+    foreach (array_slice(array_reverse($log), 0, $limit) as $row) {
+        if (!is_array($row)) {
+            continue;
+        }
+        $msg = trim((string) ($row['msg'] ?? ''));
+        if ($msg === '') {
+            continue;
+        }
+        $out[] = [
+            'at' => (string) ($row['at'] ?? ''),
+            'level' => (string) ($row['level'] ?? 'info'),
+            'msg' => $msg,
+        ];
+    }
+    return $out;
 }
 
 function brand_image_path_for(int $storeId): string

@@ -105,54 +105,53 @@ internal sealed class TrayApp : ApplicationContext
     private void StartBackend()
     {
         Directory.CreateDirectory(AgentDataDir());
-        string agent = Path.Combine(root, "scripts", "agente-hotspot.ps1");
-        StartHidden("powershell.exe", "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File \"" + agent + "\"");
+        RunAgentScheduledTask();
     }
 
-    private static void StartHidden(string file, string args)
+    private static void RunAgentScheduledTask()
     {
         try
         {
-            Process.Start(new ProcessStartInfo
+            var psi = new ProcessStartInfo
             {
-                FileName = file,
-                Arguments = args,
+                FileName = "schtasks.exe",
+                Arguments = "/Run /TN \"HotspotLoja\"",
                 UseShellExecute = false,
-                CreateNoWindow = true,
-                WindowStyle = ProcessWindowStyle.Hidden
-            });
+                CreateNoWindow = true
+            };
+            Process.Start(psi);
         }
         catch
         {
         }
     }
 
-    private void EnsureAgentRunning()
+    private bool AgentRecentlyActive(int maxAgeSeconds)
     {
         try
         {
-            string pidPath = Storage("agent.pid");
-            if (File.Exists(pidPath))
+            string raw = ReadFileSafe(Storage("status.json"));
+            string seen = JsonGet(raw, "agent_seen_at");
+            DateTime dt;
+            if (DateTime.TryParse(seen, out dt))
             {
-                string line = File.ReadAllText(pidPath).Trim();
-                int nl = line.IndexOf('\n');
-                if (nl >= 0)
-                {
-                    line = line.Substring(0, nl);
-                }
-                int pid;
-                if (int.TryParse(line.Trim(), out pid) && pid > 0)
-                {
-                    Process.GetProcessById(pid);
-                    return;
-                }
+                return (DateTime.Now - dt).TotalSeconds <= maxAgeSeconds;
             }
         }
         catch
         {
         }
-        StartBackend();
-        System.Threading.Thread.Sleep(800);
+        return false;
+    }
+
+    private void EnsureAgentRunning()
+    {
+        if (AgentRecentlyActive(20))
+        {
+            return;
+        }
+        RunAgentScheduledTask();
+        System.Threading.Thread.Sleep(1500);
     }
 
     private void WriteCommand(string action)
@@ -179,6 +178,44 @@ internal sealed class TrayApp : ApplicationContext
         {
             statusForm.RefreshData();
         }
+        var feedbackTimer = new Timer { Interval = 5000 };
+        feedbackTimer.Tick += delegate
+        {
+            feedbackTimer.Stop();
+            feedbackTimer.Dispose();
+            string statusRaw = ReadFileSafe(Storage("status.json"));
+            string err = JsonGet(statusRaw, "error");
+            bool on = JsonGet(statusRaw, "hotspot_on") == "true";
+            if (action == "start")
+            {
+                if (on)
+                {
+                    icon.ShowBalloonTip(3000, "Wi-Fi da loja", "Rede ligada.", ToolTipIcon.Info);
+                }
+                else if (err.Length > 0)
+                {
+                    icon.ShowBalloonTip(9000, "Wi-Fi da loja", err, ToolTipIcon.Error);
+                }
+                else if (!AgentRecentlyActive(30))
+                {
+                    icon.ShowBalloonTip(
+                        7000,
+                        "Wi-Fi da loja",
+                        "Agente sem resposta. Feche e abra a bandeja como administrador ou reinstale o agente.",
+                        ToolTipIcon.Warning);
+                }
+            }
+            else if (action == "stop" && !on)
+            {
+                icon.ShowBalloonTip(2500, "Wi-Fi da loja", "Rede desligada.", ToolTipIcon.Info);
+            }
+            UpdateTip();
+            if (statusForm != null && !statusForm.IsDisposed)
+            {
+                statusForm.RefreshData();
+            }
+        };
+        feedbackTimer.Start();
     }
 
     private void ShowStatus()
@@ -752,9 +789,17 @@ internal sealed class TrayApp : ApplicationContext
 
             string statusRaw = TrayApp.ReadFileSafe(app.Storage("status.json"));
             bool on = TrayApp.JsonGet(statusRaw, "hotspot_on") == "true";
+            string statusErr = TrayApp.JsonGet(statusRaw, "error");
             hotspotTag.Text = on ? "Rede ligada" : "Rede desligada";
             hotspotTag.ForeColor = on ? Ok : Danger;
-
+            if (!on && statusErr.Length > 0)
+            {
+                hotspotTag.Text = "Erro ao ligar";
+                hotspotTag.ForeColor = Danger;
+                ssidLbl.Text = statusErr.Length > 120 ? statusErr.Substring(0, 117) + "..." : statusErr;
+            }
+            else
+            {
             string ssid = app.ReadInfo("wifi_ssid");
             if (ssid.Length == 0) ssid = TrayApp.JsonGet(statusRaw, "ssid");
             ssidLbl.Text = "SSID: " + (ssid.Length > 0 ? ssid : "—");
@@ -788,6 +833,7 @@ internal sealed class TrayApp : ApplicationContext
 
             clientLink.Text = "Abrir portal do cliente";
             adminLink.Text = "Abrir hotspot no painel";
+            }
         }
 
         private static Color LicenseColor(string status)

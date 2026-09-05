@@ -23,4 +23,6 @@ if ($LASTEXITCODE -ne 0) {
 }
 & $csc /nologo /target:exe /optimize+ /out:"$root\DnsProxy.exe" "$src\DnsProxy.cs"
 if ($LASTEXITCODE -ne 0) { throw "Falha ao gerar DnsProxy.exe" }
-Write-Host "Gerados: Instalar-Hotspot.exe, Desinstalar-Hotspot.exe, HotspotBandeja.exe e DnsProxy.exe"
+& $csc /nologo /target:exe /optimize+ /out:"$root\CaptiveHttp.exe" "$src\CaptiveHttp.cs"
+if ($LASTEXITCODE -ne 0) { throw "Falha ao gerar CaptiveHttp.exe" }
+Write-Host "Gerados: Instalar-Hotspot.exe, Desinstalar-Hotspot.exe, HotspotBandeja.exe, DnsProxy.exe e CaptiveHttp.exe"

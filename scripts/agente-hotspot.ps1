@@ -18,6 +18,7 @@ $PidFile = Join-Path $Storage "agent.pid"
 $SyncErrorFile = Join-Path $Storage "sync-error.json"
 $DnsProxy = Join-Path $Root "DnsProxy.exe"
 $DnsProxyPhp = Join-Path $Root "bin\dns-proxy.php"
+$CaptiveHttp = Join-Path $Root "CaptiveHttp.exe"
 $MaxClients = 8
 $script:ServiceAllowed = $true
 $AgentVersion = Get-AgentVersion -InstallRoot $Root
@@ -30,17 +31,61 @@ if (Test-Path $PidFile) {
     $oldPid = 0
     [void][int]::TryParse(((Get-Content $PidFile -ErrorAction SilentlyContinue | Select-Object -First 1)), [ref]$oldPid)
     if ($oldPid -and (Get-Process -Id $oldPid -ErrorAction SilentlyContinue) -and $oldPid -ne $PID) {
-        exit 0
+        if (Test-AgentProcessElevated) {
+            Stop-Process -Id $oldPid -Force -ErrorAction SilentlyContinue
+            Remove-Item $PidFile -Force -ErrorAction SilentlyContinue
+        } else {
+            exit 0
+        }
     }
 }
 Set-Content -Path $PidFile -Value $PID
+Write-AgentLog ("Agente v$AgentVersion iniciado (PID $PID, elevado=$(Test-AgentElevated))") "info"
+if (-not (Test-AgentElevated)) {
+    Write-AgentLog "Processo sem privilegio de administrador — hotspot pode falhar." "warn"
+}
+if (-not (Test-ScheduledTaskExists)) {
+    Write-AgentLog "Tarefa agendada HotspotLoja nao encontrada — reinstale o agente." "warn"
+}
 
 Add-Type -AssemblyName System.Runtime.WindowsRuntime -ErrorAction SilentlyContinue | Out-Null
 
 $script:DnsProc = $null
+$script:CaptiveProc = $null
 $script:LastCmdId = ""
 $script:LastError = $null
 $script:TetheringMgr = $null
+$script:AgentLog = New-Object System.Collections.ArrayList
+$script:LastSyncOk = $false
+$script:LastSyncError = ""
+$script:LastSyncAt = ""
+
+function Write-AgentLog {
+    param([string]$Message, [string]$Level = "info")
+    if (-not $Message) { return }
+    $entry = [ordered]@{
+        at    = (Get-Date).ToString("s")
+        level = $Level
+        msg   = $Message
+    }
+    [void]$script:AgentLog.Add($entry)
+    while ($script:AgentLog.Count -gt 40) {
+        $script:AgentLog.RemoveAt(0)
+    }
+}
+
+function Test-AgentElevated {
+    if (-not (Get-Command Test-AgentProcessElevated -ErrorAction SilentlyContinue)) {
+        return $false
+    }
+    return Test-AgentProcessElevated
+}
+
+function Test-ScheduledTaskExists {
+    param([string]$Name = "HotspotLoja")
+    $t = Get-ScheduledTask -TaskName $Name -ErrorAction SilentlyContinue
+    return $null -ne $t
+}
 
 function Wait-WinRtAction {
     param($Async)
@@ -203,6 +248,22 @@ function Stop-DnsProxy {
         ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
 }
 
+function Start-CaptiveHttp {
+    if ($script:CaptiveProc -and -not $script:CaptiveProc.HasExited) { return }
+    if (-not (Test-Path $CaptiveHttp)) { return }
+    $script:CaptiveProc = Start-Process -FilePath $CaptiveHttp -WorkingDirectory $Root -WindowStyle Hidden -PassThru
+}
+
+function Stop-CaptiveHttp {
+    if ($script:CaptiveProc -and -not $script:CaptiveProc.HasExited) {
+        Stop-Process -Id $script:CaptiveProc.Id -Force -ErrorAction SilentlyContinue
+    }
+    $script:CaptiveProc = $null
+    Get-CimInstance Win32_Process -ErrorAction SilentlyContinue |
+        Where-Object { $_.Name -eq "CaptiveHttp.exe" } |
+        ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
+}
+
 function Restart-IcsService {
     try {
         $svc = Get-Service icssvc -ErrorAction SilentlyContinue
@@ -286,12 +347,14 @@ function Set-Hotspot {
             Start-TetheringSafe -Manager $mgr
         }
         Start-DnsProxy
+        Start-CaptiveHttp
     } else {
         $script:TetheringMgr = $null
         if ([int]$mgr.TetheringOperationalState -eq 1) {
             Wait-WinRt ($mgr.StopTetheringAsync()) | Out-Null
         }
         Stop-DnsProxy
+        Stop-CaptiveHttp
     }
 }
 
@@ -392,23 +455,39 @@ function Write-Status {
         }
 
     $dnsUp = [bool]($script:DnsProc -and -not $script:DnsProc.HasExited)
+    $captiveUp = [bool]($script:CaptiveProc -and -not $script:CaptiveProc.HasExited)
+    $syncErrFile = $null
+    if (Test-Path $SyncErrorFile) {
+        try {
+            $syncErrFile = (Get-Content $SyncErrorFile -Raw | ConvertFrom-Json).error
+        } catch {}
+    }
     $payload = [ordered]@{
-        hotspot_on       = [bool]$on
-        ssid             = $ssid
-        portal_ip        = $portal
-        internet_ip      = $inet.ip
-        internet_alias   = $inet.alias
-        wifi_adapters    = @($wifiCards)
-        neighbors        = @(Get-LiveNeighbors)
+        hotspot_on        = [bool]$on
+        ssid              = $ssid
+        portal_ip         = $portal
+        internet_ip       = $inet.ip
+        internet_alias    = $inet.alias
+        wifi_adapters     = @($wifiCards)
+        neighbors         = @(Get-LiveNeighbors)
         tethering_clients = @($tether)
-        ips              = @($ips)
-        windows_clients  = $clients
-        max_clients      = $MaxClients
-        dns_up           = $dnsUp
-        error            = $script:LastError
-        agent_version    = $AgentVersion
-        agent_seen_at    = (Get-Date).ToString("s")
-        agent_pid        = $PID
+        ips               = @($ips)
+        windows_clients   = $clients
+        max_clients       = $MaxClients
+        dns_up            = $dnsUp
+        captive_http_up   = $captiveUp
+        elevated          = (Test-AgentElevated)
+        task_registered   = (Test-ScheduledTaskExists)
+        cloud_linked      = $null -ne (Get-CloudCfg)
+        service_allowed   = [bool]$script:ServiceAllowed
+        sync_ok           = [bool]$script:LastSyncOk
+        sync_error        = [string]($(if ($script:LastSyncError) { $script:LastSyncError } elseif ($syncErrFile) { $syncErrFile } else { "" }))
+        sync_at           = [string]$script:LastSyncAt
+        error             = $script:LastError
+        agent_version     = $AgentVersion
+        agent_seen_at     = (Get-Date).ToString("s")
+        agent_pid         = $PID
+        agent_log         = @($script:AgentLog)
     }
     $json = ($payload | ConvertTo-Json -Depth 6)
     [System.IO.File]::WriteAllText($StatusFile, $json, [System.Text.UTF8Encoding]::new($false))
@@ -458,7 +537,13 @@ function Clear-SyncError {
 
 function Sync-Cloud {
     $cfg = Get-CloudCfg
-    if (-not $cfg -or -not $cfg.token -or -not $cfg.panel_url) { return }
+    if (-not $cfg -or -not $cfg.token -or -not $cfg.panel_url) {
+        $script:LastSyncOk = $false
+        $script:LastSyncError = "cloud.json ausente ou incompleto (URL/token do painel)."
+        $script:LastSyncAt = (Get-Date).ToString("s")
+        Write-AgentLog $script:LastSyncError "error"
+        return
+    }
     Ensure-LocalDb
     $php = Get-PhpExe
     $clients = @()
@@ -491,19 +576,27 @@ function Sync-Cloud {
         $headers = @{ "X-Agent-Token" = [string]$cfg.token }
         $resp = Invoke-RestMethod -Uri $url -Method Post -Headers $headers -Body $json -ContentType "application/json; charset=utf-8" -TimeoutSec 6
         Clear-SyncError
+        $script:LastSyncOk = $true
+        $script:LastSyncError = ""
+        $script:LastSyncAt = (Get-Date).ToString("s")
+        Write-AgentLog "Sync OK com painel" "info"
         if ($resp.config -and $resp.config.max_clients) {
             $parsedMax = 0
             if ([void][int]::TryParse([string]$resp.config.max_clients, [ref]$parsedMax) -and $parsedMax -gt 0) {
                 $MaxClients = $parsedMax
             }
         }
+        $sub = $resp.subscription
+        $links = $resp.links
         if ($resp.config -and $resp.config.wifi_ssid) {
             $suffixes = @()
             if ($resp.config.dns_allowlist) {
                 $suffixes = @(([string]$resp.config.dns_allowlist) -split "[\r\n]+" | Where-Object { $_ })
             }
+            $portalUrl = [string]($(if ($links -and $links.portal) { $links.portal } else { ([string]$cfg.panel_url).TrimEnd("/") + "/portal/" + [uri]::EscapeDataString([string]$cfg.token) }))
             $auth = [ordered]@{
                 portal_ip      = [string]$resp.config.portal_ip
+                portal_url     = $portalUrl
                 authorized     = @($resp.authorized)
                 allow_suffixes = $suffixes
                 ssid           = [string]$resp.config.wifi_ssid
@@ -512,8 +605,6 @@ function Sync-Cloud {
             }
             [System.IO.File]::WriteAllText($AuthFile, ($auth | ConvertTo-Json -Depth 5), [System.Text.UTF8Encoding]::new($false))
         }
-        $sub = $resp.subscription
-        $links = $resp.links
         $serviceAllowed = $true
         if ($null -ne $sub.service_allowed) {
             $serviceAllowed = [bool]$sub.service_allowed
@@ -591,7 +682,11 @@ function Sync-Cloud {
         if ($_.Exception.Response -and [int]$_.Exception.Response.StatusCode -eq 401) {
             $msg = "Token inválido ou expirado. Revincule o hotspot no painel."
         }
+        $script:LastSyncOk = $false
+        $script:LastSyncError = $msg
+        $script:LastSyncAt = (Get-Date).ToString("s")
         Write-SyncError $msg
+        Write-AgentLog ("Sync falhou: " + $msg) "error"
     }
 }
 
@@ -606,28 +701,35 @@ try {
             try {
                 $cmd = Get-Content $cmdPath -Raw | ConvertFrom-Json
                 if ($cmd.id -and $cmd.id -ne $script:LastCmdId) {
-                    $script:LastCmdId = [string]$cmd.id
                     $script:LastError = $null
                     $script:TetheringMgr = $null
                     switch ([string]$cmd.action) {
                         "start" {
+                            Write-AgentLog "Comando: ligar rede" "info"
                             if ($script:ServiceAllowed) {
                                 Set-Hotspot -On $true
+                                Write-AgentLog "Hotspot ligado" "info"
                             } else {
-                                $script:LastError = "Servico suspenso ou hotspot bloqueado no painel."
+                                throw "Servico suspenso ou hotspot bloqueado no painel."
                             }
                         }
-                        "stop" { Set-Hotspot -On $false }
+                        "stop" {
+                            Write-AgentLog "Comando: desligar rede" "info"
+                            Set-Hotspot -On $false
+                        }
                         "apply" {
+                            Write-AgentLog "Comando: aplicar Wi-Fi" "info"
                             if ($script:ServiceAllowed) {
                                 Set-Hotspot -On $true -ApplyOnly $true
                             }
                         }
                     }
+                    $script:LastCmdId = [string]$cmd.id
                     $script:LastAck = [string]$cmd.id
                 }
             } catch {
                 $script:LastError = $_.Exception.Message
+                Write-AgentLog ("Erro no comando: " + $script:LastError) "error"
             }
         } elseif (-not $script:ServiceAllowed) {
             try {
@@ -643,5 +745,6 @@ try {
     }
 } finally {
     Stop-DnsProxy
+    Stop-CaptiveHttp
     if (Test-Path $PidFile) { Remove-Item $PidFile -Force -ErrorAction SilentlyContinue }
 }

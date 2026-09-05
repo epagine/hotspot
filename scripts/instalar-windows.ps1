@@ -193,14 +193,15 @@ if (Test-Path $bandeja) {
 }
 Write-Log "Tarefas agendadas registradas"
 
-foreach ($rule in @("HotspotLoja-Painel-8080", "HotspotLoja-DNS-53")) {
+foreach ($rule in @("HotspotLoja-Painel-8080", "HotspotLoja-DNS-53", "HotspotLoja-HTTP-80")) {
     Get-NetFirewallRule -DisplayName $rule -ErrorAction SilentlyContinue | Remove-NetFirewallRule -ErrorAction SilentlyContinue
 }
 if (-not $isCloudAgent) {
     New-NetFirewallRule -DisplayName "HotspotLoja-Painel-8080" -Direction Inbound -Protocol TCP -LocalPort 8080 -Action Allow -Profile Any | Out-Null
 }
 New-NetFirewallRule -DisplayName "HotspotLoja-DNS-53" -Direction Inbound -Protocol UDP -LocalPort 53 -Action Allow -Profile Any | Out-Null
-Write-Log $(if ($isCloudAgent) { "Regra de firewall (53 UDP)" } else { "Regras de firewall (8080 TCP, 53 UDP)" })
+New-NetFirewallRule -DisplayName "HotspotLoja-HTTP-80" -Direction Inbound -Protocol TCP -LocalPort 80 -Action Allow -Profile Any | Out-Null
+Write-Log $(if ($isCloudAgent) { "Regras de firewall (53 UDP, 80 TCP)" } else { "Regras de firewall (8080 TCP, 53 UDP, 80 TCP)" })
 
 $desktop = [Environment]::GetFolderPath("Desktop")
 $programs = Join-Path ([Environment]::GetFolderPath("StartMenu")) "Programs\Wi-Fi da loja"

@@ -30,7 +30,7 @@ if ($do === 'create') {
     save_portal_config($id, [
         'title' => 'Bem-vindo à ' . $name,
         'subtitle' => 'Conecte-se gratuitamente ao Wi-Fi',
-        'button_label' => 'Conectar à internet',
+        'button_label' => 'Continuar',
     ]);
     audit_log('hotspot.create', $companyId, null, ['id' => $id]);
     $_SESSION['flash_ok'] = 'Hotspot criado.';
@@ -82,11 +82,22 @@ set_setting_for_store($id, 'store_name', trim((string) ($_POST['name'] ?? $store
 save_portal_config($id, [
     'title' => $_POST['portal_title'] ?? 'Bem-vindo',
     'subtitle' => $_POST['portal_subtitle'] ?? '',
-    'button_label' => $_POST['portal_button'] ?? 'Conectar à internet',
+    'button_label' => $_POST['portal_button'] ?? 'Continuar',
     'require_name' => 1,
     'require_phone' => 1,
     'require_terms' => 1,
 ]);
+$approval = (string) ($_POST['approval_mode'] ?? 'instant');
+if (!in_array($approval, ['instant', 'manual'], true)) {
+    $approval = 'instant';
+}
+set_setting_for_store($id, 'approval_mode', $approval);
+$template = trim((string) ($_POST['status_template'] ?? ''));
+if ($template !== '') {
+    set_setting_for_store($id, 'status_template', $template);
+}
+$hours = max(1, min(24, (int) ($_POST['session_hours'] ?? 2)));
+set_setting_for_store($id, 'session_hours', (string) $hours);
 $wifiChanged = $newSsid !== $oldSsid || ($wifiPass !== '' && $wifiPass !== $oldPass);
 if ($wifiChanged && $newProvider === 'windows') {
     queue_store_command($id, 'apply');

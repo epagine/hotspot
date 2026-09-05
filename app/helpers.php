@@ -530,7 +530,7 @@ function current_client(): ?array
     $stmt = db()->prepare(
         'SELECT * FROM clients WHERE store_id = ? AND ip = ? ORDER BY id DESC LIMIT 1'
     );
-    $stmt->execute([local_store_id(), $ip]);
+    $stmt->execute([current_store_id(), $ip]);
     $row = $stmt->fetch();
     return $row ?: null;
 }
