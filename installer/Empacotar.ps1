@@ -37,6 +37,14 @@ foreach ($exe in @("HotspotBandeja.exe", "Desinstalar-Hotspot.exe", "DnsProxy.ex
 
 Set-Content -Path (Join-Path $Stage "CLOUD_AGENT") -Value "1" -Encoding ASCII
 
+$versionFile = Join-Path $Root "scripts\AGENT_VERSION.txt"
+if (-not (Test-Path $versionFile)) {
+    throw "Faltando scripts\AGENT_VERSION.txt"
+}
+$agentVersion = (Get-Content $versionFile -Raw).Trim()
+Set-Content -Path (Join-Path $Stage "AGENT_VERSION") -Value $agentVersion -Encoding ASCII -NoNewline
+Write-Host "Versao do agente: $agentVersion"
+
 Add-Type -AssemblyName System.IO.Compression.FileSystem
 if (Test-Path $Zip) { Remove-Item $Zip -Force }
 Write-Host "Compactando pacote..."
@@ -49,12 +57,19 @@ if (-not (Test-Path $csc)) {
 Write-Host "Compilando instalador..."
 $manifest = Join-Path $PSScriptRoot "app.manifest"
 $setupCs = Join-Path $PSScriptRoot "Setup.cs"
+$agentBuildCs = Join-Path $PSScriptRoot "AgentBuild.generated.cs"
+@(
+    "internal static class AgentBuild",
+    "{",
+    "    public const string Version = `"$agentVersion`";",
+    "}"
+) | Set-Content -Path $agentBuildCs -Encoding UTF8
 $logo = Join-Path $Root "public\assets\logo-wifidaloja.jpg"
 if (-not (Test-Path $logo)) {
     throw "Logo nao encontrada: public\assets\logo-wifidaloja.jpg"
 }
 $resourceArg = "/resource:{0},WiFiDaLoja.Logo" -f $logo
-& $csc /nologo /optimize+ /target:winexe /win32manifest:$manifest /r:System.Windows.Forms.dll /r:System.Drawing.dll /r:System.IO.Compression.dll /r:System.IO.Compression.FileSystem.dll $resourceArg /out:$Stub $setupCs
+& $csc /nologo /optimize+ /target:winexe /win32manifest:$manifest /r:System.Windows.Forms.dll /r:System.Drawing.dll /r:System.IO.Compression.dll /r:System.IO.Compression.FileSystem.dll $resourceArg /out:$Stub $setupCs $agentBuildCs
 if ($LASTEXITCODE -ne 0) { throw "Falha ao compilar Setup.cs" }
 
 Write-Host "Montando WiFiDaLoja-Agent-Setup.exe ..."

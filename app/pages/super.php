@@ -280,7 +280,7 @@ $superNavItems = [
         <?php elseif ($tab === 'instalador'): ?>
             <section class="card card-narrow">
                 <h2>Agente Windows</h2>
-                <p class="hint">Pacote cloud para produção — bandeja, hotspot e DNS cativo, sem PHP/MySQL local. Gere com <code>installer\Empacotar.ps1</code>.</p>
+                <p class="hint">Versão publicada: <strong><?= h(agent_release_version()) ?></strong> · pacote cloud (bandeja, hotspot, DNS cativo). Gere com <code>installer\Empacotar.ps1</code> após alterar <code>scripts\AGENT_VERSION.txt</code>.</p>
                 <?php if ($setupFile): ?>
                     <?php
                     $setupBytes = (int) filesize($setupFile);

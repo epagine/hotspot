@@ -18,6 +18,7 @@ storage/migrations.lock
 storage/logs/
 dist/
 dist-cloud/
+installer/AgentBuild.generated.cs
 runtime/
 WiFiDaLoja-Setup.exe
 WiFiDaLoja-Agent-Setup.exe

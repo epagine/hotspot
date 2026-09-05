@@ -242,6 +242,8 @@ function app_nav_tw(string $tab, array $items): void
             if ($hot && (int) ($hot['company_id'] ?? 0) === $companyId):
                 $pc = portal_config_for((int) $hot['id']);
                 $health = store_connection_health($hot);
+                $agentStatus = store_status_payload($hot);
+                $agentVer = agent_version_info((string) ($agentStatus['agent_version'] ?? ''));
                 $setupReady = installer_setup_path() !== null;
                 $panelUrl = rtrim(guess_panel_url(), '/');
             ?>
@@ -260,6 +262,7 @@ function app_nav_tw(string $tab, array $items): void
                 <p class="hint">
                     PC: <span class="tag conn-<?= h((string) $health['key']) ?>"><?= h((string) $health['label']) ?></span>
                     · <?= h((string) $health['detail']) ?>
+                    · agente <span class="tag<?= $agentVer['outdated'] ? ' conn-erro' : '' ?>"><?= h($agentVer['label']) ?></span>
                     <?php if (!empty($hot['last_seen_at'])): ?>
                         · último contato <?= h((string) $hot['last_seen_at']) ?>
                     <?php endif; ?>

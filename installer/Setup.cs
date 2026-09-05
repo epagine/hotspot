@@ -29,7 +29,7 @@ internal sealed class SetupForm : Form
 
     public SetupForm()
     {
-        Text = "WiFi da Loja — Agente Windows";
+        Text = "WiFi da Loja — Agente Windows v" + AgentBuild.Version;
         Width = 700;
         Height = 600;
         StartPosition = FormStartPosition.CenterScreen;
@@ -147,7 +147,7 @@ internal sealed class SetupForm : Form
             Height = 32,
             ForeColor = Color.FromArgb(100, 112, 128),
             Font = new Font("Segoe UI", 8f),
-            Text = "Windows 10/11 · execute como administrador"
+            Text = "Windows 10/11 · execute como administrador · agente v" + AgentBuild.Version
         });
     }
 

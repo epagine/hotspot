@@ -20,6 +20,7 @@ $DnsProxy = Join-Path $Root "DnsProxy.exe"
 $DnsProxyPhp = Join-Path $Root "bin\dns-proxy.php"
 $MaxClients = 8
 $script:ServiceAllowed = $true
+$AgentVersion = Get-AgentVersion -InstallRoot $Root
 
 if (-not (Test-Path $Storage)) {
     New-Item -ItemType Directory -Path $Storage | Out-Null
@@ -405,6 +406,7 @@ function Write-Status {
         max_clients      = $MaxClients
         dns_up           = $dnsUp
         error            = $script:LastError
+        agent_version    = $AgentVersion
         agent_seen_at    = (Get-Date).ToString("s")
         agent_pid        = $PID
     }
@@ -542,6 +544,7 @@ function Sync-Cloud {
             admin_url        = [string]($(if ($links.admin) { $links.admin } else { ([string]$cfg.panel_url).TrimEnd("/") + "/app/hotspots/" + [string]$resp.store_id }))
             client_url       = [string]($(if ($links.client) { $links.client } else { ([string]$cfg.panel_url).TrimEnd("/") + "/cliente" }))
             portal_url       = [string]($(if ($links.portal) { $links.portal } else { ([string]$cfg.panel_url).TrimEnd("/") + "/portal/" + [uri]::EscapeDataString([string]$cfg.token) }))
+            agent_version    = [string]$AgentVersion
             updated_at       = (Get-Date).ToString("s")
         }
         $infoFile = Join-Path $Storage "store-info.json"

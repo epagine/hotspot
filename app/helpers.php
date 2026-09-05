@@ -767,6 +767,44 @@ function h(?string $value): string
     return htmlspecialchars((string) $value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
 }
 
+/** Versão publicada do agente Windows (scripts/AGENT_VERSION.txt). */
+function agent_release_version(): string
+{
+    static $cached = null;
+    if ($cached !== null) {
+        return $cached;
+    }
+    $path = dirname(__DIR__) . '/scripts/AGENT_VERSION.txt';
+    $cached = is_file($path) ? trim((string) file_get_contents($path)) : '0.0.0';
+    if ($cached === '') {
+        $cached = '0.0.0';
+    }
+    return $cached;
+}
+
+/** @return array{label: string, outdated: bool, latest: string, current: string} */
+function agent_version_info(?string $reported): array
+{
+    $latest = agent_release_version();
+    $current = trim((string) $reported);
+    if ($current === '') {
+        return [
+            'label' => 'desconhecida',
+            'outdated' => false,
+            'latest' => $latest,
+            'current' => '',
+        ];
+    }
+    $outdated = version_compare($current, $latest, '<');
+
+    return [
+        'label' => $outdated ? ($current . ' · atualize para ' . $latest) : $current,
+        'outdated' => $outdated,
+        'latest' => $latest,
+        'current' => $current,
+    ];
+}
+
 function installer_downloads_dir(): string
 {
     $dir = storage_dir() . DIRECTORY_SEPARATOR . 'downloads';

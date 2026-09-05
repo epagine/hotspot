@@ -58,6 +58,21 @@ function Test-AgentCloudConfig {
     return ($url.Length -ge 8 -and $token.Length -ge 8)
 }
 
+function Get-AgentVersion {
+    param([string]$InstallRoot = "")
+    if ($InstallRoot) {
+        $fromRoot = Join-Path $InstallRoot "AGENT_VERSION"
+        if (Test-Path $fromRoot) {
+            return (Get-Content $fromRoot -Raw -ErrorAction SilentlyContinue).Trim()
+        }
+    }
+    $fromRepo = Join-Path (Split-Path -Parent $PSScriptRoot) "scripts\AGENT_VERSION.txt"
+    if (Test-Path $fromRepo) {
+        return (Get-Content $fromRepo -Raw -ErrorAction SilentlyContinue).Trim()
+    }
+    return "0.0.0"
+}
+
 function Get-PendingCommandFile {
     param([string]$InstallRoot, [string]$StorageDir)
     $primary = Join-Path $StorageDir "command.json"

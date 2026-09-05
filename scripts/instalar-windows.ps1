@@ -144,6 +144,8 @@ if (-not (Test-Path $Storage)) {
 
 Write-Log "Instalando em $Root$(if ($isCloudAgent) { ' (modo cloud)' } else { '' })"
 Write-Log "Dados persistentes em $Storage"
+$agentVersion = Get-AgentVersion -InstallRoot $Root
+Write-Log "Versao do agente: $agentVersion"
 
 $php = $null
 if (-not $isCloudAgent) {
@@ -223,7 +225,7 @@ $uninst = "HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\HotspotLoja
 New-Item -Path $uninst -Force | Out-Null
 New-ItemProperty -Path $uninst -Name "DisplayName" -Value "Wi-Fi da loja" -PropertyType String -Force | Out-Null
 New-ItemProperty -Path $uninst -Name "Publisher" -Value "Hotspot Loja" -PropertyType String -Force | Out-Null
-New-ItemProperty -Path $uninst -Name "DisplayVersion" -Value "1.0" -PropertyType String -Force | Out-Null
+New-ItemProperty -Path $uninst -Name "DisplayVersion" -Value $agentVersion -PropertyType String -Force | Out-Null
 New-ItemProperty -Path $uninst -Name "InstallLocation" -Value $Root -PropertyType String -Force | Out-Null
 New-ItemProperty -Path $uninst -Name "UninstallString" -Value ("powershell.exe -NoProfile -ExecutionPolicy Bypass -File `"$desinst`"") -PropertyType String -Force | Out-Null
 New-ItemProperty -Path $uninst -Name "NoModify" -Value 1 -PropertyType DWord -Force | Out-Null

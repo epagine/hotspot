@@ -280,6 +280,22 @@ internal sealed class TrayApp : ApplicationContext
         return JsonGet(ReadFileSafe(Storage("store-info.json")), key);
     }
 
+    internal string ReadLocalAgentVersion()
+    {
+        try
+        {
+            string path = Path.Combine(root, "AGENT_VERSION");
+            if (File.Exists(path))
+            {
+                return File.ReadAllText(path).Trim();
+            }
+        }
+        catch
+        {
+        }
+        return "";
+    }
+
     internal string ReadStatus(string key)
     {
         return JsonGet(ReadFileSafe(Storage("status.json")), key);
@@ -760,6 +776,15 @@ internal sealed class TrayApp : ApplicationContext
 
             string panel = app.ReadCloud("panel_url");
             boundLbl.Text = panel.Length > 8 ? "Vinculado a " + panel : "Não vinculado ao painel";
+            string agentVer = app.ReadInfo("agent_version");
+            if (agentVer.Length == 0)
+            {
+                agentVer = app.ReadLocalAgentVersion();
+            }
+            if (agentVer.Length > 0)
+            {
+                boundLbl.Text = "Agente v" + agentVer + " · " + boundLbl.Text;
+            }
 
             clientLink.Text = "Abrir portal do cliente";
             adminLink.Text = "Abrir hotspot no painel";
