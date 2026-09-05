@@ -24,6 +24,7 @@ internal sealed class TrayApp : ApplicationContext
     public TrayApp()
     {
         root = AppDomain.CurrentDomain.BaseDirectory.TrimEnd(Path.DirectorySeparatorChar);
+        ImportLegacyStorage(root);
         icon = new NotifyIcon
         {
             Icon = MakeAppIcon(),
@@ -69,6 +70,38 @@ internal sealed class TrayApp : ApplicationContext
         return dir;
     }
 
+    private static void ImportLegacyStorage(string installRoot)
+    {
+        string legacy = Path.Combine(installRoot, "storage");
+        if (!Directory.Exists(legacy))
+        {
+            return;
+        }
+        string target = AgentDataDir();
+        foreach (string name in new[] {
+            "cloud.json", "authorized.json", "store-info.json", "install-mode.json",
+            "sync-error.json", "client-patches.json", "php-path.txt"
+        })
+        {
+            string src = Path.Combine(legacy, name);
+            string dst = Path.Combine(target, name);
+            if (File.Exists(src) && !File.Exists(dst))
+            {
+                File.Copy(src, dst);
+            }
+        }
+        string legacyBrand = Path.Combine(legacy, "brand");
+        string targetBrand = Path.Combine(target, "brand");
+        if (Directory.Exists(legacyBrand) && !Directory.Exists(targetBrand))
+        {
+            Directory.CreateDirectory(targetBrand);
+            foreach (string file in Directory.GetFiles(legacyBrand))
+            {
+                File.Copy(file, Path.Combine(targetBrand, Path.GetFileName(file)));
+            }
+        }
+    }
+
     private void StartBackend()
     {
         Directory.CreateDirectory(AgentDataDir());
@@ -98,7 +131,20 @@ internal sealed class TrayApp : ApplicationContext
     {
         string id = Guid.NewGuid().ToString("N").Substring(0, 16);
         string json = "{\n  \"id\": \"" + id + "\",\n  \"action\": \"" + action + "\",\n  \"at\": \"" + DateTime.Now.ToString("o") + "\"\n}\n";
-        File.WriteAllText(Storage("command.json"), json);
+        try
+        {
+            Directory.CreateDirectory(AgentDataDir());
+            File.WriteAllText(Storage("command.json"), json);
+        }
+        catch (Exception ex)
+        {
+            icon.ShowBalloonTip(
+                5000,
+                "Wi-Fi da loja",
+                "Nao foi possivel enviar comando. Atualize o agente (reinstale o setup) ou execute como administrador.\n" + ex.Message,
+                ToolTipIcon.Error);
+            return;
+        }
         icon.ShowBalloonTip(2500, "Wi-Fi da loja", action == "start" ? "Ligando a rede..." : "Desligando a rede...", ToolTipIcon.Info);
         if (statusForm != null && !statusForm.IsDisposed)
         {
