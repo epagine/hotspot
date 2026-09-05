@@ -2395,3 +2395,103 @@ body.page.portal .card { text-align: center; }
 .agent-diag-log-error { color: #e07060; }
 .agent-diag-log-warn { color: #e8b058; }
 .agent-diag-log-info { color: var(--app-muted); }
+
+.hotspot-edit { padding: 0; overflow: hidden; }
+.hotspot-edit-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 12px 16px;
+  padding: 20px 22px;
+  border-bottom: 1px solid var(--app-line, #24303c);
+  background: rgba(0, 0, 0, 0.12);
+}
+.hotspot-edit-back { flex-shrink: 0; }
+.hotspot-edit-heading { flex: 1 1 200px; min-width: 0; }
+.hotspot-edit-heading h2 { margin: 0 0 4px; font-size: 1.35rem; }
+.hotspot-edit-heading .hint { margin: 0; }
+.hotspot-edit-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+.hotspot-edit-layout {
+  display: grid;
+  grid-template-columns: minmax(260px, 320px) 1fr;
+  gap: 0;
+  align-items: start;
+}
+@media (max-width: 960px) {
+  .hotspot-edit-layout { grid-template-columns: 1fr; }
+}
+.hotspot-edit-side {
+  padding: 20px;
+  border-right: 1px solid var(--app-line, #24303c);
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  background: rgba(0, 0, 0, 0.08);
+}
+@media (max-width: 960px) {
+  .hotspot-edit-side {
+    border-right: 0;
+    border-bottom: 1px solid var(--app-line, #24303c);
+  }
+}
+.hotspot-edit-main { padding: 20px 22px; }
+.hotspot-panel {
+  border: 1px solid var(--app-line, #24303c);
+  border-radius: 12px;
+  padding: 16px 18px;
+  background: var(--app-input, rgba(255, 255, 255, 0.02));
+}
+.hotspot-edit-side .hotspot-panel { margin: 0; }
+.hotspot-edit-form .hotspot-panel { margin-bottom: 16px; }
+.hotspot-panel-title {
+  margin: 0 0 12px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--accent, #c8892a);
+}
+.hotspot-panel-lead { margin: -4px 0 12px; }
+.hotspot-install-steps {
+  margin: 0 0 14px;
+  padding-left: 1.2rem;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--app-muted);
+}
+.hotspot-install-steps li + li { margin-top: 8px; }
+.hotspot-meta {
+  margin: 0 0 14px;
+  font-size: 13px;
+  display: grid;
+  gap: 10px;
+}
+.hotspot-meta dt {
+  color: var(--app-muted);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin: 0;
+}
+.hotspot-meta dd { margin: 2px 0 0; word-break: break-all; }
+.hotspot-danger-action { margin: 0; }
+.hotspot-edit-form label { display: block; margin-bottom: 12px; }
+.hotspot-edit-form label:last-child { margin-bottom: 0; }
+.hotspot-edit-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding-top: 4px;
+}
+.hotspot-create-form { margin-bottom: 20px; }
+.hotspot-edit-side .agent-diag {
+  margin: 12px 0 0;
+  padding: 0;
+  border: none;
+  background: transparent;
+}

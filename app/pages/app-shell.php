@@ -190,6 +190,166 @@ function app_nav_tw(string $tab, array $items): void
 
         <?php elseif ($tab === 'hotspots'): ?>
             <?php
+            $hid = (int) ($_GET['id'] ?? 0);
+            $hot = $hid > 0 ? find_store($hid) : null;
+            $editing = $hot && (int) ($hot['company_id'] ?? 0) === $companyId;
+            if ($editing):
+                $pc = portal_config_for((int) $hot['id']);
+                $health = store_connection_health($hot);
+                $agentStatus = store_status_payload($hot);
+                $agentVer = agent_version_info((string) ($agentStatus['agent_version'] ?? ''));
+                $agentDiag = store_agent_diagnostic_summary($hot);
+                $agentLog = store_agent_event_log($hot);
+                $setupReady = installer_setup_path() !== null;
+                $panelUrl = rtrim(guess_panel_url(), '/');
+                $approval = setting_for_store((int) $hot['id'], 'approval_mode', 'instant');
+            ?>
+            <section class="card hotspot-edit">
+                <header class="hotspot-edit-header">
+                    <a class="btn ghost btn-sm hotspot-edit-back" href="/app/hotspots">← Hotspots</a>
+                    <div class="hotspot-edit-heading">
+                        <h2><?= h((string) $hot['name']) ?></h2>
+                        <p class="hint">
+                            <?php if (trim((string) ($hot['city'] ?? '')) !== ''): ?><?= h((string) $hot['city']) ?> · <?php endif; ?>
+                            <a href="/portal/<?= h((string) $hot['token']) ?>" target="_blank" rel="noopener">Abrir portal cativo</a>
+                        </p>
+                    </div>
+                    <div class="hotspot-edit-badges">
+                        <span class="tag conn-<?= h((string) $health['key']) ?>"><?= h((string) $health['label']) ?></span>
+                        <span class="tag <?= (($hot['hotspot_status'] ?? 'ativo') === 'ativo') ? 'online' : 'blocked' ?>"><?= h((string) ($hot['hotspot_status'] ?? 'ativo')) ?></span>
+                        <span class="tag<?= $agentVer['outdated'] ? ' conn-erro' : '' ?>"><?= h($agentVer['label']) ?></span>
+                    </div>
+                </header>
+
+                <div class="hotspot-edit-layout">
+                    <aside class="hotspot-edit-side">
+                        <div class="hotspot-panel">
+                            <h3 class="hotspot-panel-title">Status do PC</h3>
+                            <p class="hint hotspot-panel-lead"><?= h((string) $health['detail']) ?></p>
+                            <?php if (!empty($hot['last_seen_at'])): ?>
+                                <p class="hint">Último contato: <?= h((string) $hot['last_seen_at']) ?></p>
+                            <?php endif; ?>
+                            <details class="agent-diag" <?= ($health['key'] !== 'ok' || !empty($agentStatus['sync_error'] ?? '') || !empty($agentStatus['error'] ?? '')) ? 'open' : '' ?>>
+                                <summary>Diagnóstico<?php if ($health['key'] !== 'ok'): ?> — atenção<?php endif; ?></summary>
+                                <div class="agent-diag-grid">
+                                    <?php foreach ($agentDiag as $row): ?>
+                                        <div class="agent-diag-row">
+                                            <span class="agent-diag-label"><?= h((string) $row['label']) ?></span>
+                                            <span class="agent-diag-value<?= ($row['ok'] === false) ? ' agent-diag-bad' : (($row['ok'] === true) ? ' agent-diag-ok' : '') ?>"><?= h((string) $row['value']) ?></span>
+                                        </div>
+                                    <?php endforeach; ?>
+                                </div>
+                                <?php if ($agentLog): ?>
+                                    <h4 class="agent-diag-log-title">Log recente</h4>
+                                    <ul class="agent-diag-log">
+                                        <?php foreach ($agentLog as $ev): ?>
+                                            <li class="agent-diag-log-<?= h((string) $ev['level']) ?>">
+                                                <?php if ($ev['at'] !== ''): ?><time><?= h(str_replace('T', ' ', $ev['at'])) ?></time><?php endif; ?>
+                                                <?= h((string) $ev['msg']) ?>
+                                            </li>
+                                        <?php endforeach; ?>
+                                    </ul>
+                                <?php elseif (!$agentStatus['agent_alive']): ?>
+                                    <p class="hint">Nenhum log — agente parado ou ainda não sincronizou.</p>
+                                <?php endif; ?>
+                            </details>
+                        </div>
+
+                        <div class="hotspot-panel">
+                            <h3 class="hotspot-panel-title">Agente Windows</h3>
+                            <ol class="hotspot-install-steps">
+                                <li>Baixe e execute como administrador<?php if ($setupReady): ?> — <a href="/app/instalador/baixar">Baixar setup</a><?php else: ?> (indisponível)<?php endif; ?></li>
+                                <li>URL do painel: <code class="admin-code-break"><?= h($panelUrl) ?></code></li>
+                                <li>Cole o token na instalação ou em <em>Vincular hotspot</em> na bandeja</li>
+                            </ol>
+                            <dl class="hotspot-meta">
+                                <dt>Token</dt>
+                                <dd><code class="token"><?= h((string) $hot['token']) ?></code></dd>
+                                <dt>SSID atual</dt>
+                                <dd><?= h(setting_for_store((int) $hot['id'], 'wifi_ssid', 'WifiDaLoja')) ?></dd>
+                            </dl>
+                            <form method="post" action="/app/hotspots" class="hotspot-danger-action" onsubmit="return confirm('Gerar novo token? O PC precisará ser revinculado na bandeja.');">
+                                <?= csrf_field() ?>
+                                <input type="hidden" name="do" value="rotate">
+                                <input type="hidden" name="id" value="<?= (int) $hot['id'] ?>">
+                                <button class="btn ghost btn-sm" type="submit">Renovar token</button>
+                            </form>
+                        </div>
+                    </aside>
+
+                    <div class="hotspot-edit-main">
+                        <form method="post" action="/app/hotspots" class="form hotspot-edit-form">
+                            <?= csrf_field() ?>
+                            <input type="hidden" name="do" value="save">
+                            <input type="hidden" name="id" value="<?= (int) $hot['id'] ?>">
+
+                            <div class="hotspot-panel">
+                                <h3 class="hotspot-panel-title">Identificação</h3>
+                                <div class="form-grid-2">
+                                    <label>Nome<input name="name" value="<?= h((string) $hot['name']) ?>" required></label>
+                                    <label>Localização<input name="location" value="<?= h((string) ($hot['location'] ?? '')) ?>"></label>
+                                </div>
+                                <label>Descrição<textarea name="description" rows="2"><?= h((string) ($hot['description'] ?? '')) ?></textarea></label>
+                            </div>
+
+                            <div class="hotspot-panel">
+                                <h3 class="hotspot-panel-title">Rede Wi-Fi</h3>
+                                <div class="form-grid-2">
+                                    <label>SSID<input name="ssid" value="<?= h(setting_for_store((int) $hot['id'], 'wifi_ssid', 'WifiDaLoja')) ?>"></label>
+                                    <label>Senha<input name="wifi_pass" type="password" value="" autocomplete="new-password" placeholder="Deixe em branco para manter"></label>
+                                    <label>Situação
+                                        <select name="hotspot_status">
+                                            <?php foreach (['ativo' => 'Ativo', 'inativo' => 'Inativo', 'bloqueado' => 'Bloqueado'] as $v => $l): ?>
+                                                <option value="<?= h($v) ?>" <?= ($hot['hotspot_status'] ?? 'ativo') === $v ? 'selected' : '' ?>><?= h($l) ?></option>
+                                            <?php endforeach; ?>
+                                        </select>
+                                    </label>
+                                    <label>Provider
+                                        <select name="provider">
+                                            <?php foreach (network_providers() as $p): ?>
+                                                <option value="<?= h($p->key()) ?>" <?= ($hot['provider'] ?? 'windows') === $p->key() ? 'selected' : '' ?>><?= h($p->label()) ?></option>
+                                            <?php endforeach; ?>
+                                        </select>
+                                    </label>
+                                </div>
+                            </div>
+
+                            <div class="hotspot-panel">
+                                <h3 class="hotspot-panel-title">Portal cativo</h3>
+                                <p class="hint hotspot-panel-lead">Tela que o cliente vê ao conectar no Wi-Fi.</p>
+                                <label>Título<input name="portal_title" value="<?= h((string) ($pc['title'] ?? 'Bem-vindo')) ?>"></label>
+                                <label>Descrição<textarea name="portal_subtitle" rows="2"><?= h((string) ($pc['subtitle'] ?? '')) ?></textarea></label>
+                                <label>Texto do botão<input name="portal_button" value="<?= h((string) ($pc['button_label'] ?? 'Continuar')) ?>"></label>
+                                <div class="form-grid-2">
+                                    <label>Modo de aprovação
+                                        <select name="approval_mode">
+                                            <?php foreach (['instant' => 'Automático', 'manual' => 'Manual (balcão)'] as $v => $l): ?>
+                                                <option value="<?= h($v) ?>" <?= $approval === $v ? 'selected' : '' ?>><?= h($l) ?></option>
+                                            <?php endforeach; ?>
+                                        </select>
+                                    </label>
+                                    <label>Duração do acesso (h)<input name="session_hours" type="number" min="1" max="24" value="<?= h(setting_for_store((int) $hot['id'], 'session_hours', '2')) ?>"></label>
+                                </div>
+                                <label>Texto do status WhatsApp<textarea name="status_template" rows="2" placeholder="Estou na {loja}! Código {codigo}"><?= h(setting_for_store((int) $hot['id'], 'status_template', 'Estou na {loja} agora! 🔥 Venha conferir. Código {codigo}')) ?></textarea></label>
+                                <p class="hint">Variáveis: {loja}, {codigo}, {cidade}</p>
+                            </div>
+
+                            <div class="hotspot-panel">
+                                <h3 class="hotspot-panel-title">Termos legais</h3>
+                                <label>Termos de uso<textarea name="terms_html" rows="3"><?= h((string) ($hot['terms_html'] ?? '')) ?></textarea></label>
+                                <label>Política de privacidade<textarea name="privacy_html" rows="3"><?= h((string) ($hot['privacy_html'] ?? '')) ?></textarea></label>
+                            </div>
+
+                            <div class="hotspot-edit-actions">
+                                <button class="btn" type="submit">Salvar alterações</button>
+                                <a class="btn ghost" href="/app/hotspots">Cancelar</a>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </section>
+            <?php else: ?>
+            <?php
             $stmt = db()->prepare('SELECT * FROM stores WHERE company_id = ? ORDER BY id DESC');
             $stmt->execute([$companyId]);
             $hotspots = $stmt->fetchAll() ?: [];
@@ -205,7 +365,7 @@ function app_nav_tw(string $tab, array $items): void
                     <p class="alert"><?= h(company_limit_error('hotspots')) ?></p>
                 <?php endif; ?>
                 <?php if (!empty($_GET['novo'])): ?>
-                    <form method="post" action="/app/hotspots" class="form form-inline" style="margin-bottom:20px">
+                    <form method="post" action="/app/hotspots" class="form form-inline hotspot-create-form">
                         <?= csrf_field() ?>
                         <input type="hidden" name="do" value="create">
                         <label>Nome<input name="name" required placeholder="Loja Principal"></label>
@@ -226,137 +386,15 @@ function app_nav_tw(string $tab, array $items): void
                                 <td><span class="tag conn-<?= h((string) $health['key']) ?>"><?= h((string) $health['label']) ?></span></td>
                                 <td><span class="tag <?= (($h['hotspot_status'] ?? 'ativo') === 'ativo') ? 'online' : 'blocked' ?>"><?= h((string) ($h['hotspot_status'] ?? 'ativo')) ?></span></td>
                                 <td><?= h(network_provider((string) ($h['provider'] ?? 'windows'))->label()) ?></td>
-                                <td><a class="btn ghost btn-sm" href="/app/hotspots/<?= (int) $h['id'] ?>">Abrir</a></td>
+                                <td><a class="btn ghost btn-sm" href="/app/hotspots/<?= (int) $h['id'] ?>">Editar</a></td>
                             </tr>
                         <?php endforeach; ?>
                         <?php if (!$hotspots): ?>
-                            <tr class="empty"><td colspan="5">Nenhum hotspot. Crie o primeiro para começar.</td></tr>
+                            <tr class="empty"><td colspan="6">Nenhum hotspot. Crie o primeiro para começar.</td></tr>
                         <?php endif; ?>
                         </tbody>
                     </table>
                 </div>
-            </section>
-            <?php
-            $hid = (int) ($_GET['id'] ?? 0);
-            $hot = $hid > 0 ? find_store($hid) : null;
-            if ($hot && (int) ($hot['company_id'] ?? 0) === $companyId):
-                $pc = portal_config_for((int) $hot['id']);
-                $health = store_connection_health($hot);
-                $agentStatus = store_status_payload($hot);
-                $agentVer = agent_version_info((string) ($agentStatus['agent_version'] ?? ''));
-                $agentDiag = store_agent_diagnostic_summary($hot);
-                $agentLog = store_agent_event_log($hot);
-                $setupReady = installer_setup_path() !== null;
-                $panelUrl = rtrim(guess_panel_url(), '/');
-            ?>
-            <section class="card card-narrow">
-                <h2>Instalar no PC Windows</h2>
-                <ol class="steps">
-                    <li>Baixe e execute o instalador como administrador — <?php if ($setupReady): ?><a href="/app/instalador/baixar">Baixar agente Windows</a><?php else: ?><span class="hint">instalador indisponível — contate o suporte</span><?php endif; ?></li>
-                    <li>Informe a URL do painel: <code class="admin-code-break"><?= h($panelUrl) ?></code></li>
-                    <li>Cole o token do agente abaixo na instalação ou em <em>Vincular hotspot</em> na bandeja</li>
-                    <li>Aguarde o ícone na bandeja ficar sincronizado (status verde)</li>
-                </ol>
-                <p class="hint">Token: <code class="token"><?= h((string) $hot['token']) ?></code></p>
-            </section>
-            <section class="card">
-                <h2><?= h((string) $hot['name']) ?></h2>
-                <p class="hint">
-                    PC: <span class="tag conn-<?= h((string) $health['key']) ?>"><?= h((string) $health['label']) ?></span>
-                    · <?= h((string) $health['detail']) ?>
-                    · agente <span class="tag<?= $agentVer['outdated'] ? ' conn-erro' : '' ?>"><?= h($agentVer['label']) ?></span>
-                    <?php if (!empty($hot['last_seen_at'])): ?>
-                        · último contato <?= h((string) $hot['last_seen_at']) ?>
-                    <?php endif; ?>
-                </p>
-                <details class="agent-diag" <?= ($health['key'] !== 'ok' || !empty($agentStatus['sync_error'] ?? '') || !empty($agentStatus['error'] ?? '')) ? 'open' : '' ?>>
-                    <summary>Diagnóstico do PC<?php if ($health['key'] !== 'ok'): ?> — atenção<?php endif; ?></summary>
-                    <div class="agent-diag-grid">
-                        <?php foreach ($agentDiag as $row): ?>
-                            <div class="agent-diag-row">
-                                <span class="agent-diag-label"><?= h((string) $row['label']) ?></span>
-                                <span class="agent-diag-value<?= ($row['ok'] === false) ? ' agent-diag-bad' : (($row['ok'] === true) ? ' agent-diag-ok' : '') ?>"><?= h((string) $row['value']) ?></span>
-                            </div>
-                        <?php endforeach; ?>
-                    </div>
-                    <?php if ($agentLog): ?>
-                        <h3 class="agent-diag-log-title">Log recente do agente</h3>
-                        <ul class="agent-diag-log">
-                            <?php foreach ($agentLog as $ev): ?>
-                                <li class="agent-diag-log-<?= h((string) $ev['level']) ?>">
-                                    <?php if ($ev['at'] !== ''): ?><time><?= h(str_replace('T', ' ', $ev['at'])) ?></time><?php endif; ?>
-                                    <?= h((string) $ev['msg']) ?>
-                                </li>
-                            <?php endforeach; ?>
-                        </ul>
-                    <?php elseif (!$agentStatus['agent_alive']): ?>
-                        <p class="hint">Nenhum log recebido — o agente ainda não sincronizou com o painel ou está parado no PC.</p>
-                    <?php endif; ?>
-                </details>
-                <form method="post" action="/app/hotspots" class="form">
-                    <?= csrf_field() ?>
-                    <input type="hidden" name="do" value="save">
-                    <input type="hidden" name="id" value="<?= (int) $hot['id'] ?>">
-                    <div class="form-grid">
-                        <fieldset>
-                            <legend>Hotspot</legend>
-                            <label>Nome<input name="name" value="<?= h((string) $hot['name']) ?>" required></label>
-                            <label>Descrição<textarea name="description" rows="2"><?= h((string) ($hot['description'] ?? '')) ?></textarea></label>
-                            <label>Localização<input name="location" value="<?= h((string) ($hot['location'] ?? '')) ?>"></label>
-                            <label>SSID<input name="ssid" value="<?= h(setting_for_store((int) $hot['id'], 'wifi_ssid', 'WifiDaLoja')) ?>"></label>
-                            <label>Senha Wi-Fi<input name="wifi_pass" type="password" value="" autocomplete="new-password" placeholder="Deixe em branco para manter"></label>
-                            <label>Status
-                                <select name="hotspot_status">
-                                    <?php foreach (['ativo' => 'Ativo', 'inativo' => 'Inativo', 'bloqueado' => 'Bloqueado'] as $v => $l): ?>
-                                        <option value="<?= h($v) ?>" <?= ($hot['hotspot_status'] ?? 'ativo') === $v ? 'selected' : '' ?>><?= h($l) ?></option>
-                                    <?php endforeach; ?>
-                                </select>
-                            </label>
-                            <label>Provider
-                                <select name="provider">
-                                    <?php foreach (network_providers() as $p): ?>
-                                        <option value="<?= h($p->key()) ?>" <?= ($hot['provider'] ?? 'windows') === $p->key() ? 'selected' : '' ?>><?= h($p->label()) ?></option>
-                                    <?php endforeach; ?>
-                                </select>
-                            </label>
-                            <p class="hint">Token do agente: <code class="token"><?= h((string) $hot['token']) ?></code></p>
-                            <p class="hint">Portal: <a href="/portal/<?= h((string) $hot['token']) ?>" target="_blank">/portal/<?= h((string) $hot['token']) ?></a></p>
-                            <?php if ($setupFile): ?>
-                                <p class="hint"><a class="btn ghost btn-sm" href="/app/instalador/baixar">Baixar instalador Windows</a></p>
-                            <?php endif; ?>
-                        </fieldset>
-                        <fieldset>
-                            <legend>Portal</legend>
-                            <label>Título<input name="portal_title" value="<?= h((string) ($pc['title'] ?? 'Bem-vindo')) ?>"></label>
-                            <label>Descrição<textarea name="portal_subtitle" rows="3"><?= h((string) ($pc['subtitle'] ?? '')) ?></textarea></label>
-                            <label>Texto do botão<input name="portal_button" value="<?= h((string) ($pc['button_label'] ?? 'Continuar')) ?>"></label>
-                            <label>Modo de aprovação
-                                <select name="approval_mode">
-                                    <?php
-                                    $approval = setting_for_store((int) $hot['id'], 'approval_mode', 'instant');
-                                    foreach (['instant' => 'Automático (cliente confirma após publicar)', 'manual' => 'Manual (balcão aprova no painel)'] as $v => $l):
-                                    ?>
-                                        <option value="<?= h($v) ?>" <?= $approval === $v ? 'selected' : '' ?>><?= h($l) ?></option>
-                                    <?php endforeach; ?>
-                                </select>
-                            </label>
-                            <label>Texto do status WhatsApp<textarea name="status_template" rows="3" placeholder="Estou na {loja}! Código {codigo}"><?= h(setting_for_store((int) $hot['id'], 'status_template', 'Estou na {loja} agora! 🔥 Venha conferir. Código {codigo}')) ?></textarea></label>
-                            <p class="hint">Variáveis: {loja}, {codigo}, {cidade}</p>
-                            <label>Duração do acesso (horas)<input name="session_hours" type="number" min="1" max="24" value="<?= h(setting_for_store((int) $hot['id'], 'session_hours', '2')) ?>"></label>
-                            <label>Termos<textarea name="terms_html" rows="3"><?= h((string) ($hot['terms_html'] ?? '')) ?></textarea></label>
-                            <label>Privacidade<textarea name="privacy_html" rows="3"><?= h((string) ($hot['privacy_html'] ?? '')) ?></textarea></label>
-                        </fieldset>
-                    </div>
-                    <div class="actions row">
-                        <button class="btn" type="submit">Salvar hotspot</button>
-                    </div>
-                </form>
-                <form method="post" action="/app/hotspots" class="form-inline" style="margin-top:12px" onsubmit="return confirm('Gerar novo token? O PC do hotspot precisará ser revinculado na bandeja.');">
-                    <?= csrf_field() ?>
-                    <input type="hidden" name="do" value="rotate">
-                    <input type="hidden" name="id" value="<?= (int) $hot['id'] ?>">
-                    <button class="btn ghost" type="submit">Renovar token do agente</button>
-                </form>
             </section>
             <?php endif; ?>
 
