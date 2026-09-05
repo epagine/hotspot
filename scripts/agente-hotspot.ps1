@@ -23,6 +23,46 @@ $MaxClients = 8
 $script:ServiceAllowed = $true
 $AgentVersion = Get-AgentVersion -InstallRoot $Root
 
+$script:DnsProc = $null
+$script:CaptiveProc = $null
+$script:LastCmdId = ""
+$script:LastError = $null
+$script:TetheringMgr = $null
+$script:AgentLog = New-Object System.Collections.ArrayList
+$script:LastSyncOk = $false
+$script:LastSyncError = ""
+$script:LastSyncAt = ""
+
+function Write-AgentLog {
+    param([string]$Message, [string]$Level = "info")
+    if (-not $Message) { return }
+    if (-not $script:AgentLog) {
+        $script:AgentLog = New-Object System.Collections.ArrayList
+    }
+    $entry = [ordered]@{
+        at    = (Get-Date).ToString("s")
+        level = $Level
+        msg   = $Message
+    }
+    [void]$script:AgentLog.Add($entry)
+    while ($script:AgentLog.Count -gt 40) {
+        $script:AgentLog.RemoveAt(0)
+    }
+}
+
+function Test-AgentElevated {
+    if (-not (Get-Command Test-AgentProcessElevated -ErrorAction SilentlyContinue)) {
+        return $false
+    }
+    return Test-AgentProcessElevated
+}
+
+function Test-ScheduledTaskExists {
+    param([string]$Name = "HotspotLoja")
+    $t = Get-ScheduledTask -TaskName $Name -ErrorAction SilentlyContinue
+    return $null -ne $t
+}
+
 if (-not (Test-Path $Storage)) {
     New-Item -ItemType Directory -Path $Storage | Out-Null
 }
@@ -49,43 +89,6 @@ if (-not (Test-ScheduledTaskExists)) {
 }
 
 Add-Type -AssemblyName System.Runtime.WindowsRuntime -ErrorAction SilentlyContinue | Out-Null
-
-$script:DnsProc = $null
-$script:CaptiveProc = $null
-$script:LastCmdId = ""
-$script:LastError = $null
-$script:TetheringMgr = $null
-$script:AgentLog = New-Object System.Collections.ArrayList
-$script:LastSyncOk = $false
-$script:LastSyncError = ""
-$script:LastSyncAt = ""
-
-function Write-AgentLog {
-    param([string]$Message, [string]$Level = "info")
-    if (-not $Message) { return }
-    $entry = [ordered]@{
-        at    = (Get-Date).ToString("s")
-        level = $Level
-        msg   = $Message
-    }
-    [void]$script:AgentLog.Add($entry)
-    while ($script:AgentLog.Count -gt 40) {
-        $script:AgentLog.RemoveAt(0)
-    }
-}
-
-function Test-AgentElevated {
-    if (-not (Get-Command Test-AgentProcessElevated -ErrorAction SilentlyContinue)) {
-        return $false
-    }
-    return Test-AgentProcessElevated
-}
-
-function Test-ScheduledTaskExists {
-    param([string]$Name = "HotspotLoja")
-    $t = Get-ScheduledTask -TaskName $Name -ErrorAction SilentlyContinue
-    return $null -ne $t
-}
 
 function Wait-WinRtAction {
     param($Async)
@@ -493,6 +496,21 @@ function Write-Status {
     [System.IO.File]::WriteAllText($StatusFile, $json, [System.Text.UTF8Encoding]::new($false))
 }
 
+function Touch-AgentSeen {
+    $seen = (Get-Date).ToString("s")
+    try {
+        if (Test-Path $StatusFile) {
+            $raw = [System.IO.File]::ReadAllText($StatusFile)
+            if ($raw -match '"agent_seen_at"\s*:\s*"[^"]*"') {
+                $raw = [regex]::Replace($raw, '"agent_seen_at"\s*:\s*"[^"]*"', ('"agent_seen_at": "' + $seen + '"'), 1)
+                [System.IO.File]::WriteAllText($StatusFile, $raw, [System.Text.UTF8Encoding]::new($false))
+                return
+            }
+        }
+    } catch {}
+    Write-Status
+}
+
 $script:LastAck = ""
 
 function Get-CloudCfg {
@@ -572,6 +590,9 @@ function Sync-Cloud {
         clients        = $clients
     }
     try {
+        try {
+            [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+        } catch {}
         $json = $payload | ConvertTo-Json -Depth 8 -Compress
         $headers = @{ "X-Agent-Token" = [string]$cfg.token }
         $resp = Invoke-RestMethod -Uri $url -Method Post -Headers $headers -Body $json -ContentType "application/json; charset=utf-8" -TimeoutSec 6
@@ -692,6 +713,7 @@ function Sync-Cloud {
 
 try {
     while ($true) {
+        Touch-AgentSeen
         $cmdPath = if (Test-Path $storageScript) {
             Get-PendingCommandFile -InstallRoot $Root -StorageDir $Storage
         } else {
@@ -706,6 +728,7 @@ try {
                     switch ([string]$cmd.action) {
                         "start" {
                             Write-AgentLog "Comando: ligar rede" "info"
+                            Touch-AgentSeen
                             if ($script:ServiceAllowed) {
                                 Set-Hotspot -On $true
                                 Write-AgentLog "Hotspot ligado" "info"

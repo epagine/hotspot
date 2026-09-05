@@ -124,13 +124,60 @@ internal sealed class TrayApp : ApplicationContext
         catch
         {
         }
+        try
+        {
+            Process.Start(new ProcessStartInfo
+            {
+                FileName = "powershell.exe",
+                Arguments = "-NoProfile -Command \"Start-ScheduledTask -TaskName 'HotspotLoja'\"",
+                UseShellExecute = false,
+                CreateNoWindow = true,
+                WindowStyle = ProcessWindowStyle.Hidden
+            });
+        }
+        catch
+        {
+        }
+    }
+
+    private void StartAgentDirect()
+    {
+        string agent = Path.Combine(root, "scripts", "agente-hotspot.ps1");
+        if (!File.Exists(agent))
+        {
+            return;
+        }
+        try
+        {
+            Process.Start(new ProcessStartInfo
+            {
+                FileName = "powershell.exe",
+                Arguments = "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File \"" + agent + "\"",
+                WorkingDirectory = root,
+                UseShellExecute = false,
+                CreateNoWindow = true,
+                WindowStyle = ProcessWindowStyle.Hidden
+            });
+        }
+        catch
+        {
+        }
     }
 
     private bool AgentRecentlyActive(int maxAgeSeconds)
     {
         try
         {
-            string raw = ReadFileSafe(Storage("status.json"));
+            string path = Storage("status.json");
+            if (File.Exists(path))
+            {
+                double fileAge = (DateTime.Now - File.GetLastWriteTime(path)).TotalSeconds;
+                if (fileAge <= maxAgeSeconds)
+                {
+                    return true;
+                }
+            }
+            string raw = ReadFileSafe(path);
             string seen = JsonGet(raw, "agent_seen_at");
             DateTime dt;
             if (DateTime.TryParse(seen, out dt))
@@ -144,14 +191,32 @@ internal sealed class TrayApp : ApplicationContext
         return false;
     }
 
+    private bool WaitAgentActive(int maxWaitSeconds)
+    {
+        for (int i = 0; i < maxWaitSeconds * 2; i++)
+        {
+            if (AgentRecentlyActive(60))
+            {
+                return true;
+            }
+            System.Threading.Thread.Sleep(500);
+        }
+        return false;
+    }
+
     private void EnsureAgentRunning()
     {
-        if (AgentRecentlyActive(20))
+        if (AgentRecentlyActive(60))
         {
             return;
         }
         RunAgentScheduledTask();
-        System.Threading.Thread.Sleep(1500);
+        if (WaitAgentActive(8))
+        {
+            return;
+        }
+        StartAgentDirect();
+        WaitAgentActive(6);
     }
 
     private void WriteCommand(string action)
@@ -178,13 +243,18 @@ internal sealed class TrayApp : ApplicationContext
         {
             statusForm.RefreshData();
         }
-        var feedbackTimer = new Timer { Interval = 5000 };
+        var feedbackTimer = new Timer { Interval = 8000 };
         feedbackTimer.Tick += delegate
         {
             feedbackTimer.Stop();
             feedbackTimer.Dispose();
             string statusRaw = ReadFileSafe(Storage("status.json"));
             string err = JsonGet(statusRaw, "error");
+            string syncErr = JsonGet(statusRaw, "sync_error");
+            if (err.Length == 0 && syncErr.Length > 0)
+            {
+                err = syncErr;
+            }
             bool on = JsonGet(statusRaw, "hotspot_on") == "true";
             if (action == "start")
             {
@@ -196,12 +266,20 @@ internal sealed class TrayApp : ApplicationContext
                 {
                     icon.ShowBalloonTip(9000, "Wi-Fi da loja", err, ToolTipIcon.Error);
                 }
-                else if (!AgentRecentlyActive(30))
+                else if (!AgentRecentlyActive(60))
                 {
                     icon.ShowBalloonTip(
-                        7000,
+                        9000,
                         "Wi-Fi da loja",
-                        "Agente sem resposta. Feche e abra a bandeja como administrador ou reinstale o agente.",
+                        "Agente sem resposta. Reinstale o setup v1.2.3 como administrador ou execute: schtasks /Run /TN HotspotLoja",
+                        ToolTipIcon.Warning);
+                }
+                else
+                {
+                    icon.ShowBalloonTip(
+                        8000,
+                        "Wi-Fi da loja",
+                        "Agente ativo, mas o hotspot nao ligou. Abra Configuracoes > Rede > Ponto de acesso movel e ligue uma vez manualmente.",
                         ToolTipIcon.Warning);
                 }
             }
