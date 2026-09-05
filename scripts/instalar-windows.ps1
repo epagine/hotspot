@@ -54,17 +54,23 @@ function Get-TaskAccount {
 function Register-TaskSafe {
     param($Name, $Execute, $Arguments = "")
     Unregister-ScheduledTask -TaskName $Name -Confirm:$false -ErrorAction SilentlyContinue
-    $tr = if ($Arguments) { "`"$Execute`" $Arguments" } else { "`"$Execute`"" }
-    & schtasks.exe /Create /TN $Name /SC ONLOGON /RL HIGHEST /F /IT /TR $tr | Out-Host
-    if ($LASTEXITCODE -eq 0) {
+    try {
+        $account = Get-TaskAccount
+        $action = New-ScheduledTaskAction -Execute $Execute -Argument $Arguments
+        $trigger = New-ScheduledTaskTrigger -AtLogOn
+        $principal = New-ScheduledTaskPrincipal -UserId $account -LogonType Interactive -RunLevel Highest
+        $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -RestartCount 3 -RestartInterval (New-TimeSpan -Minutes 1)
+        Register-ScheduledTask -TaskName $Name -Action $action -Trigger $trigger -Principal $principal -Settings $settings -Force | Out-Null
         return
+    } catch {
+        Write-Log ("Tarefa $Name via cmdlet falhou, tentando schtasks: " + $_.Exception.Message)
     }
-    $account = Get-TaskAccount
-    $action = New-ScheduledTaskAction -Execute $Execute -Argument $Arguments
-    $trigger = New-ScheduledTaskTrigger -AtLogOn
-    $principal = New-ScheduledTaskPrincipal -UserId $account -LogonType Interactive -RunLevel Highest
-    $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -RestartCount 3 -RestartInterval (New-TimeSpan -Minutes 1)
-    Register-ScheduledTask -TaskName $Name -Action $action -Trigger $trigger -Principal $principal -Settings $settings -Force | Out-Null
+
+    $tr = if ($Arguments) { "$Execute $Arguments" } elseif ($Execute -match '\s') { "`"$Execute`"" } else { $Execute }
+    & schtasks.exe /Create /TN $Name /SC ONLOGON /RL HIGHEST /F /IT /TR $tr | Out-Host
+    if ($LASTEXITCODE -ne 0) {
+        throw "Nao foi possivel registrar tarefa agendada: $Name"
+    }
 }
 
 function New-AppShortcut {

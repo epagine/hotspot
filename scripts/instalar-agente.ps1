@@ -31,7 +31,7 @@ try {
 }
 if (-not $ok) {
     $tr = "powershell.exe $arg"
-    & schtasks.exe /Create /TN $TaskName /SC ONLOGON /RL HIGHEST /F /IT /TR $tr
+    & schtasks.exe /Create /TN $TaskName /SC ONLOGON /RL HIGHEST /F /IT /TR $tr | Out-Host
     if ($LASTEXITCODE -ne 0) {
         & schtasks.exe /Create /TN $TaskName /SC ONLOGON /RL HIGHEST /F /TR $tr
     }
