@@ -56,7 +56,11 @@ function Register-TaskSafe {
     Unregister-ScheduledTask -TaskName $Name -Confirm:$false -ErrorAction SilentlyContinue
     try {
         $account = Get-TaskAccount
-        $action = New-ScheduledTaskAction -Execute $Execute -Argument $Arguments
+        if ($Arguments) {
+            $action = New-ScheduledTaskAction -Execute $Execute -Argument $Arguments
+        } else {
+            $action = New-ScheduledTaskAction -Execute $Execute
+        }
         $trigger = New-ScheduledTaskTrigger -AtLogOn
         $principal = New-ScheduledTaskPrincipal -UserId $account -LogonType Interactive -RunLevel Highest
         $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -RestartCount 3 -RestartInterval (New-TimeSpan -Minutes 1)
