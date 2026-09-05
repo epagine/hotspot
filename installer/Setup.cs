@@ -5,7 +5,9 @@ using System.Drawing.Drawing2D;
 using System.IO;
 using System.IO.Compression;
 using System.Reflection;
+using System.ServiceProcess;
 using System.Text.RegularExpressions;
+using System.Threading;
 using System.Windows.Forms;
 
 internal sealed class SetupForm : Form
@@ -310,8 +312,13 @@ internal sealed class SetupForm : Form
         installBtn.Enabled = false;
         try
         {
-            statusLabel.Text = "Extraindo arquivos…";
+            statusLabel.Text = "Encerrando agente em execução…";
             statusLabel.ForeColor = Ink;
+            bar.Value = 10;
+            Application.DoEvents();
+            StopAgentProcesses(dest);
+
+            statusLabel.Text = "Extraindo arquivos…";
             bar.Value = 15;
             Application.DoEvents();
             Directory.CreateDirectory(dest);
@@ -334,7 +341,7 @@ internal sealed class SetupForm : Form
                     }
                     if (e.Length > 0 || !string.IsNullOrEmpty(e.Name))
                     {
-                        e.ExtractToFile(outPath, true);
+                        ExtractEntrySafe(e, outPath, dest);
                     }
                 }
             }
@@ -393,6 +400,60 @@ internal sealed class SetupForm : Form
             installBtn.Enabled = true;
             MessageBox.Show(ex.Message, Text, MessageBoxButtons.OK, MessageBoxIcon.Error);
         }
+    }
+
+    private static void ExtractEntrySafe(ZipArchiveEntry entry, string outPath, string installDir)
+    {
+        for (int attempt = 1; attempt <= 3; attempt++)
+        {
+            try
+            {
+                entry.ExtractToFile(outPath, true);
+                return;
+            }
+            catch (IOException)
+            {
+                if (attempt >= 3)
+                {
+                    throw;
+                }
+                StopAgentProcesses(installDir);
+                Thread.Sleep(1500);
+            }
+        }
+    }
+
+    private static void StopAgentProcesses(string installDir)
+    {
+        try
+        {
+            using (var svc = new ServiceController("WiFiDaLojaAgent"))
+            {
+                if (svc.Status == ServiceControllerStatus.Running)
+                {
+                    svc.Stop();
+                    svc.WaitForStatus(ServiceControllerStatus.Stopped, TimeSpan.FromSeconds(20));
+                }
+            }
+        }
+        catch
+        {
+        }
+        foreach (string name in new[] { "HotspotBandeja", "WiFiDaLojaAgent", "DnsProxy", "CaptiveHttp" })
+        {
+            foreach (Process proc in Process.GetProcessesByName(name))
+            {
+                try
+                {
+                    proc.Kill();
+                    proc.WaitForExit(5000);
+                }
+                catch
+                {
+                }
+            }
+        }
+        Thread.Sleep(1500);
     }
 
     private static void ExtractPayload(string zipPath)

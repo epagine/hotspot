@@ -56,7 +56,7 @@ function Get-TaskAccount {
 
 function Register-TaskSafe {
     param($Name, $Execute, $Arguments = "")
-    Unregister-ScheduledTask -TaskName $Name -Confirm:$false -ErrorAction SilentlyContinue
+    Remove-ScheduledTaskSafe -Name $Name
     try {
         $account = Get-TaskAccount
         if ($Arguments) {
@@ -93,14 +93,44 @@ function New-AppShortcut {
     $lnk.Save()
 }
 
+function Remove-ScheduledTaskSafe {
+    param([string]$Name)
+    Unregister-ScheduledTask -TaskName $Name -Confirm:$false -ErrorAction SilentlyContinue | Out-Null
+    $prevEap = $ErrorActionPreference
+    $ErrorActionPreference = "SilentlyContinue"
+    try {
+        & schtasks.exe /Delete /TN $Name /F *>$null
+    } catch {}
+    $ErrorActionPreference = $prevEap
+}
+
+function Stop-AgentProcesses {
+    param([string]$InstallRoot = $Root)
+    Write-Log "Encerrando agente e bandeja antes da instalacao..."
+    $svc = Get-Service -Name $ServiceAgent -ErrorAction SilentlyContinue
+    if ($svc -and $svc.Status -eq "Running") {
+        try { Stop-Service -Name $ServiceAgent -Force -ErrorAction SilentlyContinue } catch {}
+        & sc.exe stop $ServiceAgent 2>$null | Out-Null
+        Start-Sleep -Seconds 2
+    }
+    foreach ($name in @("HotspotBandeja", "WiFiDaLojaAgent", "DnsProxy", "CaptiveHttp")) {
+        Get-Process -Name $name -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+    }
+    Get-CimInstance Win32_Process -ErrorAction SilentlyContinue |
+        Where-Object {
+            ($_.Name -eq "powershell.exe") -and $_.CommandLine -and ($_.CommandLine -like "*agente-hotspot.ps1*")
+        } |
+        ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
+    Start-Sleep -Seconds 2
+}
+
 function Install-AgentService {
     param([string]$AgentExe)
     if (-not (Test-Path $AgentExe)) {
         throw "WiFiDaLojaAgent.exe nao encontrado em $AgentExe"
     }
-    foreach ($name in @($TaskAgent)) {
-        Unregister-ScheduledTask -TaskName $name -Confirm:$false -ErrorAction SilentlyContinue
-        & schtasks.exe /Delete /TN $name /F 2>$null | Out-Null
+    foreach ($name in @($TaskAgent, "HotspotBandeja")) {
+        Remove-ScheduledTaskSafe -Name $name
     }
     $svc = Get-Service -Name $ServiceAgent -ErrorAction SilentlyContinue
     if ($svc) {
@@ -222,6 +252,8 @@ $bandeja = Join-Path $Root "HotspotBandeja.exe"
 if (-not (Test-Path $bandeja)) {
     Write-Log "Compile o icone da bandeja (installer\compilar.ps1)."
 }
+
+Stop-AgentProcesses -InstallRoot $Root
 
 $agentExe = Join-Path $Root "WiFiDaLojaAgent.exe"
 Install-AgentService -AgentExe $agentExe

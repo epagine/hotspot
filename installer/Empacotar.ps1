@@ -13,8 +13,9 @@ if ($LASTEXITCODE -ne 0) {
     Write-Host "Aviso: compilei com o que ja existia."
 }
 
-if (Test-Path $Dist) { Remove-Item $Dist -Recurse -Force }
-New-Item -ItemType Directory -Path $Stage | Out-Null
+if (Test-Path $Stage) { Remove-Item $Stage -Recurse -Force }
+if (Test-Path $Zip) { Remove-Item $Zip -Force -ErrorAction SilentlyContinue }
+New-Item -ItemType Directory -Path $Stage -Force | Out-Null
 New-Item -ItemType Directory -Path (Join-Path $Stage "scripts") | Out-Null
 
 $scriptFiles = @(
@@ -68,7 +69,7 @@ if (-not (Test-Path $logo)) {
     throw "Logo nao encontrada: public\assets\logo-wifidaloja.jpg"
 }
 $resourceArg = "/resource:{0},WiFiDaLoja.Logo" -f $logo
-& $csc /nologo /optimize+ /target:winexe /win32manifest:$manifest /r:System.Windows.Forms.dll /r:System.Drawing.dll /r:System.IO.Compression.dll /r:System.IO.Compression.FileSystem.dll $resourceArg /out:$Stub $setupCs $agentBuildCs
+& $csc /nologo /optimize+ /target:winexe /win32manifest:$manifest /r:System.Windows.Forms.dll /r:System.Drawing.dll /r:System.IO.Compression.dll /r:System.IO.Compression.FileSystem.dll /r:System.ServiceProcess.dll $resourceArg /out:$Stub $setupCs $agentBuildCs
 if ($LASTEXITCODE -ne 0) { throw "Falha ao compilar Setup.cs" }
 
 Write-Host "Montando WiFiDaLoja-Agent-Setup.exe ..."
