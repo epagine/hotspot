@@ -57,3 +57,47 @@ function Test-AgentCloudConfig {
     $token = ([string]$cfg.token).Trim()
     return ($url.Length -ge 8 -and $token.Length -ge 8)
 }
+
+function Get-PendingCommandFile {
+    param([string]$InstallRoot, [string]$StorageDir)
+    $primary = Join-Path $StorageDir "command.json"
+    $legacy = Join-Path $InstallRoot "storage\command.json"
+    if (Test-Path $primary) {
+        return $primary
+    }
+    if (Test-Path $legacy) {
+        try {
+            Copy-Item $legacy $primary -Force -ErrorAction Stop
+            return $primary
+        } catch {
+            return $legacy
+        }
+    }
+    return $primary
+}
+
+function Test-AgentProcessAlive {
+    param([string]$StorageDir)
+    $pidPath = Join-Path $StorageDir "agent.pid"
+    if (-not (Test-Path $pidPath)) {
+        return $false
+    }
+    $oldPid = 0
+    [void][int]::TryParse(((Get-Content $pidPath -ErrorAction SilentlyContinue | Select-Object -First 1)), [ref]$oldPid)
+    if ($oldPid -le 0) {
+        return $false
+    }
+    return $null -ne (Get-Process -Id $oldPid -ErrorAction SilentlyContinue)
+}
+
+function Start-AgentProcess {
+    param([string]$InstallRoot)
+    $agent = Join-Path $InstallRoot "scripts\agente-hotspot.ps1"
+    if (-not (Test-Path $agent)) {
+        return $false
+    }
+    Start-Process powershell.exe -ArgumentList @(
+        "-NoProfile", "-ExecutionPolicy", "Bypass", "-WindowStyle", "Hidden", "-File", $agent
+    ) -WorkingDirectory $InstallRoot -WindowStyle Hidden | Out-Null
+    return $true
+}

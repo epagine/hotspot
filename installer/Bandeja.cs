@@ -127,6 +127,34 @@ internal sealed class TrayApp : ApplicationContext
         }
     }
 
+    private void EnsureAgentRunning()
+    {
+        try
+        {
+            string pidPath = Storage("agent.pid");
+            if (File.Exists(pidPath))
+            {
+                string line = File.ReadAllText(pidPath).Trim();
+                int nl = line.IndexOf('\n');
+                if (nl >= 0)
+                {
+                    line = line.Substring(0, nl);
+                }
+                int pid;
+                if (int.TryParse(line.Trim(), out pid) && pid > 0)
+                {
+                    Process.GetProcessById(pid);
+                    return;
+                }
+            }
+        }
+        catch
+        {
+        }
+        StartBackend();
+        System.Threading.Thread.Sleep(800);
+    }
+
     private void WriteCommand(string action)
     {
         string id = Guid.NewGuid().ToString("N").Substring(0, 16);
@@ -135,6 +163,7 @@ internal sealed class TrayApp : ApplicationContext
         {
             Directory.CreateDirectory(AgentDataDir());
             File.WriteAllText(Storage("command.json"), json);
+            EnsureAgentRunning();
         }
         catch (Exception ex)
         {

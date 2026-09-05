@@ -1,8 +1,16 @@
 # Agente: liga/desliga o hotspot, DNS cativo e status real da rede.
 $ErrorActionPreference = "Continue"
 $Root = Split-Path -Parent $PSScriptRoot
-. (Join-Path $PSScriptRoot "agent-storage.ps1")
-$Storage = Get-AgentStorageDir -InstallRoot $Root
+$storageScript = Join-Path $PSScriptRoot "agent-storage.ps1"
+if (Test-Path $storageScript) {
+    . $storageScript
+    $Storage = Get-AgentStorageDir -InstallRoot $Root
+} else {
+    $Storage = Join-Path $env:ProgramData "WiFiDaLoja"
+    if (-not (Test-Path $Storage)) {
+        New-Item -ItemType Directory -Path $Storage -Force | Out-Null
+    }
+}
 $AuthFile = Join-Path $Storage "authorized.json"
 $CmdFile = Join-Path $Storage "command.json"
 $StatusFile = Join-Path $Storage "status.json"
@@ -586,9 +594,14 @@ function Sync-Cloud {
 
 try {
     while ($true) {
-        if (Test-Path $CmdFile) {
+        $cmdPath = if (Test-Path $storageScript) {
+            Get-PendingCommandFile -InstallRoot $Root -StorageDir $Storage
+        } else {
+            $CmdFile
+        }
+        if (Test-Path $cmdPath) {
             try {
-                $cmd = Get-Content $CmdFile -Raw | ConvertFrom-Json
+                $cmd = Get-Content $cmdPath -Raw | ConvertFrom-Json
                 if ($cmd.id -and $cmd.id -ne $script:LastCmdId) {
                     $script:LastCmdId = [string]$cmd.id
                     $script:LastError = $null
