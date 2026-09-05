@@ -126,10 +126,6 @@ internal sealed class SetupForm : Form
         };
         Controls.Add(logBox);
 
-        pathBox.Text = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "WiFiDaLoja");
-        pathBox.TextChanged += delegate { LoadExistingCloudFields(pathBox.Text.Trim()); };
-        LoadExistingCloudFields(pathBox.Text);
-
         installBtn = MakeGoldButton("Instalar agente", 424, 512, 160, 40);
         installBtn.Click += delegate { RunInstall(); };
 
@@ -138,6 +134,10 @@ internal sealed class SetupForm : Form
 
         Controls.Add(installBtn);
         Controls.Add(cancel);
+
+        pathBox.Text = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "WiFiDaLoja");
+        pathBox.TextChanged += delegate { LoadExistingCloudFields(pathBox.Text.Trim()); };
+        LoadExistingCloudFields(pathBox.Text);
 
         Controls.Add(new Label
         {
