@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.Drawing;
 using System.Drawing.Drawing2D;
@@ -24,6 +25,11 @@ internal static class AgentPipeClient
 
     public static string SendRaw(string cmd, int timeoutMs)
     {
+        return SendRawJson("{\"cmd\":\"" + Escape(cmd) + "\"}", timeoutMs);
+    }
+
+    public static string SendRawJson(string jsonLine, int timeoutMs)
+    {
         try
         {
             using (var client = new NamedPipeClientStream(".", PipeName, PipeDirection.InOut))
@@ -32,7 +38,7 @@ internal static class AgentPipeClient
                 using (var writer = new StreamWriter(client, new UTF8Encoding(false)) { AutoFlush = true })
                 using (var reader = new StreamReader(client, Encoding.UTF8))
                 {
-                    writer.WriteLine("{\"cmd\":\"" + Escape(cmd) + "\"}");
+                    writer.WriteLine(jsonLine);
                     return reader.ReadLine() ?? "";
                 }
             }
@@ -117,6 +123,7 @@ internal sealed class TrayApp : ApplicationContext
         strip.Items.Add(new ToolStripSeparator());
         strip.Items.Add("Ligar rede", null, delegate { WriteCommand("start"); });
         strip.Items.Add("Desligar rede", null, delegate { WriteCommand("stop"); });
+        strip.Items.Add("Escolher adaptador Wi-Fi", null, delegate { SafePickAdapter(); });
         strip.Items.Add("Vincular hotspot", null, delegate { SafeBindStore(); });
         strip.Items.Add(new ToolStripSeparator());
         strip.Items.Add("Encerrar", null, delegate { ExitApp(); });
@@ -164,6 +171,209 @@ internal sealed class TrayApp : ApplicationContext
         catch (Exception ex)
         {
             MessageBox.Show("Nao foi possivel abrir a vinculacao:\n" + ex.Message, "Wi-Fi da loja", MessageBoxButtons.OK, MessageBoxIcon.Error);
+        }
+    }
+
+    private void SafePickAdapter()
+    {
+        try
+        {
+            PickAdapter();
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show("Nao foi possivel abrir os adaptadores:\n" + ex.Message, "Wi-Fi da loja", MessageBoxButtons.OK, MessageBoxIcon.Error);
+        }
+    }
+
+    internal List<string[]> LoadWifiAdapters()
+    {
+        var list = new List<string[]>();
+        try
+        {
+            string path = Storage("wifi-adapters.txt");
+            if (!File.Exists(path))
+            {
+                AgentPipeClient.SendOk("adapters", 2000);
+            }
+            if (File.Exists(path))
+            {
+                foreach (string line in File.ReadAllLines(path))
+                {
+                    if (string.IsNullOrWhiteSpace(line))
+                    {
+                        continue;
+                    }
+                    string[] parts = line.Split('\t');
+                    if (parts.Length >= 3)
+                    {
+                        list.Add(parts);
+                    }
+                }
+            }
+        }
+        catch
+        {
+        }
+        return list;
+    }
+
+    internal string CurrentAdapterGuid()
+    {
+        string fromStatus = ReadStatus("wifi_adapter_selected");
+        if (fromStatus.Length > 0)
+        {
+            return fromStatus;
+        }
+        return JsonGet(ReadFileSafe(Storage("agent-config.json")), "wifi_adapter_guid");
+    }
+
+    private void PickAdapter()
+    {
+        AgentPipeClient.SendOk("adapters", 2000);
+        var adapters = LoadWifiAdapters();
+        using (var f = new Form())
+        {
+            f.Text = "Adaptador Wi-Fi";
+            f.Width = 560;
+            f.Height = 280;
+            f.FormBorderStyle = FormBorderStyle.FixedDialog;
+            f.StartPosition = FormStartPosition.CenterScreen;
+            f.MaximizeBox = false;
+            f.BackColor = Bg;
+            f.ForeColor = Ink;
+            f.Font = new Font("Segoe UI", 10f);
+
+            f.Controls.Add(new Label
+            {
+                Left = 20,
+                Top = 16,
+                Width = 500,
+                Height = 40,
+                Text = "Escolha qual placa Wi-Fi transmite o hotspot (ex.: USB TP-Link).",
+                ForeColor = Muted
+            });
+
+            var combo = new ComboBox
+            {
+                Left = 20,
+                Top = 70,
+                Width = 500,
+                DropDownStyle = ComboBoxStyle.DropDownList,
+                BackColor = Card,
+                ForeColor = Ink,
+                FlatStyle = FlatStyle.Flat
+            };
+            combo.Items.Add(new AdapterOption("", "Automático (recomendado)"));
+            string current = CurrentAdapterGuid();
+            int selected = 0;
+            for (int i = 0; i < adapters.Count; i++)
+            {
+                string guid = adapters[i][0];
+                string name = adapters[i].Length > 2 ? adapters[i][2] : adapters[i][1];
+                if (string.IsNullOrEmpty(name))
+                {
+                    name = adapters[i][1];
+                }
+                bool rec = adapters[i].Length > 3 && adapters[i][3] == "1";
+                string label = name + (rec ? " · recomendado" : "");
+                combo.Items.Add(new AdapterOption(guid, label));
+                if (string.Equals(guid, current, StringComparison.OrdinalIgnoreCase))
+                {
+                    selected = i + 1;
+                }
+            }
+            if (combo.Items.Count > 0)
+            {
+                combo.SelectedIndex = selected;
+            }
+            f.Controls.Add(combo);
+
+            if (adapters.Count == 0)
+            {
+                f.Controls.Add(new Label
+                {
+                    Left = 20,
+                    Top = 110,
+                    Width = 500,
+                    Height = 40,
+                    Text = "Nenhum adaptador listado ainda. Aguarde o sync do agente ou reinstale o setup v2.0.3.",
+                    ForeColor = Danger
+                });
+            }
+
+            var ok = MakeGoldButton("Salvar", 310, 180, 100, 34);
+            ok.DialogResult = DialogResult.OK;
+            var cancel = MakeGhostButton("Cancelar", 420, 180, 100, 34);
+            cancel.DialogResult = DialogResult.Cancel;
+            f.Controls.Add(ok);
+            f.Controls.Add(cancel);
+            f.AcceptButton = ok;
+            f.CancelButton = cancel;
+
+            if (f.ShowDialog() != DialogResult.OK)
+            {
+                return;
+            }
+            var opt = combo.SelectedItem as AdapterOption;
+            string guidToSave = opt != null ? opt.Guid : "";
+            string payload = "{\"cmd\":\"set-adapter\",\"guid\":\"" + EscapeJson(guidToSave) + "\"}";
+            string resp = AgentPipeClient.SendRawJson(payload, 2500);
+            if (string.IsNullOrEmpty(resp) || resp.IndexOf("\"ok\":true", StringComparison.OrdinalIgnoreCase) < 0)
+            {
+                AgentConfigStoreLocal.SaveGuid(guidToSave);
+                QueueCommandFile("apply");
+                icon.ShowBalloonTip(4000, "Wi-Fi da loja", "Adaptador salvo localmente. Reinicie o servico se nao aplicar.", ToolTipIcon.Info);
+            }
+            else
+            {
+                icon.ShowBalloonTip(3000, "Wi-Fi da loja", "Adaptador Wi-Fi atualizado.", ToolTipIcon.Info);
+            }
+            if (statusForm != null && !statusForm.IsDisposed)
+            {
+                statusForm.RefreshData();
+            }
+        }
+    }
+
+    private sealed class AdapterOption
+    {
+        public string Guid;
+        public string Label;
+        public AdapterOption(string guid, string label)
+        {
+            Guid = guid;
+            Label = label;
+        }
+        public override string ToString()
+        {
+            return Label;
+        }
+    }
+
+    private static class AgentConfigStoreLocal
+    {
+        public static string SaveGuid(string guid)
+        {
+            string path = Path.Combine(AgentDataDir(), "agent-config.json");
+            string raw = ReadFileSafe(path);
+            if (raw.Length == 0)
+            {
+                raw = "{}";
+            }
+            if (raw.IndexOf("wifi_adapter_guid", StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                raw = System.Text.RegularExpressions.Regex.Replace(
+                    raw,
+                    "\"wifi_adapter_guid\"\\s*:\\s*\"[^\"]*\"",
+                    "\"wifi_adapter_guid\": \"" + EscapeJson(guid) + "\"");
+            }
+            else
+            {
+                raw = "{\"wifi_adapter_guid\":\"" + EscapeJson(guid) + "\",\"wifi_isolate_others\":\"1\",\"updated_at\":\"" + DateTime.Now.ToString("s") + "\"}";
+            }
+            File.WriteAllText(path, raw);
+            return path;
         }
     }
 

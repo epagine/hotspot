@@ -269,6 +269,29 @@ internal sealed class AgentEngine
         return _commands.Enqueue(action, sourceId);
     }
 
+    public void SetWifiAdapterGuid(string guid)
+    {
+        var cfg = AgentConfigStore.Load();
+        cfg.WifiAdapterGuid = guid ?? "";
+        AgentConfigStore.Save(cfg);
+        _config = cfg;
+        _log.Info("Adaptador Wi-Fi selecionado: " + (string.IsNullOrEmpty(guid) ? "automatico" : guid));
+        _commands.Enqueue("apply", null);
+    }
+
+    public List<Dictionary<string, object>> ListAdaptersForUi()
+    {
+        return _adapters.ListWifiAdapters().Select(a =>
+        {
+            var d = new Dictionary<string, object>();
+            d["guid"] = a.Guid ?? "";
+            d["name"] = a.Name ?? "";
+            d["desc"] = a.Description ?? "";
+            d["recommended"] = a.Recommended;
+            return d;
+        }).ToList();
+    }
+
     public void HandleCommand(string action, string cmdId)
     {
         _lastError = null;
@@ -641,19 +664,26 @@ internal sealed class AdapterCatalog
         }
         foreach (var ni in NetworkInterface.GetAllNetworkInterfaces())
         {
-            if (ni.NetworkInterfaceType != NetworkInterfaceType.Wireless80211)
+            if (ni.NetworkInterfaceType != NetworkInterfaceType.Wireless80211 &&
+                ni.Description.IndexOf("802.11", StringComparison.OrdinalIgnoreCase) < 0 &&
+                ni.Description.IndexOf("Wi-Fi", StringComparison.OrdinalIgnoreCase) < 0 &&
+                ni.Description.IndexOf("Wireless", StringComparison.OrdinalIgnoreCase) < 0 &&
+                ni.Name.IndexOf("Wi-Fi", StringComparison.OrdinalIgnoreCase) < 0)
             {
                 continue;
             }
-            if (ni.Description.IndexOf("Virtual", StringComparison.OrdinalIgnoreCase) >= 0 ||
+            if (ni.NetworkInterfaceType == NetworkInterfaceType.Loopback ||
+                ni.Description.IndexOf("Virtual", StringComparison.OrdinalIgnoreCase) >= 0 ||
                 ni.Description.IndexOf("Hyper-V", StringComparison.OrdinalIgnoreCase) >= 0 ||
                 ni.Description.IndexOf("VMware", StringComparison.OrdinalIgnoreCase) >= 0 ||
-                ni.Description.IndexOf("Bluetooth", StringComparison.OrdinalIgnoreCase) >= 0)
+                ni.Description.IndexOf("Bluetooth", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                ni.Description.IndexOf("Loopback", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                ni.Description.IndexOf("KM-TEST", StringComparison.OrdinalIgnoreCase) >= 0)
             {
                 continue;
             }
             string id = ni.Id;
-            if (!seen.Add(id))
+            if (string.IsNullOrEmpty(id) || !seen.Add(id))
             {
                 continue;
             }
@@ -666,7 +696,120 @@ internal sealed class AdapterCatalog
                 IanaType = 71
             });
         }
+        if (list.Count == 0)
+        {
+            foreach (var entry in EnumerateViaNetAdapter())
+            {
+                if (seen.Add(entry.Guid ?? entry.Name))
+                {
+                    list.Add(entry);
+                }
+            }
+        }
         ApplyRecommendations(list);
+        try
+        {
+            AtomicJson.Write(Path.Combine(AgentPaths.Storage, "wifi-adapters.json"), list.Select(WifiAdapterToDictPublic).ToList());
+            var lines = new StringBuilder();
+            foreach (var a in list)
+            {
+                lines.Append(a.Guid ?? "").Append('\t')
+                    .Append((a.Name ?? "").Replace('\t', ' ')).Append('\t')
+                    .Append((a.Description ?? "").Replace('\t', ' ')).Append('\t')
+                    .Append(a.Recommended ? "1" : "0").Append('\t')
+                    .Append(a.Status ?? "").AppendLine();
+            }
+            File.WriteAllText(Path.Combine(AgentPaths.Storage, "wifi-adapters.txt"), lines.ToString(), new UTF8Encoding(false));
+        }
+        catch
+        {
+        }
+        return list;
+    }
+
+    private static Dictionary<string, object> WifiAdapterToDictPublic(WifiAdapterInfo a)
+    {
+        var d = new Dictionary<string, object>();
+        d["guid"] = a.Guid ?? "";
+        d["name"] = a.Name ?? "";
+        d["desc"] = a.Description ?? "";
+        d["status"] = a.Status ?? "";
+        d["iana_type"] = a.IanaType;
+        d["connected_ssid"] = a.ConnectedSsid ?? "";
+        d["recommended"] = a.Recommended;
+        return d;
+    }
+
+    private static List<WifiAdapterInfo> EnumerateViaNetAdapter()
+    {
+        var list = new List<WifiAdapterInfo>();
+        try
+        {
+            var psi = new ProcessStartInfo
+            {
+                FileName = "powershell.exe",
+                Arguments = "-NoProfile -Command \"Get-NetAdapter | Where-Object { $_.Status -ne 'Not Present' -and ($_.MediaType -eq 'Native 802.11' -or $_.PhysicalMediaType -eq 'Native 802.11' -or $_.InterfaceDescription -match 'Wi-Fi|WiFi|Wireless|802\\.11|WLAN|TP-Link' -or $_.Name -match 'Wi-Fi|WiFi|Wireless|WLAN') -and $_.InterfaceDescription -notmatch 'Loopback|KM-TEST|VirtualBox|VMware|Hyper-V|Bluetooth' } | Select-Object Name,InterfaceDescription,Status,InterfaceGuid | ConvertTo-Json -Compress\"",
+                UseShellExecute = false,
+                RedirectStandardOutput = true,
+                CreateNoWindow = true
+            };
+            var proc = Process.Start(psi);
+            if (proc == null)
+            {
+                return list;
+            }
+            string output = proc.StandardOutput.ReadToEnd();
+            proc.WaitForExit(10000);
+            if (string.IsNullOrWhiteSpace(output))
+            {
+                return list;
+            }
+            var ser = new JavaScriptSerializer();
+            object parsed = ser.DeserializeObject(output);
+            var rows = new List<Dictionary<string, object>>();
+            var one = parsed as Dictionary<string, object>;
+            if (one != null)
+            {
+                rows.Add(one);
+            }
+            else
+            {
+                var many = parsed as object[];
+                if (many != null)
+                {
+                    foreach (var row in many)
+                    {
+                        var d = row as Dictionary<string, object>;
+                        if (d != null)
+                        {
+                            rows.Add(d);
+                        }
+                    }
+                }
+            }
+            foreach (var row in rows)
+            {
+                string name = Convert.ToString(row.ContainsKey("Name") ? row["Name"] : "");
+                string desc = Convert.ToString(row.ContainsKey("InterfaceDescription") ? row["InterfaceDescription"] : "");
+                string status = Convert.ToString(row.ContainsKey("Status") ? row["Status"] : "");
+                string guid = Convert.ToString(row.ContainsKey("InterfaceGuid") ? row["InterfaceGuid"] : "");
+                if (string.IsNullOrEmpty(guid))
+                {
+                    guid = name;
+                }
+                list.Add(new WifiAdapterInfo
+                {
+                    Guid = guid,
+                    Name = name,
+                    Description = desc,
+                    Status = status,
+                    IanaType = 71
+                });
+            }
+        }
+        catch
+        {
+        }
         return list;
     }
 
@@ -2058,6 +2201,17 @@ internal sealed class NamedPipeServer
                 case "stop":
                     _engine.EnqueueCommand("stop", null);
                     return ser.Serialize(new Dictionary<string, object> { { "ok", true }, { "queued", true } });
+                case "adapters":
+                    return ser.Serialize(new Dictionary<string, object>
+                    {
+                        { "ok", true },
+                        { "adapters", _engine.ListAdaptersForUi() },
+                        { "selected", AgentConfigStore.Load().WifiAdapterGuid ?? "" }
+                    });
+                case "set-adapter":
+                    string guid = req != null && req.ContainsKey("guid") ? Convert.ToString(req["guid"]) : "";
+                    _engine.SetWifiAdapterGuid(guid ?? "");
+                    return ser.Serialize(new Dictionary<string, object> { { "ok", true }, { "guid", guid ?? "" } });
                 default:
                     return ser.Serialize(new Dictionary<string, object> { { "ok", false }, { "error", "comando invalido" } });
             }

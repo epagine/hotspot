@@ -2456,6 +2456,17 @@ body.page.portal .card { text-align: center; }
   text-transform: uppercase;
   color: var(--accent, #c8892a);
 }
+.hotspot-subhead {
+  margin: 16px 0 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--app-ink, #e8eef5);
+}
+.agent-adapter-list {
+  margin: 8px 0 0;
+  padding-left: 1.1rem;
+  font-size: 12px;
+}
 .hotspot-panel-lead { margin: -4px 0 12px; }
 .hotspot-install-steps {
   margin: 0 0 14px;

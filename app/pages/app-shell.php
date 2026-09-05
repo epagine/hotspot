@@ -315,43 +315,60 @@ function app_nav_tw(string $tab, array $items): void
                                             <?php endforeach; ?>
                                         </select>
                                     </label>
-                                    <?php if ($agentSupportsAdapterPick && $wifiAdapters !== []): ?>
-                                    <label>Adaptador Wi-Fi (transmissão)
-                                        <select name="wifi_adapter_guid">
-                                            <option value="">Automático (recomendado)</option>
-                                            <?php foreach ($wifiAdapters as $wa): ?>
-                                                <?php
-                                                $waGuid = trim((string) ($wa['guid'] ?? ''));
-                                                if ($waGuid === '') {
-                                                    continue;
-                                                }
-                                                $waLabel = trim((string) ($wa['desc'] ?? $wa['name'] ?? 'Wi-Fi'));
-                                                $waExtra = trim((string) ($wa['status'] ?? ''));
-                                                if (!empty($wa['connected_ssid'])) {
-                                                    $waExtra .= ($waExtra !== '' ? ' · ' : '') . 'conectado: ' . (string) $wa['connected_ssid'];
-                                                }
-                                                if (!empty($wa['recommended'])) {
-                                                    $waExtra .= ($waExtra !== '' ? ' · ' : '') . 'recomendado';
-                                                }
-                                                ?>
-                                                <option value="<?= h($waGuid) ?>" <?= $wifiAdapterGuid === $waGuid ? 'selected' : '' ?>><?= h($waLabel . ($waExtra !== '' ? ' (' . $waExtra . ')' : '')) ?></option>
-                                            <?php endforeach; ?>
-                                        </select>
-                                    </label>
-                                    <?php elseif (!$agentSupportsAdapterPick): ?>
-                                    <p class="hint">Atualize o agente para v2.0 para escolher o adaptador Wi-Fi de transmissão.</p>
-                                    <?php else: ?>
-                                    <p class="hint">Adaptadores Wi-Fi aparecerão após o agente sincronizar com este PC.</p>
-                                    <?php endif; ?>
                                 </div>
-                                <?php if ($wifiAdapters !== []): ?>
-                                <ul class="hint agent-adapter-list">
-                                    <?php foreach ($wifiAdapters as $wa): ?>
-                                        <li><?= h(trim((string) ($wa['desc'] ?? $wa['name'] ?? 'Wi-Fi'))) ?><?php if ($wifiAdapterActive !== '' && ($wa['guid'] ?? '') === $wifiAdapterActive): ?> · <strong>em uso</strong><?php endif; ?></li>
-                                    <?php endforeach; ?>
-                                </ul>
+
+                                <h4 class="hotspot-subhead">Adaptador Wi-Fi (transmissão)</h4>
+                                <p class="hint">Qual placa Wi-Fi emite o sinal do hotspot. Com Ethernet + USB TP-Link, escolha o USB.</p>
+                                <label>Adaptador
+                                    <select name="wifi_adapter_guid">
+                                        <option value="">Automático (recomendado)</option>
+                                        <?php foreach ($wifiAdapters as $wa): ?>
+                                            <?php
+                                            if (!is_array($wa)) {
+                                                continue;
+                                            }
+                                            $waGuid = trim((string) ($wa['guid'] ?? ''));
+                                            if ($waGuid === '') {
+                                                continue;
+                                            }
+                                            $waLabel = trim((string) ($wa['desc'] ?? $wa['name'] ?? 'Wi-Fi'));
+                                            $waExtra = [];
+                                            if (!empty($wa['status'])) {
+                                                $waExtra[] = (string) $wa['status'];
+                                            }
+                                            if (!empty($wa['connected_ssid'])) {
+                                                $waExtra[] = 'conectado: ' . (string) $wa['connected_ssid'];
+                                            }
+                                            if (!empty($wa['recommended'])) {
+                                                $waExtra[] = 'recomendado';
+                                            }
+                                            if ($wifiAdapterActive !== '' && $waGuid === $wifiAdapterActive) {
+                                                $waExtra[] = 'em uso';
+                                            }
+                                            $suffix = $waExtra !== [] ? ' (' . implode(' · ', $waExtra) . ')' : '';
+                                            ?>
+                                            <option value="<?= h($waGuid) ?>" <?= $wifiAdapterGuid === $waGuid ? 'selected' : '' ?>><?= h($waLabel . $suffix) ?></option>
+                                        <?php endforeach; ?>
+                                    </select>
+                                </label>
+                                <?php if ($wifiAdapters === []): ?>
+                                    <p class="hint">
+                                        <?php if (!$agentSupportsAdapterPick): ?>
+                                            Agente antigo — atualize para v2.0.2+ e aguarde o sync. A opção Automático já fica salva.
+                                        <?php else: ?>
+                                            Lista ainda vazia: o PC ainda não enviou os adaptadores. Salve com Automático agora; após o próximo sync a lista completa aparece aqui.
+                                        <?php endif; ?>
+                                    </p>
+                                <?php else: ?>
+                                    <ul class="hint agent-adapter-list">
+                                        <?php foreach ($wifiAdapters as $wa): ?>
+                                            <?php if (!is_array($wa)) {
+                                                continue;
+                                            } ?>
+                                            <li><?= h(trim((string) ($wa['desc'] ?? $wa['name'] ?? 'Wi-Fi'))) ?><?php if ($wifiAdapterActive !== '' && ($wa['guid'] ?? '') === $wifiAdapterActive): ?> · <strong>em uso</strong><?php endif; ?></li>
+                                        <?php endforeach; ?>
+                                    </ul>
                                 <?php endif; ?>
-                                <p class="hint">Use o USB TP-Link se o PC tiver Wi-Fi interno e adaptador USB.</p>
                             </div>
 
                             <div class="hotspot-panel">
