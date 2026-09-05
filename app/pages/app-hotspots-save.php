@@ -98,8 +98,13 @@ if ($template !== '') {
 }
 $hours = max(1, min(24, (int) ($_POST['session_hours'] ?? 2)));
 set_setting_for_store($id, 'session_hours', (string) $hours);
+$oldAdapterGuid = setting_for_store($id, 'wifi_adapter_guid', '');
+$newAdapterGuid = trim((string) ($_POST['wifi_adapter_guid'] ?? ''));
+set_setting_for_store($id, 'wifi_adapter_guid', $newAdapterGuid);
+set_setting_for_store($id, 'wifi_isolate_others', '1');
 $wifiChanged = $newSsid !== $oldSsid || ($wifiPass !== '' && $wifiPass !== $oldPass);
-if ($wifiChanged && $newProvider === 'windows') {
+$adapterChanged = $newAdapterGuid !== $oldAdapterGuid;
+if (($wifiChanged || $adapterChanged) && $newProvider === 'windows') {
     queue_store_command($id, 'apply');
 }
 if ($newStatus !== $oldStatus && $newProvider === 'windows') {

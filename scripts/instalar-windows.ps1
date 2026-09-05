@@ -13,6 +13,7 @@ $Scripts = Join-Path $Root "scripts"
 $Log = Join-Path $Storage "install.log"
 $TaskAgent = "HotspotLoja"
 $TaskPanel = "HotspotLojaPainel"
+$ServiceAgent = "WiFiDaLojaAgent"
 
 function Write-Log([string]$Message) {
     $line = "{0}  {1}" -f (Get-Date -Format "yyyy-MM-dd HH:mm:ss"), $Message
@@ -92,6 +93,41 @@ function New-AppShortcut {
     $lnk.Save()
 }
 
+function Install-AgentService {
+    param([string]$AgentExe)
+    if (-not (Test-Path $AgentExe)) {
+        throw "WiFiDaLojaAgent.exe nao encontrado em $AgentExe"
+    }
+    foreach ($name in @($TaskAgent)) {
+        Unregister-ScheduledTask -TaskName $name -Confirm:$false -ErrorAction SilentlyContinue
+        & schtasks.exe /Delete /TN $name /F 2>$null | Out-Null
+    }
+    $svc = Get-Service -Name $ServiceAgent -ErrorAction SilentlyContinue
+    if ($svc) {
+        try {
+            if ($svc.Status -eq "Running") {
+                Stop-Service -Name $ServiceAgent -Force -ErrorAction SilentlyContinue
+            }
+        } catch {}
+        & sc.exe stop $ServiceAgent 2>$null | Out-Null
+        Start-Sleep -Seconds 2
+    }
+    & $AgentExe --install-service 2>&1 | Out-Host
+    if ($LASTEXITCODE -ne 0) {
+        Write-Log "Instalacao via --install-service falhou; tentando sc create..."
+        $bin = "`"$AgentExe`""
+        & sc.exe create $ServiceAgent binPath= $bin start= auto DisplayName= "Wi-Fi da Loja Agent" 2>&1 | Out-Host
+        & sc.exe description $ServiceAgent "Agente hotspot Wi-Fi da Loja v2" 2>&1 | Out-Host
+        & sc.exe start $ServiceAgent 2>&1 | Out-Host
+    }
+    Start-Sleep -Seconds 2
+    $svc = Get-Service -Name $ServiceAgent -ErrorAction SilentlyContinue
+    if (-not $svc) {
+        throw "Nao foi possivel registrar o servico $ServiceAgent"
+    }
+    Write-Log "Servico $ServiceAgent registrado (Status: $($svc.Status))"
+}
+
 function Test-CloudAgentInstall {
     if (Test-Path (Join-Path $Root "CLOUD_AGENT")) { return $true }
     $modeFile = Join-Path $Storage "install-mode.json"
@@ -129,8 +165,8 @@ if (-not $isCloudAgent -and -not (Test-Path (Join-Path $Root "index.php"))) {
     Write-Host "Pasta invalida: nao achei index.php em $Root"
     exit 1
 }
-if ($isCloudAgent -and -not (Test-Path (Join-Path $Scripts "agente-hotspot.ps1"))) {
-    Write-Host "Pacote cloud invalido: falta scripts\agente-hotspot.ps1"
+if ($isCloudAgent -and -not (Test-Path (Join-Path $Root "WiFiDaLojaAgent.exe"))) {
+    Write-Host "Pacote cloud invalido: falta WiFiDaLojaAgent.exe"
     exit 1
 }
 if ($isCloudAgent -and -not (Test-Path (Join-Path $Root "DnsProxy.exe"))) {
@@ -187,11 +223,12 @@ if (-not (Test-Path $bandeja)) {
     Write-Log "Compile o icone da bandeja (installer\compilar.ps1)."
 }
 
-Register-TaskSafe -Name $TaskAgent -Execute "powershell.exe" -Arguments "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$(Join-Path $Scripts 'agente-hotspot.ps1')`""
+$agentExe = Join-Path $Root "WiFiDaLojaAgent.exe"
+Install-AgentService -AgentExe $agentExe
 if (Test-Path $bandeja) {
     Register-TaskSafe -Name "HotspotBandeja" -Execute $bandeja
 }
-Write-Log "Tarefas agendadas registradas"
+Write-Log "Servico agente e bandeja configurados"
 
 foreach ($rule in @("HotspotLoja-Painel-8080", "HotspotLoja-DNS-53", "HotspotLoja-HTTP-80")) {
     Get-NetFirewallRule -DisplayName $rule -ErrorAction SilentlyContinue | Remove-NetFirewallRule -ErrorAction SilentlyContinue
@@ -231,16 +268,12 @@ New-ItemProperty -Path $uninst -Name "InstallLocation" -Value $Root -PropertyTyp
 New-ItemProperty -Path $uninst -Name "UninstallString" -Value ("powershell.exe -NoProfile -ExecutionPolicy Bypass -File `"$desinst`"") -PropertyType String -Force | Out-Null
 New-ItemProperty -Path $uninst -Name "NoModify" -Value 1 -PropertyType DWord -Force | Out-Null
 
-try { Start-ScheduledTask -TaskName $TaskAgent } catch { Write-Log $_.Exception.Message }
-Start-Sleep -Seconds 1
-if (-not (Test-Path (Join-Path $Storage "agent.pid"))) {
-    $agent = Join-Path $Scripts "agente-hotspot.ps1"
-    Start-Process powershell.exe -ArgumentList @("-NoProfile", "-ExecutionPolicy", "Bypass", "-WindowStyle", "Hidden", "-File", $agent) -WorkingDirectory $Root -WindowStyle Hidden
-}
+try { Start-Service -Name $ServiceAgent -ErrorAction SilentlyContinue } catch { Write-Log $_.Exception.Message }
+Start-Sleep -Seconds 2
 if (Test-Path $bandeja) {
     Start-Process $bandeja -WorkingDirectory $Root
 }
-Write-Log "Agente e bandeja iniciados"
+Write-Log "Agente (servico) e bandeja iniciados"
 
 if ($isRemoteCloud) {
     Write-Log "Modo nuvem: painel PHP local nao sera iniciado (portal em /portal/{token})."

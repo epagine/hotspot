@@ -285,12 +285,18 @@ function write_json_file(string $path, array $data): void
 
 function start_windows_agent(): void
 {
-    $root = dirname(__DIR__);
-    $ps1 = $root . DIRECTORY_SEPARATOR . 'scripts' . DIRECTORY_SEPARATOR . 'agente-hotspot.ps1';
-    if (!is_file($ps1)) {
+    if (!php_cmd_allowed('popen')) {
         return;
     }
-    if (!php_cmd_allowed('popen')) {
+    $root = dirname(__DIR__);
+    $agentExe = $root . DIRECTORY_SEPARATOR . 'WiFiDaLojaAgent.exe';
+    if (is_file($agentExe)) {
+        pclose(popen('cmd /c sc start WiFiDaLojaAgent', 'r'));
+
+        return;
+    }
+    $ps1 = $root . DIRECTORY_SEPARATOR . 'scripts' . DIRECTORY_SEPARATOR . 'agente-hotspot.ps1';
+    if (!is_file($ps1)) {
         return;
     }
     $cmd = 'powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File ' . escapeshellarg($ps1);

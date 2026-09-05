@@ -661,8 +661,8 @@ function store_agent_diagnostic_summary(array $store): array
     }
     if (array_key_exists('task_registered', $status)) {
         $lines[] = [
-            'label' => 'Tarefa HotspotLoja',
-            'value' => !empty($status['task_registered']) ? 'Registrada' : 'Ausente — reinstale o agente',
+            'label' => 'Serviço WiFiDaLojaAgent',
+            'value' => !empty($status['task_registered']) ? 'Registrado' : 'Ausente — reinstale o agente v2.0',
             'ok' => !empty($status['task_registered']),
         ];
     }
@@ -679,6 +679,45 @@ function store_agent_diagnostic_summary(array $store): array
             'label' => 'Erro do hotspot',
             'value' => $err,
             'ok' => false,
+        ];
+    }
+    $wifiAdapters = json_list($status['wifi_adapters'] ?? []);
+    if ($wifiAdapters !== []) {
+        $names = [];
+        foreach ($wifiAdapters as $wa) {
+            if (!is_array($wa)) {
+                continue;
+            }
+            $label = trim((string) ($wa['desc'] ?? $wa['name'] ?? 'Wi-Fi'));
+            if (!empty($wa['connected_ssid'])) {
+                $label .= ' (conectado)';
+            }
+            $names[] = $label;
+        }
+        $lines[] = [
+            'label' => 'Adaptadores Wi-Fi',
+            'value' => count($names) . ' detectado(s): ' . implode(', ', $names),
+            'ok' => true,
+        ];
+    }
+    $activeGuid = trim((string) ($status['wifi_adapter_active'] ?? ''));
+    $selectedGuid = trim((string) ($status['wifi_adapter_selected'] ?? ''));
+    if ($activeGuid !== '' || $selectedGuid !== '') {
+        $activeName = 'Automático';
+        foreach ($wifiAdapters as $wa) {
+            if (!is_array($wa)) {
+                continue;
+            }
+            $guid = trim((string) ($wa['guid'] ?? ''));
+            if ($guid !== '' && ($guid === $activeGuid || ($activeGuid === '' && $guid === $selectedGuid))) {
+                $activeName = trim((string) ($wa['desc'] ?? $wa['name'] ?? 'Wi-Fi'));
+                break;
+            }
+        }
+        $lines[] = [
+            'label' => 'Adaptador hotspot',
+            'value' => $activeGuid !== '' ? $activeName : ($selectedGuid !== '' ? $activeName . ' (aguardando ligar)' : 'Automático'),
+            'ok' => $activeGuid !== '' ? true : null,
         ];
     }
     $ver = trim((string) ($status['agent_version'] ?? ''));

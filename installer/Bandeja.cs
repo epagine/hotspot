@@ -1,9 +1,41 @@
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.IO;
+using System.IO.Pipes;
+using System.Text;
+using System.Web.Script.Serialization;
 using System.Windows.Forms;
+
+internal static class AgentPipeClient
+{
+    private const string PipeName = "WiFiDaLojaAgent";
+
+    public static Dictionary<string, object> Send(string cmd)
+    {
+        try
+        {
+            using (var client = new NamedPipeClientStream(".", PipeName, PipeDirection.InOut))
+            {
+                client.Connect(2000);
+                using (var writer = new StreamWriter(client, Encoding.UTF8) { AutoFlush = true })
+                using (var reader = new StreamReader(client, Encoding.UTF8))
+                {
+                    var ser = new JavaScriptSerializer();
+                    writer.WriteLine(ser.Serialize(new Dictionary<string, object> { { "cmd", cmd } }));
+                    string resp = reader.ReadLine();
+                    return ser.DeserializeObject(resp) as Dictionary<string, object>;
+                }
+            }
+        }
+        catch
+        {
+            return null;
+        }
+    }
+}
 
 internal sealed class TrayApp : ApplicationContext
 {
@@ -105,63 +137,13 @@ internal sealed class TrayApp : ApplicationContext
     private void StartBackend()
     {
         Directory.CreateDirectory(AgentDataDir());
-        RunAgentScheduledTask();
+        PingAgentService();
     }
 
-    private static void RunAgentScheduledTask()
+    private bool PingAgentService()
     {
-        try
-        {
-            var psi = new ProcessStartInfo
-            {
-                FileName = "schtasks.exe",
-                Arguments = "/Run /TN \"HotspotLoja\"",
-                UseShellExecute = false,
-                CreateNoWindow = true
-            };
-            Process.Start(psi);
-        }
-        catch
-        {
-        }
-        try
-        {
-            Process.Start(new ProcessStartInfo
-            {
-                FileName = "powershell.exe",
-                Arguments = "-NoProfile -Command \"Start-ScheduledTask -TaskName 'HotspotLoja'\"",
-                UseShellExecute = false,
-                CreateNoWindow = true,
-                WindowStyle = ProcessWindowStyle.Hidden
-            });
-        }
-        catch
-        {
-        }
-    }
-
-    private void StartAgentDirect()
-    {
-        string agent = Path.Combine(root, "scripts", "agente-hotspot.ps1");
-        if (!File.Exists(agent))
-        {
-            return;
-        }
-        try
-        {
-            Process.Start(new ProcessStartInfo
-            {
-                FileName = "powershell.exe",
-                Arguments = "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File \"" + agent + "\"",
-                WorkingDirectory = root,
-                UseShellExecute = false,
-                CreateNoWindow = true,
-                WindowStyle = ProcessWindowStyle.Hidden
-            });
-        }
-        catch
-        {
-        }
+        var resp = AgentPipeClient.Send("ping");
+        return resp != null && resp.ContainsKey("ok") && Convert.ToBoolean(resp["ok"]);
     }
 
     private bool AgentRecentlyActive(int maxAgeSeconds)
@@ -195,7 +177,7 @@ internal sealed class TrayApp : ApplicationContext
     {
         for (int i = 0; i < maxWaitSeconds * 2; i++)
         {
-            if (AgentRecentlyActive(60))
+            if (AgentRecentlyActive(60) || PingAgentService())
             {
                 return true;
             }
@@ -204,37 +186,37 @@ internal sealed class TrayApp : ApplicationContext
         return false;
     }
 
-    private void EnsureAgentRunning()
+    private bool EnsureAgentRunning()
     {
-        if (AgentRecentlyActive(60))
+        if (AgentRecentlyActive(60) || PingAgentService())
         {
-            return;
+            return true;
         }
-        RunAgentScheduledTask();
-        if (WaitAgentActive(8))
-        {
-            return;
-        }
-        StartAgentDirect();
-        WaitAgentActive(6);
+        return WaitAgentActive(6);
     }
 
     private void WriteCommand(string action)
     {
-        string id = Guid.NewGuid().ToString("N").Substring(0, 16);
-        string json = "{\n  \"id\": \"" + id + "\",\n  \"action\": \"" + action + "\",\n  \"at\": \"" + DateTime.Now.ToString("o") + "\"\n}\n";
+        string pipeCmd = action == "start" ? "start" : "stop";
         try
         {
             Directory.CreateDirectory(AgentDataDir());
-            File.WriteAllText(Storage("command.json"), json);
-            EnsureAgentRunning();
+            var resp = AgentPipeClient.Send(pipeCmd);
+            if (resp == null || !resp.ContainsKey("ok") || !Convert.ToBoolean(resp["ok"]))
+            {
+                throw new InvalidOperationException("Servico WiFiDaLojaAgent sem resposta. Reinstale o setup v2.0 como administrador.");
+            }
+            if (!EnsureAgentRunning())
+            {
+                throw new InvalidOperationException("Agente iniciando... aguarde alguns segundos.");
+            }
         }
         catch (Exception ex)
         {
             icon.ShowBalloonTip(
                 5000,
                 "Wi-Fi da loja",
-                "Nao foi possivel enviar comando. Atualize o agente (reinstale o setup) ou execute como administrador.\n" + ex.Message,
+                ex.Message,
                 ToolTipIcon.Error);
             return;
         }
@@ -266,12 +248,12 @@ internal sealed class TrayApp : ApplicationContext
                 {
                     icon.ShowBalloonTip(9000, "Wi-Fi da loja", err, ToolTipIcon.Error);
                 }
-                else if (!AgentRecentlyActive(60))
+                else if (!AgentRecentlyActive(60) && !PingAgentService())
                 {
                     icon.ShowBalloonTip(
                         9000,
                         "Wi-Fi da loja",
-                        "Agente sem resposta. Reinstale o setup v1.2.3 como administrador ou execute: schtasks /Run /TN HotspotLoja",
+                        "Agente sem resposta. Reinstale o setup v2.0 como administrador.",
                         ToolTipIcon.Warning);
                 }
                 else

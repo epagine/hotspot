@@ -203,6 +203,10 @@ function app_nav_tw(string $tab, array $items): void
                 $setupReady = installer_setup_path() !== null;
                 $panelUrl = rtrim(guess_panel_url(), '/');
                 $approval = setting_for_store((int) $hot['id'], 'approval_mode', 'instant');
+                $wifiAdapterGuid = setting_for_store((int) $hot['id'], 'wifi_adapter_guid', '');
+                $wifiAdapters = json_list($agentStatus['wifi_adapters'] ?? []);
+                $wifiAdapterActive = trim((string) ($agentStatus['wifi_adapter_active'] ?? ''));
+                $agentSupportsAdapterPick = version_compare((string) ($agentStatus['agent_version'] ?? ''), '2.0.0', '>=');
             ?>
             <section class="card hotspot-edit">
                 <header class="hotspot-edit-header">
@@ -311,7 +315,43 @@ function app_nav_tw(string $tab, array $items): void
                                             <?php endforeach; ?>
                                         </select>
                                     </label>
+                                    <?php if ($agentSupportsAdapterPick && $wifiAdapters !== []): ?>
+                                    <label>Adaptador Wi-Fi (transmissão)
+                                        <select name="wifi_adapter_guid">
+                                            <option value="">Automático (recomendado)</option>
+                                            <?php foreach ($wifiAdapters as $wa): ?>
+                                                <?php
+                                                $waGuid = trim((string) ($wa['guid'] ?? ''));
+                                                if ($waGuid === '') {
+                                                    continue;
+                                                }
+                                                $waLabel = trim((string) ($wa['desc'] ?? $wa['name'] ?? 'Wi-Fi'));
+                                                $waExtra = trim((string) ($wa['status'] ?? ''));
+                                                if (!empty($wa['connected_ssid'])) {
+                                                    $waExtra .= ($waExtra !== '' ? ' · ' : '') . 'conectado: ' . (string) $wa['connected_ssid'];
+                                                }
+                                                if (!empty($wa['recommended'])) {
+                                                    $waExtra .= ($waExtra !== '' ? ' · ' : '') . 'recomendado';
+                                                }
+                                                ?>
+                                                <option value="<?= h($waGuid) ?>" <?= $wifiAdapterGuid === $waGuid ? 'selected' : '' ?>><?= h($waLabel . ($waExtra !== '' ? ' (' . $waExtra . ')' : '')) ?></option>
+                                            <?php endforeach; ?>
+                                        </select>
+                                    </label>
+                                    <?php elseif (!$agentSupportsAdapterPick): ?>
+                                    <p class="hint">Atualize o agente para v2.0 para escolher o adaptador Wi-Fi de transmissão.</p>
+                                    <?php else: ?>
+                                    <p class="hint">Adaptadores Wi-Fi aparecerão após o agente sincronizar com este PC.</p>
+                                    <?php endif; ?>
                                 </div>
+                                <?php if ($wifiAdapters !== []): ?>
+                                <ul class="hint agent-adapter-list">
+                                    <?php foreach ($wifiAdapters as $wa): ?>
+                                        <li><?= h(trim((string) ($wa['desc'] ?? $wa['name'] ?? 'Wi-Fi'))) ?><?php if ($wifiAdapterActive !== '' && ($wa['guid'] ?? '') === $wifiAdapterActive): ?> · <strong>em uso</strong><?php endif; ?></li>
+                                    <?php endforeach; ?>
+                                </ul>
+                                <?php endif; ?>
+                                <p class="hint">Use o USB TP-Link se o PC tiver Wi-Fi interno e adaptador USB.</p>
                             </div>
 
                             <div class="hotspot-panel">

@@ -4,6 +4,7 @@ $Root = Split-Path -Parent $PSScriptRoot
 $Storage = Get-AgentStorageDir -InstallRoot $Root
 $TaskAgent = "HotspotLoja"
 $TaskPanel = "HotspotLojaPainel"
+$ServiceAgent = "WiFiDaLojaAgent"
 
 $id = [Security.Principal.WindowsIdentity]::GetCurrent()
 $p = New-Object Security.Principal.WindowsPrincipal($id)
@@ -16,6 +17,23 @@ foreach ($name in @($TaskAgent, $TaskPanel, "HotspotBandeja")) {
     Unregister-ScheduledTask -TaskName $name -Confirm:$false -ErrorAction SilentlyContinue
     & schtasks.exe /Delete /TN $name /F 2>$null | Out-Null
 }
+
+$agentExe = Join-Path $Root "WiFiDaLojaAgent.exe"
+if (Test-Path $agentExe) {
+    & $agentExe --uninstall-service 2>$null | Out-Null
+}
+$svc = Get-Service -Name $ServiceAgent -ErrorAction SilentlyContinue
+if ($svc) {
+    try {
+        if ($svc.Status -eq "Running") {
+            Stop-Service -Name $ServiceAgent -Force -ErrorAction SilentlyContinue
+        }
+    } catch {}
+    & sc.exe stop $ServiceAgent 2>$null | Out-Null
+    & sc.exe delete $ServiceAgent 2>$null | Out-Null
+}
+
+Get-Process WiFiDaLojaAgent -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
 
 Get-Process HotspotBandeja -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
 
@@ -35,6 +53,7 @@ Get-CimInstance Win32_Process -ErrorAction SilentlyContinue |
     Where-Object {
         ($_.Name -eq "DnsProxy.exe") -or
         ($_.Name -eq "CaptiveHttp.exe") -or
+        ($_.Name -eq "WiFiDaLojaAgent.exe") -or
         ($_.Name -eq "php.exe" -and $_.CommandLine -and ($_.CommandLine -like "*dns-proxy.php*" -or $_.CommandLine -like "*0.0.0.0:8080*"))
     } |
     ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }

@@ -56,6 +56,8 @@ $cfg = [
         : setting('store_city'),
     'wifi_ssid' => setting('wifi_ssid', 'WifiDaLoja'),
     'wifi_pass' => setting('wifi_pass', ''),
+    'wifi_adapter_guid' => setting('wifi_adapter_guid', ''),
+    'wifi_isolate_others' => setting('wifi_isolate_others', '1'),
     'portal_ip' => setting('portal_ip', '192.168.137.1'),
     'max_clients' => (string) store_agent_max_clients($sid),
     'dns_allowlist' => setting('dns_allowlist', default_dns_allowlist()),
