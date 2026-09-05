@@ -17,7 +17,7 @@ if (-not (Test-Path $webExt)) {
 if ($LASTEXITCODE -ne 0) { throw "Falha ao gerar Instalar-Hotspot.exe" }
 & $csc /nologo /target:winexe /optimize+ /win32manifest:"$src\app.manifest" /r:System.Windows.Forms.dll /out:"$root\Desinstalar-Hotspot.exe" "$src\Desinstalar.cs"
 if ($LASTEXITCODE -ne 0) { throw "Falha ao gerar Desinstalar-Hotspot.exe" }
-& $csc /nologo /target:winexe /optimize+ /r:System.Windows.Forms.dll /r:System.Drawing.dll /r:"$webExt" /out:"$root\HotspotBandeja.exe" "$src\Bandeja.cs"
+& $csc /nologo /target:winexe /optimize+ /r:System.Windows.Forms.dll /r:System.Drawing.dll /out:"$root\HotspotBandeja.exe" "$src\Bandeja.cs"
 if ($LASTEXITCODE -ne 0) {
     if (Test-Path (Join-Path $root "HotspotBandeja.exe")) {
         Write-Host "HotspotBandeja.exe em uso; mantendo o arquivo existente."

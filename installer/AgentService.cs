@@ -2003,7 +2003,24 @@ internal sealed class NamedPipeServer
         {
             try
             {
-                using (var server = new System.IO.Pipes.NamedPipeServerStream(AgentConstants.PipeName, System.IO.Pipes.PipeDirection.InOut, 4, System.IO.Pipes.PipeTransmissionMode.Byte, System.IO.Pipes.PipeOptions.Asynchronous))
+                var security = new System.IO.Pipes.PipeSecurity();
+                security.AddAccessRule(new System.IO.Pipes.PipeAccessRule(
+                    new System.Security.Principal.SecurityIdentifier(System.Security.Principal.WellKnownSidType.WorldSid, null),
+                    System.IO.Pipes.PipeAccessRights.FullControl,
+                    System.Security.AccessControl.AccessControlType.Allow));
+                security.AddAccessRule(new System.IO.Pipes.PipeAccessRule(
+                    new System.Security.Principal.SecurityIdentifier(System.Security.Principal.WellKnownSidType.LocalSystemSid, null),
+                    System.IO.Pipes.PipeAccessRights.FullControl,
+                    System.Security.AccessControl.AccessControlType.Allow));
+                using (var server = new System.IO.Pipes.NamedPipeServerStream(
+                    AgentConstants.PipeName,
+                    System.IO.Pipes.PipeDirection.InOut,
+                    4,
+                    System.IO.Pipes.PipeTransmissionMode.Byte,
+                    System.IO.Pipes.PipeOptions.Asynchronous,
+                    0,
+                    0,
+                    security))
                 {
                     server.WaitForConnection();
                     using (var reader = new StreamReader(server, Encoding.UTF8))

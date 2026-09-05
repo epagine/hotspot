@@ -1,39 +1,51 @@
 using System;
-using System.Collections.Generic;
 using System.Diagnostics;
 using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.IO;
 using System.IO.Pipes;
 using System.Text;
-using System.Web.Script.Serialization;
 using System.Windows.Forms;
 
 internal static class AgentPipeClient
 {
     private const string PipeName = "WiFiDaLojaAgent";
 
-    public static Dictionary<string, object> Send(string cmd)
+    public static bool SendOk(string cmd, int timeoutMs)
+    {
+        string resp = SendRaw(cmd, timeoutMs);
+        if (string.IsNullOrEmpty(resp))
+        {
+            return false;
+        }
+        return resp.IndexOf("\"ok\":true", StringComparison.OrdinalIgnoreCase) >= 0
+            || resp.IndexOf("\"ok\": true", StringComparison.OrdinalIgnoreCase) >= 0;
+    }
+
+    public static string SendRaw(string cmd, int timeoutMs)
     {
         try
         {
             using (var client = new NamedPipeClientStream(".", PipeName, PipeDirection.InOut))
             {
-                client.Connect(2000);
-                using (var writer = new StreamWriter(client, Encoding.UTF8) { AutoFlush = true })
+                client.Connect(timeoutMs);
+                using (var writer = new StreamWriter(client, new UTF8Encoding(false)) { AutoFlush = true })
                 using (var reader = new StreamReader(client, Encoding.UTF8))
                 {
-                    var ser = new JavaScriptSerializer();
-                    writer.WriteLine(ser.Serialize(new Dictionary<string, object> { { "cmd", cmd } }));
-                    string resp = reader.ReadLine();
-                    return ser.DeserializeObject(resp) as Dictionary<string, object>;
+                    writer.WriteLine("{\"cmd\":\"" + Escape(cmd) + "\"}");
+                    return reader.ReadLine() ?? "";
                 }
             }
         }
         catch
         {
-            return null;
+            return "";
         }
+    }
+
+    private static string Escape(string s)
+    {
+        return (s ?? "").Replace("\\", "\\\\").Replace("\"", "\\\"");
     }
 }
 
@@ -50,44 +62,109 @@ internal sealed class TrayApp : ApplicationContext
 
     private readonly string root;
     private readonly NotifyIcon icon;
+    private readonly ContextMenuStrip menu;
     private readonly Timer timer;
     private StatusForm statusForm;
 
     public TrayApp()
     {
         root = AppDomain.CurrentDomain.BaseDirectory.TrimEnd(Path.DirectorySeparatorChar);
-        ImportLegacyStorage(root);
+        try
+        {
+            ImportLegacyStorage(root);
+            Directory.CreateDirectory(AgentDataDir());
+        }
+        catch
+        {
+        }
+
+        menu = BuildMenu();
         icon = new NotifyIcon
         {
             Icon = MakeAppIcon(),
             Visible = true,
-            Text = "Wi-Fi da loja"
+            Text = "Wi-Fi da loja",
+            ContextMenuStrip = menu
         };
-        icon.DoubleClick += delegate { ShowStatus(); };
-        icon.ContextMenu = new ContextMenu(new[]
-        {
-            new MenuItem("Abrir status", delegate { ShowStatus(); }),
-            new MenuItem("Abrir painel do cliente", delegate { OpenUrl(ClientPanelUrl()); }),
-            new MenuItem("Abrir hotspot no painel", delegate { OpenUrl(AdminPanelUrl()); }),
-            new MenuItem("-"),
-            new MenuItem("Ligar rede", delegate { WriteCommand("start"); }),
-            new MenuItem("Desligar rede", delegate { WriteCommand("stop"); }),
-            new MenuItem("Vincular hotspot", delegate { BindStore(); }),
-            new MenuItem("-"),
-            new MenuItem("Encerrar", delegate { ExitApp(); })
-        });
-        StartBackend();
+        icon.MouseUp += Icon_MouseUp;
+        icon.DoubleClick += delegate { SafeShowStatus(); };
+
         timer = new Timer { Interval = 3000 };
         timer.Tick += delegate
         {
-            UpdateTip();
-            if (statusForm != null && !statusForm.IsDisposed && statusForm.Visible)
+            try
             {
-                statusForm.RefreshData();
+                UpdateTip();
+                if (statusForm != null && !statusForm.IsDisposed && statusForm.Visible)
+                {
+                    statusForm.RefreshData();
+                }
+            }
+            catch
+            {
             }
         };
         timer.Start();
         UpdateTip();
+    }
+
+    private ContextMenuStrip BuildMenu()
+    {
+        var strip = new ContextMenuStrip();
+        strip.Items.Add("Abrir status", null, delegate { SafeShowStatus(); });
+        strip.Items.Add("Abrir painel do cliente", null, delegate { OpenUrl(ClientPanelUrl()); });
+        strip.Items.Add("Abrir hotspot no painel", null, delegate { OpenUrl(AdminPanelUrl()); });
+        strip.Items.Add(new ToolStripSeparator());
+        strip.Items.Add("Ligar rede", null, delegate { WriteCommand("start"); });
+        strip.Items.Add("Desligar rede", null, delegate { WriteCommand("stop"); });
+        strip.Items.Add("Vincular hotspot", null, delegate { SafeBindStore(); });
+        strip.Items.Add(new ToolStripSeparator());
+        strip.Items.Add("Encerrar", null, delegate { ExitApp(); });
+        return strip;
+    }
+
+    private void Icon_MouseUp(object sender, MouseEventArgs e)
+    {
+        try
+        {
+            if (e.Button == MouseButtons.Left)
+            {
+                SafeShowStatus();
+                return;
+            }
+            if (e.Button == MouseButtons.Right)
+            {
+                menu.Show(Cursor.Position);
+            }
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(ex.Message, "Wi-Fi da loja", MessageBoxButtons.OK, MessageBoxIcon.Error);
+        }
+    }
+
+    private void SafeShowStatus()
+    {
+        try
+        {
+            ShowStatus();
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show("Nao foi possivel abrir o status:\n" + ex.Message, "Wi-Fi da loja", MessageBoxButtons.OK, MessageBoxIcon.Error);
+        }
+    }
+
+    private void SafeBindStore()
+    {
+        try
+        {
+            BindStore();
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show("Nao foi possivel abrir a vinculacao:\n" + ex.Message, "Wi-Fi da loja", MessageBoxButtons.OK, MessageBoxIcon.Error);
+        }
     }
 
     private string Storage(string name)
@@ -134,16 +211,9 @@ internal sealed class TrayApp : ApplicationContext
         }
     }
 
-    private void StartBackend()
-    {
-        Directory.CreateDirectory(AgentDataDir());
-        PingAgentService();
-    }
-
     private bool PingAgentService()
     {
-        var resp = AgentPipeClient.Send("ping");
-        return resp != null && resp.ContainsKey("ok") && Convert.ToBoolean(resp["ok"]);
+        return AgentPipeClient.SendOk("ping", 800);
     }
 
     private bool AgentRecentlyActive(int maxAgeSeconds)
@@ -192,7 +262,18 @@ internal sealed class TrayApp : ApplicationContext
         {
             return true;
         }
-        return WaitAgentActive(6);
+        return WaitAgentActive(3);
+    }
+
+    private void QueueCommandFile(string action)
+    {
+        string id = Guid.NewGuid().ToString("N").Substring(0, 16);
+        string json = "{\n  \"id\": \"" + id + "\",\n  \"action\": \"" + action + "\",\n  \"at\": \"" + DateTime.Now.ToString("o") + "\"\n}\n";
+        Directory.CreateDirectory(AgentDataDir());
+        string commandsDir = Path.Combine(AgentDataDir(), "commands");
+        Directory.CreateDirectory(commandsDir);
+        File.WriteAllText(Path.Combine(commandsDir, id + ".json"), json);
+        File.WriteAllText(Storage("command.json"), json);
     }
 
     private void WriteCommand(string action)
@@ -201,23 +282,20 @@ internal sealed class TrayApp : ApplicationContext
         try
         {
             Directory.CreateDirectory(AgentDataDir());
-            var resp = AgentPipeClient.Send(pipeCmd);
-            if (resp == null || !resp.ContainsKey("ok") || !Convert.ToBoolean(resp["ok"]))
+            bool viaPipe = AgentPipeClient.SendOk(pipeCmd, 1500);
+            if (!viaPipe)
             {
-                throw new InvalidOperationException("Servico WiFiDaLojaAgent sem resposta. Reinstale o setup v2.0 como administrador.");
-            }
-            if (!EnsureAgentRunning())
-            {
-                throw new InvalidOperationException("Agente iniciando... aguarde alguns segundos.");
+                QueueCommandFile(action);
+                if (!EnsureAgentRunning())
+                {
+                    throw new InvalidOperationException(
+                        "Servico WiFiDaLojaAgent sem resposta. Reinstale o setup v2.0.2 como administrador.");
+                }
             }
         }
         catch (Exception ex)
         {
-            icon.ShowBalloonTip(
-                5000,
-                "Wi-Fi da loja",
-                ex.Message,
-                ToolTipIcon.Error);
+            icon.ShowBalloonTip(6000, "Wi-Fi da loja", ex.Message, ToolTipIcon.Error);
             return;
         }
         icon.ShowBalloonTip(2500, "Wi-Fi da loja", action == "start" ? "Ligando a rede..." : "Desligando a rede...", ToolTipIcon.Info);
@@ -253,7 +331,7 @@ internal sealed class TrayApp : ApplicationContext
                     icon.ShowBalloonTip(
                         9000,
                         "Wi-Fi da loja",
-                        "Agente sem resposta. Reinstale o setup v2.0 como administrador.",
+                        "Agente sem resposta. Reinstale o setup v2.0.2 como administrador.",
                         ToolTipIcon.Warning);
                 }
                 else
@@ -285,9 +363,20 @@ internal sealed class TrayApp : ApplicationContext
             statusForm = new StatusForm(this);
         }
         statusForm.RefreshData();
-        statusForm.Show();
+        if (!statusForm.Visible)
+        {
+            statusForm.Show();
+        }
+        if (statusForm.WindowState == FormWindowState.Minimized)
+        {
+            statusForm.WindowState = FormWindowState.Normal;
+        }
+        statusForm.ShowInTaskbar = true;
+        statusForm.TopMost = true;
         statusForm.BringToFront();
         statusForm.Activate();
+        statusForm.TopMost = false;
+        statusForm.Focus();
     }
 
     private void BindStore()
@@ -525,11 +614,20 @@ internal sealed class TrayApp : ApplicationContext
 
     private void ExitApp()
     {
-        if (statusForm != null && !statusForm.IsDisposed)
+        try
         {
-            statusForm.Close();
+            timer.Stop();
+            if (statusForm != null && !statusForm.IsDisposed)
+            {
+                statusForm.Close();
+            }
+            icon.Visible = false;
+            icon.Dispose();
+            menu.Dispose();
         }
-        icon.Visible = false;
+        catch
+        {
+        }
         Application.Exit();
     }
 
@@ -595,7 +693,18 @@ internal sealed class TrayApp : ApplicationContext
     {
         Application.EnableVisualStyles();
         Application.SetCompatibleTextRenderingDefault(false);
-        Application.Run(new TrayApp());
+        try
+        {
+            Application.Run(new TrayApp());
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(
+                "Erro ao iniciar a bandeja:\n" + ex.Message,
+                "Wi-Fi da loja",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Error);
+        }
     }
 
     private sealed class StatusForm : Form
@@ -670,7 +779,7 @@ internal sealed class TrayApp : ApplicationContext
             var stopBtn = MakeGhostButton("Desligar", 126, 552, 100, 34);
             stopBtn.Click += delegate { app.WriteCommand("stop"); };
             var bindBtn = MakeGhostButton("Vincular…", 236, 552, 110, 34);
-            bindBtn.Click += delegate { app.BindStore(); };
+            bindBtn.Click += delegate { app.SafeBindStore(); };
             var refreshBtn = MakeGhostButton("Atualizar", 356, 552, 100, 34);
             refreshBtn.Click += delegate { RefreshData(); };
 

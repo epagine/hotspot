@@ -76,13 +76,21 @@ Write-Host "Montando WiFiDaLoja-Agent-Setup.exe ..."
 $stubBytes = [System.IO.File]::ReadAllBytes($Stub)
 $zipBytes = [System.IO.File]::ReadAllBytes($Zip)
 $lenBytes = [BitConverter]::GetBytes([int64]$zipBytes.LongLength)
-$out = [System.IO.File]::Create($OutExe)
+$tmpOut = Join-Path $Dist ("WiFiDaLoja-Agent-Setup-" + [guid]::NewGuid().ToString("N").Substring(0, 8) + ".exe")
+$out = [System.IO.File]::Create($tmpOut)
 try {
     $out.Write($stubBytes, 0, $stubBytes.Length)
     $out.Write($zipBytes, 0, $zipBytes.Length)
     $out.Write($lenBytes, 0, $lenBytes.Length)
 } finally {
     $out.Close()
+}
+try {
+    if (Test-Path $OutExe) { Remove-Item $OutExe -Force -ErrorAction Stop }
+    Move-Item $tmpOut $OutExe -Force
+} catch {
+    Write-Host "Aviso: nao sobrescrevi dist\WiFiDaLoja-Agent-Setup.exe (em uso). Usando arquivo novo: $tmpOut"
+    $OutExe = $tmpOut
 }
 
 Copy-Item $OutExe (Join-Path $Root "WiFiDaLoja-Agent-Setup.exe") -Force
