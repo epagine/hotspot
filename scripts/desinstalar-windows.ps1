@@ -1,6 +1,7 @@
 $ErrorActionPreference = "Continue"
 $Root = Split-Path -Parent $PSScriptRoot
-$Storage = Join-Path $Root "storage"
+. (Join-Path $PSScriptRoot "agent-storage.ps1")
+$Storage = Get-AgentStorageDir -InstallRoot $Root
 $TaskAgent = "HotspotLoja"
 $TaskPanel = "HotspotLojaPainel"
 
@@ -48,5 +49,5 @@ Remove-Item (Join-Path $desktop "Painel Wi-Fi da loja.lnk") -Force -ErrorAction 
 Remove-Item $programs -Recurse -Force -ErrorAction SilentlyContinue
 Remove-Item "HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\HotspotLoja" -Recurse -Force -ErrorAction SilentlyContinue
 
-Write-Host "Removido. A pasta do sistema em $Root foi mantida."
+Write-Host "Removido. Dados do agente mantidos em $Storage"
 exit 0

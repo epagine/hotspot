@@ -14,8 +14,9 @@ internal static class DnsProxy
 
     static DnsProxy()
     {
-        string root = AppDomain.CurrentDomain.BaseDirectory.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
-        StatePath = Path.Combine(root, "storage", "authorized.json");
+        string dir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), "WiFiDaLoja");
+        Directory.CreateDirectory(dir);
+        StatePath = Path.Combine(dir, "authorized.json");
     }
 
     public static void Main()

@@ -16,12 +16,12 @@ if ($LASTEXITCODE -ne 0) {
 if (Test-Path $Dist) { Remove-Item $Dist -Recurse -Force }
 New-Item -ItemType Directory -Path $Stage | Out-Null
 New-Item -ItemType Directory -Path (Join-Path $Stage "scripts") | Out-Null
-New-Item -ItemType Directory -Path (Join-Path $Stage "storage") | Out-Null
 
 $scriptFiles = @(
     "agente-hotspot.ps1",
     "instalar-windows.ps1",
-    "desinstalar-windows.ps1"
+    "desinstalar-windows.ps1",
+    "agent-storage.ps1"
 )
 foreach ($name in $scriptFiles) {
     Copy-Item (Join-Path (Join-Path $Root "scripts") $name) (Join-Path (Join-Path $Stage "scripts") $name) -Force
@@ -36,7 +36,6 @@ foreach ($exe in @("HotspotBandeja.exe", "Desinstalar-Hotspot.exe", "DnsProxy.ex
 }
 
 Set-Content -Path (Join-Path $Stage "CLOUD_AGENT") -Value "1" -Encoding ASCII
-Set-Content -Path (Join-Path $Stage "storage\.gitkeep") -Value "" -Encoding ASCII
 
 Add-Type -AssemblyName System.IO.Compression.FileSystem
 if (Test-Path $Zip) { Remove-Item $Zip -Force }

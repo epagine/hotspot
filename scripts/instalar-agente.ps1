@@ -4,6 +4,8 @@ $ErrorActionPreference = "Stop"
 $Agent = Join-Path $PSScriptRoot "agente-hotspot.ps1"
 $TaskName = "HotspotLoja"
 $Root = Split-Path -Parent $PSScriptRoot
+. (Join-Path $PSScriptRoot "agent-storage.ps1")
+$Storage = Get-AgentStorageDir -InstallRoot $Root
 
 function Get-TaskAccount {
     $name = [Security.Principal.WindowsIdentity]::GetCurrent().Name

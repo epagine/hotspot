@@ -59,12 +59,19 @@ internal sealed class TrayApp : ApplicationContext
 
     private string Storage(string name)
     {
-        return Path.Combine(root, "storage", name);
+        return Path.Combine(AgentDataDir(), name);
+    }
+
+    private static string AgentDataDir()
+    {
+        string dir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), "WiFiDaLoja");
+        Directory.CreateDirectory(dir);
+        return dir;
     }
 
     private void StartBackend()
     {
-        Directory.CreateDirectory(Path.Combine(root, "storage"));
+        Directory.CreateDirectory(AgentDataDir());
         string agent = Path.Combine(root, "scripts", "agente-hotspot.ps1");
         StartHidden("powershell.exe", "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File \"" + agent + "\"");
     }
@@ -178,7 +185,7 @@ internal sealed class TrayApp : ApplicationContext
                 return;
             }
             string json = "{\n  \"panel_url\": \"" + EscapeJson(u) + "\",\n  \"token\": \"" + EscapeJson(t) + "\"\n}\n";
-            Directory.CreateDirectory(Path.Combine(root, "storage"));
+            Directory.CreateDirectory(AgentDataDir());
             File.WriteAllText(Storage("cloud.json"), json);
             icon.ShowBalloonTip(2500, "Wi-Fi da Loja", "Hotspot vinculado. Aguarde a sincronização.", ToolTipIcon.Info);
             if (statusForm != null && !statusForm.IsDisposed)

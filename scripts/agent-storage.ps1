@@ -1,0 +1,59 @@
+# Caminho persistente do agente (sobrevive a reinstalacao/atualizacao em Program Files).
+function Get-AgentStorageDir {
+    param([string]$InstallRoot = "")
+    $dir = Join-Path $env:ProgramData "WiFiDaLoja"
+    if (-not (Test-Path $dir)) {
+        New-Item -ItemType Directory -Path $dir -Force | Out-Null
+    }
+    if ($InstallRoot) {
+        Import-LegacyAgentStorage -InstallRoot $InstallRoot -TargetDir $dir
+    }
+    return $dir
+}
+
+function Import-LegacyAgentStorage {
+    param([string]$InstallRoot, [string]$TargetDir)
+    $legacy = Join-Path $InstallRoot "storage"
+    if (-not (Test-Path $legacy)) {
+        return
+    }
+    foreach ($name in @(
+        "cloud.json", "authorized.json", "store-info.json", "install-mode.json",
+        "sync-error.json", "client-patches.json", "php-path.txt"
+    )) {
+        $src = Join-Path $legacy $name
+        $dst = Join-Path $TargetDir $name
+        if ((Test-Path $src) -and -not (Test-Path $dst)) {
+            Copy-Item $src $dst -Force
+        }
+    }
+    $legacyBrand = Join-Path $legacy "brand"
+    $targetBrand = Join-Path $TargetDir "brand"
+    if ((Test-Path $legacyBrand) -and -not (Test-Path $targetBrand)) {
+        Copy-Item $legacyBrand $targetBrand -Recurse -Force
+    }
+}
+
+function Read-AgentCloudConfig {
+    param([string]$StorageDir)
+    $path = Join-Path $StorageDir "cloud.json"
+    if (-not (Test-Path $path)) {
+        return $null
+    }
+    try {
+        return Get-Content $path -Raw -ErrorAction Stop | ConvertFrom-Json
+    } catch {
+        return $null
+    }
+}
+
+function Test-AgentCloudConfig {
+    param([string]$StorageDir)
+    $cfg = Read-AgentCloudConfig -StorageDir $StorageDir
+    if (-not $cfg) {
+        return $false
+    }
+    $url = ([string]$cfg.panel_url).Trim()
+    $token = ([string]$cfg.token).Trim()
+    return ($url.Length -ge 8 -and $token.Length -ge 8)
+}

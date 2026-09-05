@@ -1,7 +1,8 @@
 # Agente: liga/desliga o hotspot, DNS cativo e status real da rede.
 $ErrorActionPreference = "Continue"
 $Root = Split-Path -Parent $PSScriptRoot
-$Storage = Join-Path $Root "storage"
+. (Join-Path $PSScriptRoot "agent-storage.ps1")
+$Storage = Get-AgentStorageDir -InstallRoot $Root
 $AuthFile = Join-Path $Storage "authorized.json"
 $CmdFile = Join-Path $Storage "command.json"
 $StatusFile = Join-Path $Storage "status.json"
@@ -193,6 +194,66 @@ function Stop-DnsProxy {
         ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
 }
 
+function Restart-IcsService {
+    try {
+        $svc = Get-Service icssvc -ErrorAction SilentlyContinue
+        if (-not $svc) { return }
+        if ($svc.Status -eq "Running") {
+            Restart-Service icssvc -Force -ErrorAction SilentlyContinue
+        } else {
+            Start-Service icssvc -ErrorAction SilentlyContinue
+        }
+        Start-Sleep -Seconds 2
+    } catch {}
+}
+
+function Get-TetheringStatusHint {
+    param([int]$Code)
+    switch ($Code) {
+        1 { "Ponto de acesso movel nao iniciou (Windows: desconhecido). Abra Configuracoes > Rede e internet > Ponto de acesso movel, ligue uma vez manualmente, e depois clique Ligar no painel." }
+        2 { "Modem movel desligado. Este PC usa Wi-Fi/Ethernet — verifique o adaptador de internet." }
+        3 { "Wi-Fi desligado. Ative o Wi-Fi no Windows (o adaptador TP-Link deve estar habilitado)." }
+        4 { "Tempo esgotado ao validar tethering com a operadora." }
+        5 { "Esta conexao nao permite ponto de acesso movel." }
+        6 { "Hotspot ainda iniciando. Aguarde alguns segundos e tente Ligar de novo." }
+        7 { "Bluetooth desligado (necessario apenas para tethering via Bluetooth)." }
+        8 { "Wi-Fi ocupado ou internet instavel. Desconecte o TP-Link de outras redes Wi-Fi e confira o cabo/Ethernet da loja." }
+        9 { "" }
+        10 { "Restricao de radio/banda no adaptador Wi-Fi. Tente outro canal ou atualize o driver." }
+        11 { "Interferencia de banda entre conexao principal e hotspot. Desconecte o Wi-Fi do adaptador USB." }
+        default { "Codigo Windows $Code. Abra Configuracoes > Rede > Ponto de acesso movel e ligue uma vez manualmente." }
+    }
+}
+
+function Start-TetheringSafe {
+    param($Manager)
+    $retriedIcs = $false
+    for ($attempt = 1; $attempt -le 3; $attempt++) {
+        $result = Wait-WinRt ($Manager.StartTetheringAsync())
+        $code = -1
+        try { $code = [int]$result.Status } catch {}
+        if ($code -eq 0 -or $code -eq 9) {
+            return
+        }
+        if ($code -eq 1 -and -not $retriedIcs) {
+            Restart-IcsService
+            $script:TetheringMgr = $null
+            $Manager = Get-TetheringManager
+            $retriedIcs = $true
+            continue
+        }
+        if ($code -eq 6 -and $attempt -lt 3) {
+            Start-Sleep -Seconds 3
+            continue
+        }
+        $hint = Get-TetheringStatusHint -Code $code
+        if ($hint) {
+            throw $hint
+        }
+        throw "Codigo Windows $code ao ligar hotspot."
+    }
+}
+
 function Set-Hotspot {
     param([bool]$On, [bool]$ApplyOnly = $false)
     $wifiCards = @(Get-WifiAdapters)
@@ -213,18 +274,7 @@ function Set-Hotspot {
     if ($ApplyOnly) { return }
     if ($On) {
         if ([int]$mgr.TetheringOperationalState -ne 1) {
-            $result = Wait-WinRt ($mgr.StartTetheringAsync())
-            $code = -1
-            try { $code = [int]$result.Status } catch {}
-            if ($code -ne 0) {
-                $hint = switch ($code) {
-                    8 { "O Wi-Fi TP-Link esta ocupado. Desconecte de qualquer rede (deixe Desconectado) e tente de novo." }
-                    10 { "O radio Wi-Fi esta desligado. Ligue o Wi-Fi no Windows." }
-                    3 { "Falha de autenticacao do ponto de acesso. Confira a senha do Wi-Fi (minimo 8 caracteres)." }
-                    default { "Codigo Windows $code. Abra Configuracoes > Rede > Ponto de acesso movel e ligue uma vez manualmente." }
-                }
-                throw $hint
-            }
+            Start-TetheringSafe -Manager $mgr
         }
         Start-DnsProxy
     } else {
@@ -314,6 +364,10 @@ function Write-Status {
         if (-not $script:LastError) {
             $script:LastError = $_.Exception.Message
         }
+    }
+
+    if ($on) {
+        $script:LastError = $null
     }
 
     $inet = Get-InternetRoute

@@ -5,6 +5,7 @@ using System.Drawing.Drawing2D;
 using System.IO;
 using System.IO.Compression;
 using System.Reflection;
+using System.Text.RegularExpressions;
 using System.Windows.Forms;
 
 internal sealed class SetupForm : Form
@@ -67,6 +68,7 @@ internal sealed class SetupForm : Form
                 if (dlg.ShowDialog() == DialogResult.OK && dlg.SelectedPath.Length > 0)
                 {
                     pathBox.Text = dlg.SelectedPath;
+                    LoadExistingCloudFields(dlg.SelectedPath);
                 }
             }
         };
@@ -88,7 +90,7 @@ internal sealed class SetupForm : Form
             Height = 48,
             ForeColor = Muted,
             Font = new Font("Segoe UI", 8.5f),
-            Text = "Copie URL e token em Painel → Hotspots → Abrir. O portal dos clientes fica na nuvem — sem PHP ou MySQL neste PC."
+            Text = "Copie URL e token em Painel → Hotspots → Abrir. Em atualizações, os campos são preenchidos automaticamente."
         });
         Controls.Add(card);
 
@@ -125,6 +127,8 @@ internal sealed class SetupForm : Form
         Controls.Add(logBox);
 
         pathBox.Text = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "WiFiDaLoja");
+        pathBox.TextChanged += delegate { LoadExistingCloudFields(pathBox.Text.Trim()); };
+        LoadExistingCloudFields(pathBox.Text);
 
         installBtn = MakeGoldButton("Instalar agente", 424, 512, 160, 40);
         installBtn.Click += delegate { RunInstall(); };
@@ -280,6 +284,18 @@ internal sealed class SetupForm : Form
         string dest = pathBox.Text.Trim();
         string panelUrl = urlBox.Text.Trim().TrimEnd('/');
         string token = tokenBox.Text.Trim();
+        bool isUpdate = HasExistingCloudConfig(dest);
+        if (panelUrl.Length < 8 || token.Length < 8)
+        {
+            string existingUrl;
+            string existingToken;
+            if (TryReadCloudJson(GetCloudJsonPath(dest), out existingUrl, out existingToken))
+            {
+                if (panelUrl.Length < 8) { panelUrl = existingUrl; }
+                if (token.Length < 8) { token = existingToken; }
+                isUpdate = true;
+            }
+        }
         if (dest.Length < 8)
         {
             MessageBox.Show("Escolha uma pasta de instalação válida.", Text, MessageBoxButtons.OK, MessageBoxIcon.Warning);
@@ -329,6 +345,10 @@ internal sealed class SetupForm : Form
             Application.DoEvents();
             string setupPs1 = Path.Combine(dest, "scripts", "instalar-windows.ps1");
             string args = "-NoProfile -ExecutionPolicy Bypass -File \"" + setupPs1 + "\" -Cloud -PanelUrl \"" + panelUrl.Replace("\"", "`\"") + "\" -Token \"" + token.Replace("\"", "`\"") + "\"";
+            if (isUpdate)
+            {
+                args += " -Update";
+            }
             var psi = new ProcessStartInfo
             {
                 FileName = "powershell.exe",
@@ -355,7 +375,9 @@ internal sealed class SetupForm : Form
             installBtn.Text = "Fechar";
             installBtn.Enabled = true;
             MessageBox.Show(
-                "Agente instalado com sucesso.\n\nO ícone na bandeja deve sincronizar com o painel em alguns segundos.",
+                isUpdate
+                    ? "Agente atualizado.\n\nSeu vínculo com o painel foi mantido."
+                    : "Agente instalado com sucesso.\n\nO ícone na bandeja deve sincronizar com o painel em alguns segundos.",
                 "WiFi da Loja",
                 MessageBoxButtons.OK,
                 MessageBoxIcon.Information);
@@ -403,6 +425,70 @@ internal sealed class SetupForm : Form
                 }
             }
         }
+    }
+
+    private static string ProgramDataDir()
+    {
+        return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), "WiFiDaLoja");
+    }
+
+    private static string GetCloudJsonPath(string installDir)
+    {
+        string programData = Path.Combine(ProgramDataDir(), "cloud.json");
+        if (File.Exists(programData))
+        {
+            return programData;
+        }
+        return Path.Combine(installDir, "storage", "cloud.json");
+    }
+
+    private static bool TryReadCloudJson(string path, out string panelUrl, out string token)
+    {
+        panelUrl = "";
+        token = "";
+        if (!File.Exists(path))
+        {
+            return false;
+        }
+        try
+        {
+            string json = File.ReadAllText(path);
+            panelUrl = ExtractJsonString(json, "panel_url").Trim().TrimEnd('/');
+            token = ExtractJsonString(json, "token").Trim();
+            return panelUrl.Length >= 8 && token.Length >= 8;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private static string ExtractJsonString(string json, string key)
+    {
+        Match m = Regex.Match(json, "\"" + Regex.Escape(key) + "\"\\s*:\\s*\"([^\"]*)\"");
+        return m.Success ? m.Groups[1].Value : "";
+    }
+
+    private static bool HasExistingCloudConfig(string installDir)
+    {
+        string panelUrl;
+        string token;
+        return TryReadCloudJson(GetCloudJsonPath(installDir), out panelUrl, out token);
+    }
+
+    private void LoadExistingCloudFields(string installDir)
+    {
+        string panelUrl;
+        string token;
+        if (!TryReadCloudJson(GetCloudJsonPath(installDir), out panelUrl, out token))
+        {
+            return;
+        }
+        urlBox.Text = panelUrl;
+        tokenBox.Text = token;
+        statusLabel.Text = "Atualização detectada — vínculo existente será mantido.";
+        statusLabel.ForeColor = Muted;
+        installBtn.Text = "Atualizar agente";
     }
 
     [STAThread]

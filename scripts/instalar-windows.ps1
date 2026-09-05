@@ -1,12 +1,14 @@
 param(
     [string]$PanelUrl = "",
     [string]$Token = "",
-    [switch]$Cloud
+    [switch]$Cloud,
+    [switch]$Update
 )
 # Instalador do agente Wi-Fi da Loja (administrador).
 $ErrorActionPreference = "Stop"
 $Root = Split-Path -Parent $PSScriptRoot
-$Storage = Join-Path $Root "storage"
+. (Join-Path $PSScriptRoot "agent-storage.ps1")
+$Storage = Get-AgentStorageDir -InstallRoot $Root
 $Scripts = Join-Path $Root "scripts"
 $Log = Join-Path $Storage "install.log"
 $TaskAgent = "HotspotLoja"
@@ -141,6 +143,7 @@ if (-not (Test-Path $Storage)) {
 }
 
 Write-Log "Instalando em $Root$(if ($isCloudAgent) { ' (modo cloud)' } else { '' })"
+Write-Log "Dados persistentes em $Storage"
 
 $php = $null
 if (-not $isCloudAgent) {
@@ -160,9 +163,14 @@ if ($PanelUrl -and $Token) {
     $cloudJson = @{ panel_url = $PanelUrl.TrimEnd("/"); token = $Token; updated_at = (Get-Date).ToString("s") } | ConvertTo-Json
     Set-Content -Path (Join-Path $Storage "cloud.json") -Value $cloudJson -Encoding UTF8
     Write-Log "Hotspot vinculado ao painel $PanelUrl"
+} elseif ($Update -and (Test-AgentCloudConfig -StorageDir $Storage)) {
+    $cfg = Read-AgentCloudConfig -StorageDir $Storage
+    Write-Log "Vinculo ao painel mantido (atualizacao): $($cfg.panel_url)"
+} elseif (-not (Test-AgentCloudConfig -StorageDir $Storage)) {
+    Write-Log "AVISO: cloud.json ausente. Informe URL e token do painel."
 }
 
-$isRemoteCloud = (Test-RemoteCloudInstall -PanelUrl $PanelUrl -Token $Token) -or $isCloudAgent
+$isRemoteCloud = (Test-RemoteCloudInstall -PanelUrl $PanelUrl -Token $Token) -or $isCloudAgent -or (Test-AgentCloudConfig -StorageDir $Storage)
 
 $oldPidPath = Join-Path $Storage "agent.pid"
 if (Test-Path $oldPidPath) {

@@ -3,7 +3,9 @@
 
 $ErrorActionPreference = "Stop"
 $Root = Split-Path -Parent $PSScriptRoot
-$AuthFile = Join-Path $Root "storage\authorized.json"
+. (Join-Path $PSScriptRoot "agent-storage.ps1")
+$Storage = Get-AgentStorageDir -InstallRoot $Root
+$AuthFile = Join-Path $Storage "authorized.json"
 $DnsProxy = Join-Path $Root "bin\dns-proxy.php"
 
 function Wait-WinRt {
