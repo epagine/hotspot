@@ -152,6 +152,9 @@ internal sealed class AgentEngine
     private int _maxClients = AgentConstants.MaxClientsDefault;
     private DateTime _runningSince = DateTime.MinValue;
     private int _recoveryAttempts;
+    private volatile bool _cmdBusy;
+    private List<WifiAdapterInfo> _adaptersCache;
+    private DateTime _adaptersCacheAt = DateTime.MinValue;
 
     public void Start()
     {
@@ -220,10 +223,16 @@ internal sealed class AgentEngine
     {
         _loopTick++;
         _config = AgentConfigStore.Load();
-        _commands.ProcessPending(this);
+        if (!_cmdBusy)
+        {
+            _commands.ProcessPending(this);
+        }
         _supervisor.Watchdog(_log);
-        TryAutoRecovery();
-        if (_loopTick % AgentConstants.SyncIntervalSeconds == 0)
+        if (!_cmdBusy)
+        {
+            TryAutoRecovery();
+        }
+        if (!_cmdBusy && _loopTick % AgentConstants.SyncIntervalSeconds == 0)
         {
             _sync.Run(this);
         }
@@ -290,6 +299,40 @@ internal sealed class AgentEngine
             d["recommended"] = a.Recommended;
             return d;
         }).ToList();
+    }
+
+    public void BeginHandleCommand(string action, string cmdId)
+    {
+        if (_cmdBusy)
+        {
+            _commands.Enqueue(action, cmdId);
+            return;
+        }
+        _cmdBusy = true;
+        string act = (action ?? "").Trim().ToLowerInvariant();
+        if (act == "start" || act == "apply")
+        {
+            _state.SetStarting();
+            _lastError = null;
+            WriteStatusSnapshot();
+        }
+        else if (act == "stop")
+        {
+            _state.SetStopping();
+            WriteStatusSnapshot();
+        }
+        ThreadPool.QueueUserWorkItem(delegate
+        {
+            try
+            {
+                HandleCommand(action, cmdId);
+            }
+            finally
+            {
+                _cmdBusy = false;
+                try { WriteStatusSnapshot(); } catch { }
+            }
+        });
     }
 
     public void HandleCommand(string action, string cmdId)
@@ -399,12 +442,13 @@ internal sealed class AgentEngine
 
     public Dictionary<string, object> BuildStatusPayload()
     {
-        bool on = _hotspot.IsOperational();
+        bool on = false;
+        try { on = _hotspot.IsOperational(); } catch { on = false; }
         if (on)
         {
             _lastError = null;
         }
-        var wifiCards = _adapters.ListWifiAdapters();
+        var wifiCards = GetAdaptersCached();
         var inet = _adapters.GetInternetRoute();
         var payload = new Dictionary<string, object>();
         payload["hotspot_on"] = on;
@@ -415,9 +459,10 @@ internal sealed class AgentEngine
         payload["wifi_adapters"] = wifiCards.Select(WifiAdapterToDict).ToList();
         payload["wifi_adapter_active"] = _hotspot.ActiveAdapterGuid ?? "";
         payload["wifi_adapter_selected"] = _config.WifiAdapterGuid ?? "";
-        payload["neighbors"] = _adapters.GetLiveNeighbors();
-        payload["tethering_clients"] = _hotspot.GetTetheringClients();
-        payload["ips"] = _adapters.ListIpv4();
+        bool heavyOk = !_cmdBusy && _state.Current != HotspotState.Starting && _state.Current != HotspotState.Stopping;
+        payload["neighbors"] = (heavyOk && _loopTick % 15 == 0) ? _adapters.GetLiveNeighbors() : new List<Dictionary<string, object>>();
+        payload["tethering_clients"] = heavyOk ? _hotspot.GetTetheringClientsFast() : new List<Dictionary<string, object>>();
+        payload["ips"] = heavyOk ? _adapters.ListIpv4() : new List<Dictionary<string, object>>();
         payload["windows_clients"] = _hotspot.ClientCount;
         payload["max_clients"] = _maxClients;
         payload["dns_up"] = _supervisor.DnsUp;
@@ -434,10 +479,32 @@ internal sealed class AgentEngine
         payload["agent_seen_at"] = DateTime.Now.ToString("s");
         payload["agent_pid"] = Process.GetCurrentProcess().Id;
         payload["agent_state"] = _state.Current.ToString();
+        payload["cmd_busy"] = _cmdBusy;
         payload["manual_hotspot_required"] = _hotspot.ManualHotspotRequired;
         payload["agent_log"] = _log.Recent();
         payload["last_ack"] = _lastAck;
         return payload;
+    }
+
+    private List<WifiAdapterInfo> GetAdaptersCached()
+    {
+        if (_adaptersCache != null && (DateTime.Now - _adaptersCacheAt).TotalSeconds < 20)
+        {
+            return _adaptersCache;
+        }
+        try
+        {
+            _adaptersCache = _adapters.ListWifiAdapters();
+            _adaptersCacheAt = DateTime.Now;
+        }
+        catch
+        {
+            if (_adaptersCache == null)
+            {
+                _adaptersCache = new List<WifiAdapterInfo>();
+            }
+        }
+        return _adaptersCache;
     }
 
     private static Dictionary<string, object> WifiAdapterToDict(WifiAdapterInfo a)
@@ -534,7 +601,7 @@ internal sealed class AgentRuntimeConfig
     public AgentRuntimeConfig()
     {
         WifiAdapterGuid = "";
-        WifiIsolateOthers = true;
+        WifiIsolateOthers = false;
         Ssid = "WifiDaLoja";
         WifiPass = "loja1234";
         PortalIp = "192.168.137.1";
@@ -1146,11 +1213,11 @@ internal sealed class HotspotController
     public void StartHotspot(AgentRuntimeConfig config, int maxClients, AgentLog log)
     {
         EnsureManager(config, log);
-        ApplyConfiguration(config, maxClients, false, log);
         if (IsOperational())
         {
             return;
         }
+        ApplyConfiguration(config, maxClients, false, log);
         StartTetheringSafe(log);
     }
 
@@ -1226,6 +1293,11 @@ internal sealed class HotspotController
 
     public List<Dictionary<string, object>> GetTetheringClients()
     {
+        return GetTetheringClientsFast();
+    }
+
+    public List<Dictionary<string, object>> GetTetheringClientsFast()
+    {
         var list = new List<Dictionary<string, object>>();
         try
         {
@@ -1234,7 +1306,7 @@ internal sealed class HotspotController
                 return list;
             }
             object op = _manager.GetType().InvokeMember("GetTetheringClientsAsync", BindingFlags.InvokeMethod, null, _manager, null);
-            object clients = WinRtHelper.WaitOperation(op, null);
+            object clients = WinRtHelper.WaitOperation(op, null, 3000);
             ClientCount = 0;
             var arr = clients as Array;
             if (arr != null)
@@ -1550,15 +1622,20 @@ internal static class WinRtHelper
 
     public static object WaitOperation(object asyncOp, AgentLog log)
     {
-        return WaitAsync(asyncOp, true, log);
+        return WaitAsync(asyncOp, true, log, 12000);
+    }
+
+    public static object WaitOperation(object asyncOp, AgentLog log, int timeoutMs)
+    {
+        return WaitAsync(asyncOp, true, log, timeoutMs);
     }
 
     public static void WaitAction(object asyncOp, AgentLog log)
     {
-        WaitAsync(asyncOp, false, log);
+        WaitAsync(asyncOp, false, log, 12000);
     }
 
-    private static object WaitAsync(object asyncOp, bool generic, AgentLog log)
+    private static object WaitAsync(object asyncOp, bool generic, AgentLog log, int timeoutMs)
     {
         if (asyncOp == null)
         {
@@ -1578,7 +1655,7 @@ internal static class WinRtHelper
         MethodInfo call = generic ? asTask.MakeGenericMethod(asyncOp.GetType().GetGenericArguments()[0]) : asTask;
         object task = call.Invoke(null, new[] { asyncOp });
         var wait = task.GetType().GetMethod("Wait", new[] { typeof(int) });
-        if (!(bool)wait.Invoke(task, new object[] { 25000 }))
+        if (!(bool)wait.Invoke(task, new object[] { timeoutMs }))
         {
             throw new System.TimeoutException("Tempo esgotado aguardando operacao WinRT.");
         }
@@ -1772,10 +1849,11 @@ internal sealed class CommandQueue
                 {
                     continue;
                 }
-                engine.HandleCommand(action, id);
+                engine.BeginHandleCommand(action, id);
                 _processed.Add(id);
                 SaveProcessed();
                 try { File.Delete(file); } catch { }
+                break; // one command at a time
             }
             catch
             {

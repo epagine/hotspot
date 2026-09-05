@@ -6,7 +6,9 @@ using System.Drawing.Drawing2D;
 using System.IO;
 using System.IO.Pipes;
 using System.Text;
+using System.Threading;
 using System.Windows.Forms;
+using FormsTimer = System.Windows.Forms.Timer;
 
 internal static class AgentPipeClient
 {
@@ -69,7 +71,7 @@ internal sealed class TrayApp : ApplicationContext
     private readonly string root;
     private readonly NotifyIcon icon;
     private readonly ContextMenuStrip menu;
-    private readonly Timer timer;
+    private readonly FormsTimer timer;
     private StatusForm statusForm;
 
     public TrayApp()
@@ -95,7 +97,7 @@ internal sealed class TrayApp : ApplicationContext
         icon.MouseUp += Icon_MouseUp;
         icon.DoubleClick += delegate { SafeShowStatus(); };
 
-        timer = new Timer { Interval = 3000 };
+        timer = new FormsTimer { Interval = 3000 };
         timer.Tick += delegate
         {
             try
@@ -488,32 +490,33 @@ internal sealed class TrayApp : ApplicationContext
 
     private void WriteCommand(string action)
     {
-        string pipeCmd = action == "start" ? "start" : "stop";
-        try
+        icon.ShowBalloonTip(2000, "Wi-Fi da loja", action == "start" ? "Ligando a rede..." : "Desligando a rede...", ToolTipIcon.Info);
+        ThreadPool.QueueUserWorkItem(delegate
         {
-            Directory.CreateDirectory(AgentDataDir());
-            bool viaPipe = AgentPipeClient.SendOk(pipeCmd, 1500);
-            if (!viaPipe)
+            try
             {
+                Directory.CreateDirectory(AgentDataDir());
                 QueueCommandFile(action);
-                if (!EnsureAgentRunning())
+                bool viaPipe = AgentPipeClient.SendOk(action == "start" ? "start" : "stop", 1200);
+                if (!viaPipe && !AgentRecentlyActive(90))
                 {
-                    throw new InvalidOperationException(
-                        "Servico WiFiDaLojaAgent sem resposta. Reinstale o setup v2.0.2 como administrador.");
+                    BeginInvokeBalloon(
+                        "Servico WiFiDaLojaAgent sem resposta. Confirme em services.msc ou reinstale o setup v2.0.4.",
+                        ToolTipIcon.Error);
+                    return;
                 }
             }
-        }
-        catch (Exception ex)
-        {
-            icon.ShowBalloonTip(6000, "Wi-Fi da loja", ex.Message, ToolTipIcon.Error);
-            return;
-        }
-        icon.ShowBalloonTip(2500, "Wi-Fi da loja", action == "start" ? "Ligando a rede..." : "Desligando a rede...", ToolTipIcon.Info);
+            catch (Exception ex)
+            {
+                BeginInvokeBalloon(ex.Message, ToolTipIcon.Error);
+                return;
+            }
+        });
         if (statusForm != null && !statusForm.IsDisposed)
         {
             statusForm.RefreshData();
         }
-        var feedbackTimer = new Timer { Interval = 8000 };
+        var feedbackTimer = new FormsTimer { Interval = 12000 };
         feedbackTimer.Tick += delegate
         {
             feedbackTimer.Stop();
@@ -521,16 +524,22 @@ internal sealed class TrayApp : ApplicationContext
             string statusRaw = ReadFileSafe(Storage("status.json"));
             string err = JsonGet(statusRaw, "error");
             string syncErr = JsonGet(statusRaw, "sync_error");
+            string state = JsonGet(statusRaw, "agent_state");
             if (err.Length == 0 && syncErr.Length > 0)
             {
                 err = syncErr;
             }
             bool on = JsonGet(statusRaw, "hotspot_on") == "true";
+            bool busy = JsonGet(statusRaw, "cmd_busy") == "true" || string.Equals(state, "Starting", StringComparison.OrdinalIgnoreCase);
             if (action == "start")
             {
                 if (on)
                 {
                     icon.ShowBalloonTip(3000, "Wi-Fi da loja", "Rede ligada.", ToolTipIcon.Info);
+                }
+                else if (busy)
+                {
+                    icon.ShowBalloonTip(5000, "Wi-Fi da loja", "Ainda ligando o hotspot… aguarde.", ToolTipIcon.Info);
                 }
                 else if (err.Length > 0)
                 {
@@ -541,7 +550,7 @@ internal sealed class TrayApp : ApplicationContext
                     icon.ShowBalloonTip(
                         9000,
                         "Wi-Fi da loja",
-                        "Agente sem resposta. Reinstale o setup v2.0.2 como administrador.",
+                        "Agente sem resposta. Reinstale o setup v2.0.4 como administrador.",
                         ToolTipIcon.Warning);
                 }
                 else
@@ -564,6 +573,20 @@ internal sealed class TrayApp : ApplicationContext
             }
         };
         feedbackTimer.Start();
+    }
+
+    private void BeginInvokeBalloon(string message, ToolTipIcon tip)
+    {
+        try
+        {
+            if (icon != null)
+            {
+                icon.ShowBalloonTip(7000, "Wi-Fi da loja", message, tip);
+            }
+        }
+        catch
+        {
+        }
     }
 
     private void ShowStatus()
