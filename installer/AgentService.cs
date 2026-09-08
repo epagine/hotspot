@@ -1334,7 +1334,7 @@ internal sealed class HotspotController
         string msg = error ?? "Falha ao controlar o hotspot.";
         if (msg.IndexOf("IDispatch", StringComparison.OrdinalIgnoreCase) >= 0)
         {
-            msg = "Falha ao controlar o hotspot do Windows. Reinstale o agente v2.0.8.";
+            msg = "Falha ao controlar o hotspot do Windows. Reinstale o agente v2.1.0.";
         }
         throw new InvalidOperationException(msg);
     }
@@ -2235,17 +2235,110 @@ internal sealed class CloudSync
         string portalIp = GetStr(cfg, "portal_ip", "192.168.137.1");
         string portalUrl = ResolvePublicUrl(GetLink(resp, "portal"), "portal", resp);
         string panelUrl = ResolvePublicUrl(GetLink(resp, "panel"), "panel", resp);
+
+        // Preserva liberacoes locais (IP LAN). Sync na nuvem costuma gravar IP publico e apagava a liberacao.
+        var localGrants = ReadAuthStringSet("local_grants");
+        foreach (var ip in ReadAuthStringSet("authorized"))
+        {
+            if (IsPrivateLanIp(ip))
+            {
+                localGrants.Add(ip);
+            }
+        }
+
+        var merged = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var ip in localGrants)
+        {
+            merged.Add(ip);
+        }
+        if (resp.ContainsKey("authorized"))
+        {
+            var arr = resp["authorized"] as object[];
+            if (arr != null)
+            {
+                foreach (var item in arr)
+                {
+                    string ip = (Convert.ToString(item) ?? "").Trim();
+                    if (IsPrivateLanIp(ip))
+                    {
+                        merged.Add(ip);
+                    }
+                }
+            }
+        }
+
         auth["portal_ip"] = portalIp;
         auth["portal_url"] = portalUrl;
-        auth["authorized"] = resp.ContainsKey("authorized") ? resp["authorized"] : new object[0];
+        auth["authorized"] = merged.Cast<object>().ToArray();
+        auth["local_grants"] = localGrants.Cast<object>().ToArray();
         auth["allow_suffixes"] = MergeDnsAllowlist(SplitLines(GetStr(cfg, "dns_allowlist")), portalUrl, panelUrl);
         auth["ssid"] = GetStr(cfg, "wifi_ssid");
         auth["wifi_pass"] = GetStr(cfg, "wifi_pass");
+        auth["store_name"] = GetStr(cfg, "store_name");
+        auth["status_template"] = GetStr(cfg, "status_template", "Estou na {loja} agora! Codigo {codigo}");
         auth["wifi_adapter_guid"] = GetStr(cfg, "wifi_adapter_guid");
         auth["wifi_isolate_others"] = GetStr(cfg, "wifi_isolate_others", "1");
         auth["updated_at"] = DateTime.Now.ToString("s");
         AtomicJson.Write(AgentPaths.AuthFile, auth);
         AgentConfigStore.MergeFromSync(cfg);
+    }
+
+    private static HashSet<string> ReadAuthStringSet(string key)
+    {
+        var set = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        try
+        {
+            if (!File.Exists(AgentPaths.AuthFile))
+            {
+                return set;
+            }
+            var ser = new JavaScriptSerializer();
+            var raw = ser.DeserializeObject(File.ReadAllText(AgentPaths.AuthFile)) as Dictionary<string, object>;
+            if (raw == null || !raw.ContainsKey(key))
+            {
+                return set;
+            }
+            var arr = raw[key] as object[];
+            if (arr == null)
+            {
+                return set;
+            }
+            foreach (var item in arr)
+            {
+                string s = (Convert.ToString(item) ?? "").Trim();
+                if (s.Length > 0)
+                {
+                    set.Add(s);
+                }
+            }
+        }
+        catch
+        {
+        }
+        return set;
+    }
+
+    private static bool IsPrivateLanIp(string ip)
+    {
+        if (string.IsNullOrWhiteSpace(ip))
+        {
+            return false;
+        }
+        ip = ip.Trim();
+        if (ip.StartsWith("192.168.") || ip.StartsWith("10."))
+        {
+            return true;
+        }
+        if (ip.StartsWith("172."))
+        {
+            string[] p = ip.Split('.');
+            int second;
+            if (p.Length > 1 && int.TryParse(p[1], out second) && second >= 16 && second <= 31)
+            {
+                return true;
+            }
+        }
+        return false;
     }
 
     /** Troca 127.0.0.1/localhost pela URL real do cloud.json (celular nao alcanca loopback do PC). */
