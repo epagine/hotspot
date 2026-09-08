@@ -610,15 +610,19 @@ function sync_authorized_file(): void
         }
         $ips[] = $row['ip'];
     }
+    $sid = local_store_id();
+    $store = $sid > 0 ? find_store($sid) : null;
+    $token = is_array($store) ? (string) ($store['token'] ?? '') : '';
     $payload = [
         'portal_ip' => setting('portal_ip', '192.168.137.1'),
         'authorized' => array_values(array_unique($ips)),
         'allow_suffixes' => array_values(array_filter(array_map(
             'trim',
-            explode("\n", setting('dns_allowlist', default_dns_allowlist()))
+            explode("\n", dns_allowlist_for_agent($sid > 0 ? $sid : null))
         ))),
         'ssid' => setting('wifi_ssid', 'WifiDaLoja'),
         'wifi_pass' => setting('wifi_pass', ''),
+        'portal_url' => rtrim(guess_panel_url(), '/') . '/portal/' . rawurlencode($token),
         'updated_at' => date('c'),
     ];
     file_put_contents($dir . '/authorized.json', json_encode($payload, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
@@ -638,6 +642,35 @@ function default_dns_allowlist(): string
         'cdninstagram.com',
         'instagram.com',
     ]);
+}
+
+/** Allowlist DNS + host do painel/portal (sem isso o celular nao abre a pagina cativa na nuvem). */
+function dns_allowlist_for_agent(?int $storeId = null): string
+{
+    $raw = $storeId !== null && $storeId > 0
+        ? setting_for_store($storeId, 'dns_allowlist', default_dns_allowlist())
+        : setting('dns_allowlist', default_dns_allowlist());
+    $lines = preg_split('/\R+/', $raw) ?: [];
+    $hosts = [];
+    foreach ($lines as $line) {
+        $line = strtolower(trim($line));
+        if ($line !== '') {
+            $hosts[$line] = true;
+        }
+    }
+    foreach ([guess_panel_url(), rtrim(guess_panel_url(), '/') . '/portal/x'] as $url) {
+        $host = strtolower((string) (parse_url($url, PHP_URL_HOST) ?? ''));
+        if ($host !== '' && $host !== 'localhost' && $host !== '127.0.0.1') {
+            $hosts[$host] = true;
+            // tambem liberar dominio-pai (ex.: app.wifidaloja.com.br -> wifidaloja.com.br)
+            $parts = explode('.', $host);
+            if (count($parts) > 2) {
+                $hosts[implode('.', array_slice($parts, -2))] = true;
+            }
+        }
+    }
+
+    return implode("\n", array_keys($hosts));
 }
 
 function require_admin(): void

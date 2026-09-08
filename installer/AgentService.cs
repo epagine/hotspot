@@ -227,7 +227,7 @@ internal sealed class AgentEngine
         {
             _commands.ProcessPending(this);
         }
-        _supervisor.Watchdog(_log);
+        _supervisor.Watchdog(_log, _state.Current == HotspotState.Running);
         if (!_cmdBusy)
         {
             TryAutoRecovery();
@@ -385,8 +385,18 @@ internal sealed class AgentEngine
         else
         {
             _hotspot.StartHotspot(_config, _maxClients, _log);
+            _supervisor.EnsureUrlAcl(_log);
             _supervisor.StartDns();
             _supervisor.StartCaptive();
+            Thread.Sleep(800);
+            if (!_supervisor.DnsUp)
+            {
+                throw new InvalidOperationException("DnsProxy nao subiu (porta 53). Feche outros DNS locais e tente de novo.");
+            }
+            if (!_supervisor.CaptiveUp)
+            {
+                throw new InvalidOperationException("CaptiveHttp nao subiu (porta 80). Libere a porta 80 ou rode o instalador como administrador.");
+            }
             _state.SetRunning();
             _runningSince = DateTime.Now;
         }
@@ -1324,7 +1334,7 @@ internal sealed class HotspotController
         string msg = error ?? "Falha ao controlar o hotspot.";
         if (msg.IndexOf("IDispatch", StringComparison.OrdinalIgnoreCase) >= 0)
         {
-            msg = "Falha ao controlar o hotspot do Windows. Reinstale o agente v2.0.5.";
+            msg = "Falha ao controlar o hotspot do Windows. Reinstale o agente v2.0.6.";
         }
         throw new InvalidOperationException(msg);
     }
@@ -1757,6 +1767,11 @@ internal sealed class ProcessSupervisor
         {
             return;
         }
+        AdoptOrphan("DnsProxy", ref _dns);
+        if (DnsUp)
+        {
+            return;
+        }
         if (!File.Exists(AgentPaths.DnsProxyExe))
         {
             throw new FileNotFoundException("DnsProxy.exe nao encontrado.");
@@ -1769,11 +1784,26 @@ internal sealed class ProcessSupervisor
             CreateNoWindow = true,
             WindowStyle = ProcessWindowStyle.Hidden
         });
+        Thread.Sleep(400);
+        if (_dns == null || _dns.HasExited)
+        {
+            _dns = null;
+            throw new InvalidOperationException("DnsProxy encerrou na hora (porta 53 ocupada?).");
+        }
     }
 
     public void StartCaptive()
     {
-        if (CaptiveUp || !File.Exists(AgentPaths.CaptiveHttpExe))
+        if (CaptiveUp)
+        {
+            return;
+        }
+        AdoptOrphan("CaptiveHttp", ref _captive);
+        if (CaptiveUp)
+        {
+            return;
+        }
+        if (!File.Exists(AgentPaths.CaptiveHttpExe))
         {
             return;
         }
@@ -1785,6 +1815,42 @@ internal sealed class ProcessSupervisor
             CreateNoWindow = true,
             WindowStyle = ProcessWindowStyle.Hidden
         });
+        Thread.Sleep(400);
+        if (_captive == null || _captive.HasExited)
+        {
+            _captive = null;
+            throw new InvalidOperationException("CaptiveHttp encerrou na hora (porta 80 ocupada ou sem URL ACL?).");
+        }
+    }
+
+    public void EnsureUrlAcl(AgentLog log)
+    {
+        try
+        {
+            var psi = new ProcessStartInfo
+            {
+                FileName = "netsh",
+                Arguments = "http add urlacl url=http://+:80/ user=Everyone",
+                UseShellExecute = false,
+                CreateNoWindow = true,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true
+            };
+            using (var p = Process.Start(psi))
+            {
+                if (p != null)
+                {
+                    p.WaitForExit(5000);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            if (log != null)
+            {
+                log.Warn("URL ACL :80: " + ex.Message);
+            }
+        }
     }
 
     public void StopAll()
@@ -1801,24 +1867,64 @@ internal sealed class ProcessSupervisor
         }
     }
 
-    public void Watchdog(AgentLog log)
+    public void Watchdog(AgentLog log, bool hotspotRunning)
     {
         if ((DateTime.Now - _lastWatch).TotalSeconds < 5)
         {
             return;
         }
         _lastWatch = DateTime.Now;
+        if (!hotspotRunning)
+        {
+            return;
+        }
         if (_dns != null && _dns.HasExited)
         {
             log.Warn("DnsProxy parou; reiniciando");
             _dns = null;
-            try { StartDns(); } catch (Exception ex) { log.Error(ex.Message); }
         }
         if (_captive != null && _captive.HasExited)
         {
             log.Warn("CaptiveHttp parou; reiniciando");
             _captive = null;
-            try { StartCaptive(); } catch (Exception ex) { log.Error(ex.Message); }
+        }
+        if (!DnsUp)
+        {
+            try { StartDns(); } catch (Exception ex) { log.Error(ex.Message); }
+        }
+        if (!CaptiveUp)
+        {
+            try
+            {
+                EnsureUrlAcl(log);
+                StartCaptive();
+            }
+            catch (Exception ex)
+            {
+                log.Error(ex.Message);
+            }
+        }
+    }
+
+    private static void AdoptOrphan(string processName, ref Process slot)
+    {
+        if (slot != null && !slot.HasExited)
+        {
+            return;
+        }
+        foreach (var proc in Process.GetProcessesByName(processName))
+        {
+            try
+            {
+                if (!proc.HasExited)
+                {
+                    slot = proc;
+                    return;
+                }
+            }
+            catch
+            {
+            }
         }
     }
 
@@ -2126,10 +2232,12 @@ internal sealed class CloudSync
     private static void WriteAuthorized(Dictionary<string, object> cfg, Dictionary<string, object> resp)
     {
         var auth = new Dictionary<string, object>();
+        string portalUrl = GetLink(resp, "portal");
+        string panelUrl = GetLink(resp, "panel");
         auth["portal_ip"] = GetStr(cfg, "portal_ip", "192.168.137.1");
-        auth["portal_url"] = GetLink(resp, "portal");
+        auth["portal_url"] = portalUrl;
         auth["authorized"] = resp.ContainsKey("authorized") ? resp["authorized"] : new object[0];
-        auth["allow_suffixes"] = SplitLines(GetStr(cfg, "dns_allowlist"));
+        auth["allow_suffixes"] = MergeDnsAllowlist(SplitLines(GetStr(cfg, "dns_allowlist")), portalUrl, panelUrl);
         auth["ssid"] = GetStr(cfg, "wifi_ssid");
         auth["wifi_pass"] = GetStr(cfg, "wifi_pass");
         auth["wifi_adapter_guid"] = GetStr(cfg, "wifi_adapter_guid");
@@ -2137,6 +2245,49 @@ internal sealed class CloudSync
         auth["updated_at"] = DateTime.Now.ToString("s");
         AtomicJson.Write(AgentPaths.AuthFile, auth);
         AgentConfigStore.MergeFromSync(cfg);
+    }
+
+    /** Garante que o host do portal/painel nao seja spoofado (senao a pagina cativa nao abre). */
+    private static object[] MergeDnsAllowlist(object[] existing, string portalUrl, string panelUrl)
+    {
+        var set = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        if (existing != null)
+        {
+            foreach (var item in existing)
+            {
+                string s = Convert.ToString(item) ?? "";
+                if (s.Trim().Length > 0)
+                {
+                    set.Add(s.Trim().ToLowerInvariant());
+                }
+            }
+        }
+        foreach (string url in new[] { portalUrl, panelUrl })
+        {
+            if (string.IsNullOrWhiteSpace(url))
+            {
+                continue;
+            }
+            try
+            {
+                var uri = new Uri(url);
+                string host = (uri.Host ?? "").Trim().ToLowerInvariant();
+                if (host.Length == 0 || host == "localhost" || host == "127.0.0.1")
+                {
+                    continue;
+                }
+                set.Add(host);
+                string[] parts = host.Split('.');
+                if (parts.Length > 2)
+                {
+                    set.Add(parts[parts.Length - 2] + "." + parts[parts.Length - 1]);
+                }
+            }
+            catch
+            {
+            }
+        }
+        return set.Cast<object>().ToArray();
     }
 
     private static void WriteStoreInfo(Dictionary<string, object> resp)

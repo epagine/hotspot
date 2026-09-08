@@ -130,8 +130,32 @@ internal static class CaptiveHttp
             {
                 target = "http://192.168.137.1/";
             }
-            ctx.Response.StatusCode = 302;
-            ctx.Response.RedirectLocation = target;
+            // Probes do SO: 302 para o portal (abre o "login de rede").
+            if (probe)
+            {
+                ctx.Response.StatusCode = 302;
+                ctx.Response.RedirectLocation = target;
+                ctx.Response.Close();
+                return;
+            }
+            // Navegacao normal: pagina local com link (funciona mesmo se o redirect automatico falhar).
+            string safe = WebUtility.HtmlEncode(target);
+            string html =
+                "<!DOCTYPE html><html><head><meta charset=\"utf-8\">" +
+                "<meta http-equiv=\"refresh\" content=\"0;url=" + safe + "\">" +
+                "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">" +
+                "<title>Wi-Fi da loja</title>" +
+                "<style>body{font-family:Segoe UI,sans-serif;background:#0f172a;color:#f8fafc;display:flex;min-height:100vh;align-items:center;justify-content:center;margin:0;padding:24px;text-align:center}" +
+                "a{display:inline-block;margin-top:16px;padding:14px 22px;background:#22c55e;color:#052e16;text-decoration:none;font-weight:700;border-radius:10px}</style>" +
+                "</head><body><div><h1>Wi-Fi da loja</h1>" +
+                "<p>Para liberar a internet, compartilhe o status no WhatsApp.</p>" +
+                "<a href=\"" + safe + "\">Continuar</a></div></body></html>";
+            byte[] body = Encoding.UTF8.GetBytes(html);
+            ctx.Response.StatusCode = 200;
+            ctx.Response.ContentType = "text/html; charset=utf-8";
+            ctx.Response.Headers["Cache-Control"] = "no-store";
+            ctx.Response.ContentLength64 = body.Length;
+            ctx.Response.OutputStream.Write(body, 0, body.Length);
             ctx.Response.Close();
         }
         catch

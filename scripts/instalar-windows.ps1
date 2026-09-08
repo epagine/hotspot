@@ -270,7 +270,10 @@ if (-not $isCloudAgent) {
 }
 New-NetFirewallRule -DisplayName "HotspotLoja-DNS-53" -Direction Inbound -Protocol UDP -LocalPort 53 -Action Allow -Profile Any | Out-Null
 New-NetFirewallRule -DisplayName "HotspotLoja-HTTP-80" -Direction Inbound -Protocol TCP -LocalPort 80 -Action Allow -Profile Any | Out-Null
-Write-Log $(if ($isCloudAgent) { "Regras de firewall (53 UDP, 80 TCP)" } else { "Regras de firewall (8080 TCP, 53 UDP, 80 TCP)" })
+try {
+    netsh http add urlacl url=http://+:80/ user=Everyone 2>$null | Out-Null
+} catch {}
+Write-Log $(if ($isCloudAgent) { "Regras de firewall (53 UDP, 80 TCP) + URL ACL :80" } else { "Regras de firewall (8080 TCP, 53 UDP, 80 TCP) + URL ACL :80" })
 
 $desktop = [Environment]::GetFolderPath("Desktop")
 $programs = Join-Path ([Environment]::GetFolderPath("StartMenu")) "Programs\Wi-Fi da loja"
