@@ -1334,7 +1334,7 @@ internal sealed class HotspotController
         string msg = error ?? "Falha ao controlar o hotspot.";
         if (msg.IndexOf("IDispatch", StringComparison.OrdinalIgnoreCase) >= 0)
         {
-            msg = "Falha ao controlar o hotspot do Windows. Reinstale o agente v2.0.6.";
+            msg = "Falha ao controlar o hotspot do Windows. Reinstale o agente v2.0.7.";
         }
         throw new InvalidOperationException(msg);
     }
@@ -2232,9 +2232,10 @@ internal sealed class CloudSync
     private static void WriteAuthorized(Dictionary<string, object> cfg, Dictionary<string, object> resp)
     {
         var auth = new Dictionary<string, object>();
-        string portalUrl = GetLink(resp, "portal");
-        string panelUrl = GetLink(resp, "panel");
-        auth["portal_ip"] = GetStr(cfg, "portal_ip", "192.168.137.1");
+        string portalIp = GetStr(cfg, "portal_ip", "192.168.137.1");
+        string portalUrl = ResolvePublicUrl(GetLink(resp, "portal"), "portal", resp);
+        string panelUrl = ResolvePublicUrl(GetLink(resp, "panel"), "panel", resp);
+        auth["portal_ip"] = portalIp;
         auth["portal_url"] = portalUrl;
         auth["authorized"] = resp.ContainsKey("authorized") ? resp["authorized"] : new object[0];
         auth["allow_suffixes"] = MergeDnsAllowlist(SplitLines(GetStr(cfg, "dns_allowlist")), portalUrl, panelUrl);
@@ -2245,6 +2246,96 @@ internal sealed class CloudSync
         auth["updated_at"] = DateTime.Now.ToString("s");
         AtomicJson.Write(AgentPaths.AuthFile, auth);
         AgentConfigStore.MergeFromSync(cfg);
+    }
+
+    /** Troca 127.0.0.1/localhost pela URL real do cloud.json (celular nao alcanca loopback do PC). */
+    private static string ResolvePublicUrl(string candidate, string kind, Dictionary<string, object> resp)
+    {
+        var cloud = ReadCloud();
+        string cloudBase = cloud != null ? (cloud.PanelUrl ?? "").TrimEnd('/') : "";
+        if (!IsLoopbackUrl(candidate) && !string.IsNullOrWhiteSpace(candidate))
+        {
+            return candidate.Trim();
+        }
+        if (cloudBase.Length > 8 && !IsLoopbackUrl(cloudBase))
+        {
+            if (kind == "portal")
+            {
+                string token = cloud.Token ?? "";
+                string pathToken = ExtractPortalToken(candidate);
+                if (pathToken.Length > 0)
+                {
+                    token = pathToken;
+                }
+                if (token.Length > 0)
+                {
+                    return cloudBase + "/portal/" + Uri.EscapeDataString(token);
+                }
+            }
+            return cloudBase;
+        }
+        if (kind == "portal")
+        {
+            string portalIp = "192.168.137.1";
+            var cfg = resp != null && resp.ContainsKey("config") ? resp["config"] as Dictionary<string, object> : null;
+            if (cfg != null)
+            {
+                portalIp = GetStr(cfg, "portal_ip", portalIp);
+            }
+            string tok = ExtractPortalToken(candidate);
+            if (tok.Length > 0)
+            {
+                return "http://" + portalIp + "/portal/" + Uri.EscapeDataString(tok);
+            }
+        }
+        return candidate ?? "";
+    }
+
+    private static string ExtractPortalToken(string url)
+    {
+        if (string.IsNullOrWhiteSpace(url))
+        {
+            return "";
+        }
+        try
+        {
+            var uri = new Uri(url);
+            string path = uri.AbsolutePath ?? "";
+            int i = path.IndexOf("/portal/", StringComparison.OrdinalIgnoreCase);
+            if (i < 0)
+            {
+                return "";
+            }
+            string rest = path.Substring(i + "/portal/".Length).Trim('/');
+            int slash = rest.IndexOf('/');
+            if (slash >= 0)
+            {
+                rest = rest.Substring(0, slash);
+            }
+            return Uri.UnescapeDataString(rest);
+        }
+        catch
+        {
+            return "";
+        }
+    }
+
+    private static bool IsLoopbackUrl(string url)
+    {
+        if (string.IsNullOrWhiteSpace(url))
+        {
+            return true;
+        }
+        try
+        {
+            var uri = new Uri(url);
+            string host = (uri.Host ?? "").Trim().ToLowerInvariant();
+            return host == "" || host == "localhost" || host == "127.0.0.1" || host == "::1";
+        }
+        catch
+        {
+            return true;
+        }
     }
 
     /** Garante que o host do portal/painel nao seja spoofado (senao a pagina cativa nao abre). */
@@ -2258,7 +2349,11 @@ internal sealed class CloudSync
                 string s = Convert.ToString(item) ?? "";
                 if (s.Trim().Length > 0)
                 {
-                    set.Add(s.Trim().ToLowerInvariant());
+                    string norm = s.Trim().ToLowerInvariant();
+                    if (!IsOverbroadDnsSuffix(norm))
+                    {
+                        set.Add(norm);
+                    }
                 }
             }
         }
@@ -2278,9 +2373,18 @@ internal sealed class CloudSync
                 }
                 set.Add(host);
                 string[] parts = host.Split('.');
-                if (parts.Length > 2)
+                // Nao promover "com.br"/"net.br" (liberaria a internet inteira do Brasil).
+                if (parts.Length >= 3)
                 {
-                    set.Add(parts[parts.Length - 2] + "." + parts[parts.Length - 1]);
+                    string tld2 = parts[parts.Length - 2] + "." + parts[parts.Length - 1];
+                    if (tld2 == "com.br" || tld2 == "net.br" || tld2 == "org.br" || tld2 == "gov.br" || tld2 == "co.uk")
+                    {
+                        set.Add(parts[parts.Length - 3] + "." + tld2);
+                    }
+                    else if (parts.Length > 2)
+                    {
+                        set.Add(tld2);
+                    }
                 }
             }
             catch
@@ -2288,6 +2392,12 @@ internal sealed class CloudSync
             }
         }
         return set.Cast<object>().ToArray();
+    }
+
+    private static bool IsOverbroadDnsSuffix(string s)
+    {
+        return s == "br" || s == "com" || s == "net" || s == "org"
+            || s == "com.br" || s == "net.br" || s == "org.br" || s == "gov.br";
     }
 
     private static void WriteStoreInfo(Dictionary<string, object> resp)
@@ -2305,10 +2415,10 @@ internal sealed class CloudSync
             info["max_clients"] = GetStr(cfg, "max_clients", "8");
         }
         info["hotspot_status"] = GetStr(resp, "hotspot_status", "ativo");
-        info["panel_url"] = GetLink(resp, "panel");
-        info["admin_url"] = GetLink(resp, "admin");
-        info["client_url"] = GetLink(resp, "client");
-        info["portal_url"] = GetLink(resp, "portal");
+        info["panel_url"] = ResolvePublicUrl(GetLink(resp, "panel"), "panel", resp);
+        info["admin_url"] = ResolvePublicUrl(GetLink(resp, "admin"), "panel", resp);
+        info["client_url"] = ResolvePublicUrl(GetLink(resp, "client"), "panel", resp);
+        info["portal_url"] = ResolvePublicUrl(GetLink(resp, "portal"), "portal", resp);
         info["agent_version"] = AgentPaths.AgentVersion;
         info["updated_at"] = DateTime.Now.ToString("s");
         var sub = resp.ContainsKey("subscription") ? resp["subscription"] as Dictionary<string, object> : null;

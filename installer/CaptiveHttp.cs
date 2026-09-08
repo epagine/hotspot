@@ -54,7 +54,98 @@ internal static class CaptiveHttp
     private sealed class CaptiveState
     {
         public string PortalUrl = "";
+        public string PortalIp = "192.168.137.1";
         public HashSet<string> Authorized = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+    }
+
+    private static string ResolvePortalTarget(string portalUrl, string portalIp)
+    {
+        string cloudPanel = "";
+        string cloudToken = "";
+        try
+        {
+            string cloudPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), "WiFiDaLoja", "cloud.json");
+            if (File.Exists(cloudPath))
+            {
+                string raw = File.ReadAllText(cloudPath, Encoding.UTF8);
+                cloudPanel = JsonGet(raw, "panel_url").TrimEnd('/');
+                cloudToken = JsonGet(raw, "token");
+            }
+        }
+        catch
+        {
+        }
+        if (IsLoopbackUrl(portalUrl))
+        {
+            if (cloudPanel.Length > 8 && !IsLoopbackUrl(cloudPanel))
+            {
+                string tok = ExtractPortalToken(portalUrl);
+                if (tok.Length == 0)
+                {
+                    tok = cloudToken;
+                }
+                if (tok.Length > 0)
+                {
+                    return cloudPanel + "/portal/" + Uri.EscapeDataString(tok);
+                }
+                return cloudPanel;
+            }
+            string ip = string.IsNullOrWhiteSpace(portalIp) ? "192.168.137.1" : portalIp.Trim();
+            string t = ExtractPortalToken(portalUrl);
+            if (t.Length > 0)
+            {
+                return "http://" + ip + "/portal/" + Uri.EscapeDataString(t);
+            }
+            return "http://" + ip + "/";
+        }
+        return portalUrl ?? "";
+    }
+
+    private static bool IsLoopbackUrl(string url)
+    {
+        if (string.IsNullOrWhiteSpace(url))
+        {
+            return true;
+        }
+        try
+        {
+            var uri = new Uri(url);
+            string host = (uri.Host ?? "").Trim().ToLowerInvariant();
+            return host == "" || host == "localhost" || host == "127.0.0.1" || host == "::1";
+        }
+        catch
+        {
+            return true;
+        }
+    }
+
+    private static string ExtractPortalToken(string url)
+    {
+        if (string.IsNullOrWhiteSpace(url))
+        {
+            return "";
+        }
+        try
+        {
+            var uri = new Uri(url);
+            string path = uri.AbsolutePath ?? "";
+            int i = path.IndexOf("/portal/", StringComparison.OrdinalIgnoreCase);
+            if (i < 0)
+            {
+                return "";
+            }
+            string rest = path.Substring(i + "/portal/".Length).Trim('/');
+            int slash = rest.IndexOf('/');
+            if (slash >= 0)
+            {
+                rest = rest.Substring(0, slash);
+            }
+            return Uri.UnescapeDataString(rest);
+        }
+        catch
+        {
+            return "";
+        }
     }
 
     private static void LoadState()
@@ -94,6 +185,11 @@ internal static class CaptiveHttp
                     {
                         _state.PortalUrl = portal;
                     }
+                    string pip = JsonGet(raw, "portal_ip");
+                    if (pip.Length > 0)
+                    {
+                        _state.PortalIp = pip;
+                    }
                     _state.Authorized = next;
                     _authMtime = mt;
                 }
@@ -125,10 +221,10 @@ internal static class CaptiveHttp
                 ctx.Response.Close();
                 return;
             }
-            string target = _state.PortalUrl;
+            string target = ResolvePortalTarget(_state.PortalUrl, _state.PortalIp);
             if (target.Length == 0)
             {
-                target = "http://192.168.137.1/";
+                target = "http://" + (_state.PortalIp.Length > 0 ? _state.PortalIp : "192.168.137.1") + "/";
             }
             // Probes do SO: 302 para o portal (abre o "login de rede").
             if (probe)

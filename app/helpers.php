@@ -662,10 +662,15 @@ function dns_allowlist_for_agent(?int $storeId = null): string
         $host = strtolower((string) (parse_url($url, PHP_URL_HOST) ?? ''));
         if ($host !== '' && $host !== 'localhost' && $host !== '127.0.0.1') {
             $hosts[$host] = true;
-            // tambem liberar dominio-pai (ex.: app.wifidaloja.com.br -> wifidaloja.com.br)
             $parts = explode('.', $host);
-            if (count($parts) > 2) {
-                $hosts[implode('.', array_slice($parts, -2))] = true;
+            if (count($parts) >= 3) {
+                $tld2 = $parts[count($parts) - 2] . '.' . $parts[count($parts) - 1];
+                // Nao liberar "com.br" inteiro
+                if (in_array($tld2, ['com.br', 'net.br', 'org.br', 'gov.br', 'co.uk'], true)) {
+                    $hosts[$parts[count($parts) - 3] . '.' . $tld2] = true;
+                } elseif (count($parts) > 2) {
+                    $hosts[$tld2] = true;
+                }
             }
         }
     }

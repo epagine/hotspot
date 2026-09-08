@@ -390,18 +390,37 @@ function guess_panel_url(): string
     if ($saved === '') {
         $saved = rtrim(trim((string) env('APP_URL', '')), '/');
     }
-    if ($saved !== '' && preg_match('#^https?://#i', $saved) === 1) {
-        return $saved;
-    }
 
     $https = request_is_https();
     $host = strtolower(trim((string) ($_SERVER['HTTP_HOST'] ?? '')));
     $hostBare = preg_replace('/:\d+$/', '', $host) ?? $host;
-    if (in_array($hostBare, ['localhost', '127.0.0.1', '::1'], true)) {
-        return ($https ? 'https://' : 'http://') . ($host !== '' ? $host : '127.0.0.1');
+    $requestUrl = '';
+    if ($host !== '' && !in_array($hostBare, ['localhost', '127.0.0.1', '::1'], true)) {
+        $requestUrl = ($https ? 'https://' : 'http://') . $host;
     }
 
-    return 'http://127.0.0.1';
+    // Nunca preferir localhost/127.0.0.1 se o request atual for publico
+    // (senao o agente manda o celular para 127.0.0.1 e o portal nao abre).
+    if ($saved !== '' && preg_match('#^https?://#i', $saved) === 1) {
+        $savedHost = strtolower((string) (parse_url($saved, PHP_URL_HOST) ?? ''));
+        $savedLoopback = in_array($savedHost, ['localhost', '127.0.0.1', '::1', ''], true);
+        if (!$savedLoopback) {
+            return $saved;
+        }
+        if ($requestUrl !== '') {
+            return $requestUrl;
+        }
+    }
+
+    if ($requestUrl !== '') {
+        return $requestUrl;
+    }
+
+    if ($saved !== '' && preg_match('#^https?://#i', $saved) === 1) {
+        return $saved;
+    }
+
+    return ($https ? 'https://' : 'http://') . ($host !== '' ? $host : '127.0.0.1');
 }
 
 function all_stores(): array
