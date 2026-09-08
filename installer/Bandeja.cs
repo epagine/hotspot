@@ -824,6 +824,8 @@ internal sealed class TrayApp : ApplicationContext
             if (bill.Length == 0) bill = ReadInfo("billing_status");
             string raw = ReadFileSafe(Storage("status.json"));
             bool on = JsonGet(raw, "hotspot_on") == "true";
+            bool dnsUp = JsonGet(raw, "dns_up") == "true";
+            bool captiveUp = JsonGet(raw, "captive_http_up") == "true";
             string clients = JsonGet(raw, "windows_clients");
             string max = ReadInfo("max_clients");
             if (max.Length == 0) max = "8";
@@ -831,7 +833,9 @@ internal sealed class TrayApp : ApplicationContext
             string company = ReadInfo("company_name");
             string tip = (name.Length > 0 ? name : "Wi-Fi da Loja");
             if (company.Length > 0) tip = company + " · " + tip;
-            tip += " · " + (on ? "Rede ligada" : "Rede desligada");
+            tip += " · HS:" + (on ? "on" : "off");
+            tip += " DNS:" + (dnsUp ? "on" : "off");
+            tip += " CAP:" + (captiveUp ? "on" : "off");
             tip += " · " + clients + "/" + max;
             if (bill.Length > 0) tip += " · " + bill;
             string syncErr = JsonGet(ReadFileSafe(Storage("sync-error.json")), "error");
@@ -953,6 +957,8 @@ internal sealed class TrayApp : ApplicationContext
         private readonly Label passLbl;
         private readonly Label clientsLbl;
         private readonly Label portalLbl;
+        private readonly Label dnsLbl;
+        private readonly Label captiveLbl;
         private readonly Label syncLbl;
         private readonly Label boundLbl;
         private readonly LinkLabel adminLink;
@@ -964,7 +970,7 @@ internal sealed class TrayApp : ApplicationContext
             app = owner;
             Text = "Wi-Fi da loja";
             Width = 560;
-            Height = 640;
+            Height = 700;
             FormBorderStyle = FormBorderStyle.FixedSingle;
             MaximizeBox = false;
             MinimizeBox = true;
@@ -991,12 +997,14 @@ internal sealed class TrayApp : ApplicationContext
             adminLink = MakeLink(links, "Abrir hotspot no painel", 300, 56, 180, 22);
             adminLink.LinkClicked += delegate { app.OpenUrl(app.AdminPanelUrl()); };
 
-            var hot = Section("Hotspot", 16, 388, 512, 150);
-            hotspotTag = Field(hot, "—", 16, 34, 180, 24, new Font("Segoe UI", 11f, FontStyle.Bold), Ok);
+            var hot = Section("Rede e portal cativo", 16, 388, 512, 200);
+            hotspotTag = Field(hot, "—", 16, 34, 480, 24, new Font("Segoe UI", 11f, FontStyle.Bold), Ok);
             ssidLbl = Field(hot, "SSID: —", 16, 62, 340, 20, Font, Ink);
             passLbl = Field(hot, "Senha: ••••••••", 16, 84, 340, 20, Font, Muted);
             clientsLbl = Field(hot, "Clientes: —", 16, 106, 200, 20, Font, Muted);
-            portalLbl = Field(hot, "Portal: —", 220, 106, 260, 20, Font, Muted);
+            portalLbl = Field(hot, "Portal IP: —", 220, 106, 260, 20, Font, Muted);
+            dnsLbl = Field(hot, "DNS cativo: —", 16, 132, 480, 20, Font, Muted);
+            captiveLbl = Field(hot, "HTTP cativo (:80): —", 16, 154, 480, 20, Font, Muted);
 
             var showPassBtn = MakeGhostButton("Mostrar senha", 360, 58, 120, 28);
             showPassBtn.Click += delegate
@@ -1007,13 +1015,13 @@ internal sealed class TrayApp : ApplicationContext
             };
             hot.Controls.Add(showPassBtn);
 
-            var startBtn = MakeGoldButton("Ligar", 16, 552, 100, 34);
+            var startBtn = MakeGoldButton("Ligar", 16, 610, 100, 34);
             startBtn.Click += delegate { app.WriteCommand("start"); };
-            var stopBtn = MakeGhostButton("Desligar", 126, 552, 100, 34);
+            var stopBtn = MakeGhostButton("Desligar", 126, 610, 100, 34);
             stopBtn.Click += delegate { app.WriteCommand("stop"); };
-            var bindBtn = MakeGhostButton("Vincular…", 236, 552, 110, 34);
+            var bindBtn = MakeGhostButton("Vincular…", 236, 610, 110, 34);
             bindBtn.Click += delegate { app.SafeBindStore(); };
-            var refreshBtn = MakeGhostButton("Atualizar", 356, 552, 100, 34);
+            var refreshBtn = MakeGhostButton("Atualizar", 356, 610, 100, 34);
             refreshBtn.Click += delegate { RefreshData(); };
 
             boundLbl = new Label
@@ -1191,35 +1199,51 @@ internal sealed class TrayApp : ApplicationContext
 
             string statusRaw = TrayApp.ReadFileSafe(app.Storage("status.json"));
             bool on = TrayApp.JsonGet(statusRaw, "hotspot_on") == "true";
+            bool dnsUp = TrayApp.JsonGet(statusRaw, "dns_up") == "true";
+            bool captiveUp = TrayApp.JsonGet(statusRaw, "captive_http_up") == "true";
             string statusErr = TrayApp.JsonGet(statusRaw, "error");
-            hotspotTag.Text = on ? "Rede ligada" : "Rede desligada";
+            hotspotTag.Text = on
+                ? "hotspot_on = true (rede ligada)"
+                : "hotspot_on = false (rede desligada)";
             hotspotTag.ForeColor = on ? Ok : Danger;
             if (!on && statusErr.Length > 0)
             {
-                hotspotTag.Text = "Erro ao ligar";
+                hotspotTag.Text = "Erro ao ligar · hotspot_on = false";
                 hotspotTag.ForeColor = Danger;
                 ssidLbl.Text = statusErr.Length > 120 ? statusErr.Substring(0, 117) + "..." : statusErr;
             }
             else
             {
-            string ssid = app.ReadInfo("wifi_ssid");
-            if (ssid.Length == 0) ssid = TrayApp.JsonGet(statusRaw, "ssid");
-            ssidLbl.Text = "SSID: " + (ssid.Length > 0 ? ssid : "—");
+                string ssid = app.ReadInfo("wifi_ssid");
+                if (ssid.Length == 0) ssid = TrayApp.JsonGet(statusRaw, "ssid");
+                ssidLbl.Text = "SSID: " + (ssid.Length > 0 ? ssid : "—");
 
-            string pass = app.ReadInfo("wifi_pass");
-            if (showPass && pass.Length > 0) passLbl.Text = "Senha: " + pass;
-            else if (pass.Length > 0) passLbl.Text = "Senha: ••••••••";
-            else passLbl.Text = "Senha: —";
+                string pass = app.ReadInfo("wifi_pass");
+                if (showPass && pass.Length > 0) passLbl.Text = "Senha: " + pass;
+                else if (pass.Length > 0) passLbl.Text = "Senha: ••••••••";
+                else passLbl.Text = "Senha: —";
 
-            string clients = TrayApp.JsonGet(statusRaw, "windows_clients");
-            string max = app.ReadInfo("max_clients");
-            if (max.Length == 0) max = "8";
-            if (clients.Length == 0) clients = "0";
-            clientsLbl.Text = "Clientes: " + clients + "/" + max;
+                string clients = TrayApp.JsonGet(statusRaw, "windows_clients");
+                string max = app.ReadInfo("max_clients");
+                if (max.Length == 0) max = "8";
+                if (clients.Length == 0) clients = "0";
+                clientsLbl.Text = "Clientes: " + clients + "/" + max;
 
-            string portal = app.ReadInfo("portal_ip");
-            if (portal.Length == 0) portal = "192.168.137.1";
-            portalLbl.Text = "Portal: " + portal;
+                string portal = app.ReadInfo("portal_ip");
+                if (portal.Length == 0) portal = TrayApp.JsonGet(statusRaw, "portal_ip");
+                if (portal.Length == 0) portal = "192.168.137.1";
+                portalLbl.Text = "Portal IP: " + portal;
+            }
+
+            dnsLbl.Text = dnsUp
+                ? "dns_up = true (DnsProxy ativo)"
+                : "dns_up = false (DnsProxy parado — sem bloqueio/liberação DNS)";
+            dnsLbl.ForeColor = dnsUp ? Ok : (on ? Danger : Muted);
+
+            captiveLbl.Text = captiveUp
+                ? "captive_http_up = true (HTTP :80 ativo — popup pode abrir)"
+                : "captive_http_up = false (HTTP :80 parado — popup não aparece)";
+            captiveLbl.ForeColor = captiveUp ? Ok : (on ? Danger : Muted);
 
             string panel = app.ReadCloud("panel_url");
             boundLbl.Text = panel.Length > 8 ? "Vinculado a " + panel : "Não vinculado ao painel";
@@ -1235,7 +1259,6 @@ internal sealed class TrayApp : ApplicationContext
 
             clientLink.Text = "Abrir portal do cliente";
             adminLink.Text = "Abrir hotspot no painel";
-            }
         }
 
         private static Color LicenseColor(string status)

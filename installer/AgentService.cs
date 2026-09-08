@@ -1334,7 +1334,7 @@ internal sealed class HotspotController
         string msg = error ?? "Falha ao controlar o hotspot.";
         if (msg.IndexOf("IDispatch", StringComparison.OrdinalIgnoreCase) >= 0)
         {
-            msg = "Falha ao controlar o hotspot do Windows. Reinstale o agente v2.0.7.";
+            msg = "Falha ao controlar o hotspot do Windows. Reinstale o agente v2.0.8.";
         }
         throw new InvalidOperationException(msg);
     }
