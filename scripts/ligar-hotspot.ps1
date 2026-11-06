@@ -21,13 +21,9 @@ function Wait-WinRt {
 
 Add-Type -AssemblyName System.Runtime.WindowsRuntime | Out-Null
 
-$ssid = "WifiDaLoja"
-$pass = "loja1234"
-if (Test-Path $AuthFile) {
-    $cfg = Get-Content $AuthFile -Raw | ConvertFrom-Json
-    if ($cfg.ssid) { $ssid = [string]$cfg.ssid }
-    if ($cfg.wifi_pass) { $pass = [string]$cfg.wifi_pass }
-}
+$wifiConfig = Get-AgentWifiConfig -StorageDir $Storage
+$ssid = [string]$wifiConfig.ssid
+$pass = [string]$wifiConfig.wifi_pass
 
 $profile = [Windows.Networking.Connectivity.NetworkInformation, Windows.Networking.Connectivity, ContentType = WindowsRuntime]::GetInternetConnectionProfile()
 if (-not $profile) {

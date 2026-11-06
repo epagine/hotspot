@@ -203,14 +203,8 @@ function Get-PhpExe {
 }
 
 function Get-WifiConfig {
-    $ssid = "WifiDaLoja"
-    $pass = "loja1234"
-    if (Test-Path $AuthFile) {
-        $cfg = Get-Content $AuthFile -Raw -ErrorAction SilentlyContinue | ConvertFrom-Json
-        if ($cfg.ssid) { $ssid = [string]$cfg.ssid }
-        if ($cfg.wifi_pass) { $pass = [string]$cfg.wifi_pass }
-    }
-    return @{ Ssid = $ssid; Pass = $pass }
+    $cfg = Get-AgentWifiConfig -StorageDir $Storage
+    return @{ Ssid = [string]$cfg.ssid; Pass = [string]$cfg.wifi_pass }
 }
 
 function Test-CloudAgent {
@@ -496,7 +490,7 @@ function Write-Status {
     [System.IO.File]::WriteAllText($StatusFile, $json, [System.Text.UTF8Encoding]::new($false))
 }
 
-function Touch-AgentSeen {
+function Set-AgentSeen {
     $seen = (Get-Date).ToString("s")
     try {
         if (Test-Path $StatusFile) {
@@ -519,7 +513,7 @@ function Get-CloudCfg {
     try { return Get-Content $f -Raw -ErrorAction SilentlyContinue | ConvertFrom-Json } catch { return $null }
 }
 
-function Ensure-LocalDb {
+function Initialize-LocalDb {
     if (Test-CloudAgent) { return }
     if (Test-RemoteCloud) { return }
     $cfgPhp = Join-Path $Root "app\config.php"
@@ -562,7 +556,7 @@ function Sync-Cloud {
         Write-AgentLog $script:LastSyncError "error"
         return
     }
-    Ensure-LocalDb
+    Initialize-LocalDb
     $php = Get-PhpExe
     $clients = @()
     $patchPath = Join-Path $Storage "client-patches.json"
@@ -584,7 +578,6 @@ function Sync-Cloud {
     }
     $url = ([string]$cfg.panel_url).TrimEnd("/") + "/agente/sincronizar"
     $payload = @{
-        token          = [string]$cfg.token
         ack_command_id = $script:LastAck
         status         = $statusObj
         clients        = $clients
@@ -609,19 +602,28 @@ function Sync-Cloud {
         }
         $sub = $resp.subscription
         $links = $resp.links
+        $localWifiConfig = Get-AgentWifiConfig -StorageDir $Storage
+        $effectiveWifiPass = [string]$localWifiConfig.wifi_pass
+        if ($resp.config -and -not [string]::IsNullOrWhiteSpace([string]$resp.config.wifi_pass)) {
+            $effectiveWifiPass = [string]$resp.config.wifi_pass
+        }
+        $portalFallback = ""
+        if ($resp.portal_token) {
+            $portalFallback = ([string]$cfg.panel_url).TrimEnd("/") + "/portal/" + [uri]::EscapeDataString([string]$resp.portal_token)
+        }
+        $portalUrl = [string]$(if ($links -and $links.portal) { $links.portal } else { $portalFallback })
         if ($resp.config -and $resp.config.wifi_ssid) {
             $suffixes = @()
             if ($resp.config.dns_allowlist) {
                 $suffixes = @(([string]$resp.config.dns_allowlist) -split "[\r\n]+" | Where-Object { $_ })
             }
-            $portalUrl = [string]($(if ($links -and $links.portal) { $links.portal } else { ([string]$cfg.panel_url).TrimEnd("/") + "/portal/" + [uri]::EscapeDataString([string]$cfg.token) }))
             $auth = [ordered]@{
                 portal_ip      = [string]$resp.config.portal_ip
                 portal_url     = $portalUrl
                 authorized     = @($resp.authorized)
                 allow_suffixes = $suffixes
                 ssid           = [string]$resp.config.wifi_ssid
-                wifi_pass      = [string]$resp.config.wifi_pass
+                wifi_pass      = $effectiveWifiPass
                 updated_at     = (Get-Date).ToString("s")
             }
             [System.IO.File]::WriteAllText($AuthFile, ($auth | ConvertTo-Json -Depth 5), [System.Text.UTF8Encoding]::new($false))
@@ -649,13 +651,13 @@ function Sync-Cloud {
             active           = [bool]($(if ($null -ne $sub.active) { [bool]$sub.active } else { $true }))
             service_allowed  = [bool]$serviceAllowed
             wifi_ssid        = [string]($(if ($resp.config.wifi_ssid) { $resp.config.wifi_ssid } else { "" }))
-            wifi_pass        = [string]($(if ($resp.config.wifi_pass) { $resp.config.wifi_pass } else { "" }))
+            wifi_pass        = $effectiveWifiPass
             portal_ip        = [string]($(if ($resp.config.portal_ip) { $resp.config.portal_ip } else { "192.168.137.1" }))
             max_clients      = [string]$MaxClients
             panel_url        = [string]($(if ($links.panel) { $links.panel } else { ([string]$cfg.panel_url).TrimEnd("/") }))
             admin_url        = [string]($(if ($links.admin) { $links.admin } else { ([string]$cfg.panel_url).TrimEnd("/") + "/app/hotspots/" + [string]$resp.store_id }))
             client_url       = [string]($(if ($links.client) { $links.client } else { ([string]$cfg.panel_url).TrimEnd("/") + "/cliente" }))
-            portal_url       = [string]($(if ($links.portal) { $links.portal } else { ([string]$cfg.panel_url).TrimEnd("/") + "/portal/" + [uri]::EscapeDataString([string]$cfg.token) }))
+            portal_url       = $portalUrl
             agent_version    = [string]$AgentVersion
             updated_at       = (Get-Date).ToString("s")
         }
@@ -676,9 +678,9 @@ function Sync-Cloud {
             $brandDir = Join-Path $Storage "brand"
             New-Item -ItemType Directory -Path $brandDir -Force | Out-Null
             $brandFile = Join-Path $brandDir ([string]$resp.store_id + ".png")
-            $brandUrl = ([string]$cfg.panel_url).TrimEnd("/") + "/agente/marca/" + [uri]::EscapeDataString([string]$cfg.token)
+            $brandUrl = ([string]$cfg.panel_url).TrimEnd("/") + "/agent/brand"
             try {
-                Invoke-WebRequest -Uri $brandUrl -OutFile $brandFile -TimeoutSec 8 -UseBasicParsing | Out-Null
+                Invoke-WebRequest -Uri $brandUrl -Headers @{ "X-Agent-Token" = [string]$cfg.token } -OutFile $brandFile -TimeoutSec 8 -UseBasicParsing | Out-Null
             } catch {}
         }
         if (-not $serviceAllowed) {
@@ -713,7 +715,7 @@ function Sync-Cloud {
 
 try {
     while ($true) {
-        Touch-AgentSeen
+        Set-AgentSeen
         $cmdPath = if (Test-Path $storageScript) {
             Get-PendingCommandFile -InstallRoot $Root -StorageDir $Storage
         } else {
@@ -728,7 +730,7 @@ try {
                     switch ([string]$cmd.action) {
                         "start" {
                             Write-AgentLog "Comando: ligar rede" "info"
-                            Touch-AgentSeen
+                            Set-AgentSeen
                             if ($script:ServiceAllowed) {
                                 Set-Hotspot -On $true
                                 Write-AgentLog "Hotspot ligado" "info"

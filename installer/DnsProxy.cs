@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Net;
+using System.Net.NetworkInformation;
 using System.Net.Sockets;
 using System.Text;
 
@@ -40,6 +41,10 @@ internal static class DnsProxy
                 continue;
             }
             CaptiveState st = LoadState();
+            if (!IsPortalNetworkClient(remote.Address, st.PortalIp))
+            {
+                continue;
+            }
             string qname = ParseQname(buf);
             string clientIp = remote.Address.ToString();
             bool authorized = st.Authorized.Contains(clientIp);
@@ -64,6 +69,46 @@ internal static class DnsProxy
                 }
             }
         }
+    }
+
+    private static bool IsPortalNetworkClient(IPAddress remoteAddress, string portalIp)
+    {
+        IPAddress portalAddress;
+        if (remoteAddress == null
+            || remoteAddress.AddressFamily != AddressFamily.InterNetwork
+            || !IPAddress.TryParse(portalIp, out portalAddress)
+            || portalAddress.AddressFamily != AddressFamily.InterNetwork)
+        {
+            return false;
+        }
+        try
+        {
+            foreach (NetworkInterface adapter in NetworkInterface.GetAllNetworkInterfaces())
+            {
+                foreach (UnicastIPAddressInformation unicast in adapter.GetIPProperties().UnicastAddresses)
+                {
+                    if (!unicast.Address.Equals(portalAddress) || unicast.IPv4Mask == null)
+                    {
+                        continue;
+                    }
+                    byte[] remote = remoteAddress.GetAddressBytes();
+                    byte[] local = portalAddress.GetAddressBytes();
+                    byte[] mask = unicast.IPv4Mask.GetAddressBytes();
+                    for (int i = 0; i < 4; i++)
+                    {
+                        if ((remote[i] & mask[i]) != (local[i] & mask[i]))
+                        {
+                            return false;
+                        }
+                    }
+                    return true;
+                }
+            }
+        }
+        catch
+        {
+        }
+        return false;
     }
 
     private sealed class CaptiveState

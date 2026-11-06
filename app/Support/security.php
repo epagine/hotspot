@@ -12,8 +12,15 @@ function request_is_https(): bool
     if (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') {
         return true;
     }
-    $fwd = strtolower((string) ($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? ''));
-    return $fwd === 'https';
+    $trustedProxies = array_filter(array_map(
+        'trim',
+        explode(',', (string) env('TRUSTED_PROXIES', ''))
+    ));
+    if (!in_array((string) ($_SERVER['REMOTE_ADDR'] ?? ''), $trustedProxies, true)) {
+        return false;
+    }
+    $forwardedProto = strtolower(trim(explode(',', (string) ($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? ''), 2)[0]));
+    return $forwardedProto === 'https';
 }
 
 function session_boot(): void
@@ -52,6 +59,9 @@ function send_security_headers(): void
     header('X-Frame-Options: DENY');
     header('X-Content-Type-Options: nosniff');
     header('Referrer-Policy: strict-origin-when-cross-origin');
+    if (request_is_https()) {
+        header('Strict-Transport-Security: max-age=31536000');
+    }
     header(
         "Content-Security-Policy: default-src 'self'; "
         . "script-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com; "
@@ -176,15 +186,12 @@ function honeypot_tripped(): bool
     return $v !== '';
 }
 
-function agent_request_token(array $body = []): string
+function agent_request_token(): string
 {
-    $header = trim((string) ($_SERVER['HTTP_X_AGENT_TOKEN'] ?? ''));
-    if ($header !== '') {
-        return $header;
-    }
-    $fromBody = trim((string) ($body['token'] ?? ''));
-    if ($fromBody !== '') {
-        return $fromBody;
-    }
-    return trim((string) ($_GET['token'] ?? ''));
+    return trim((string) ($_SERVER['HTTP_X_AGENT_TOKEN'] ?? ''));
+}
+
+function portal_request_token(array $body = []): string
+{
+    return trim((string) ($body['token'] ?? ''));
 }

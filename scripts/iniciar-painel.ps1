@@ -51,7 +51,7 @@ if (-not (Test-Listening $Port)) {
     $router = Join-Path $Root "index.php"
     $psi = New-Object System.Diagnostics.ProcessStartInfo
     $psi.FileName = $php
-    $psi.Arguments = "-S 0.0.0.0:$Port `"$router`""
+    $psi.Arguments = "-S 127.0.0.1:$Port `"$router`""
     $psi.WorkingDirectory = $Root
     $psi.WindowStyle = "Hidden"
     $psi.CreateNoWindow = $true

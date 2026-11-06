@@ -47,9 +47,17 @@ Rotas legadas `/admin/*` redirecionam para `/app` ou `/super`.
 
 ## 1. Painel na hospedagem (produção)
 
-PHP 8.1+ com PDO MySQL (**recomendado 8.3+**; 8.1 está fora de suporte de segurança). **HTTPS obrigatório** (webhooks de pagamento e sync do agente).
+PHP 8.3+ com PDO MySQL. O front controller rejeita versões anteriores. **HTTPS obrigatório** (webhooks de pagamento e sync do agente).
 
-Defina `APP_URL=https://seu-dominio` no `.env` ou em Super → Configurações → Sistema (URL canônica). O status do agente aceita o header `X-Agent-Token` (o query `token` ainda funciona). Headers CSP permitem o Tailwind CDN; um build local com SRI fica para uma etapa futura.
+Defina `APP_URL=https://seu-dominio` no `.env` para redirecionar HTTP antes de iniciar a sessão. Se TLS terminar em um proxy, defina também `TRUSTED_PROXIES` com os IPs exatos dos proxies, separados por vírgula; somente esses endereços podem informar HTTPS via `X-Forwarded-Proto`. Não configure redes inteiras como confiáveis. `APP_URL` também pode ser definido em Super → Configurações → Sistema para gerar links, mas o redirecionamento HTTPS usa o valor do ambiente.
+
+Depois que `app/config.php` existir, `/instalar` não reconfigura o painel. Se o banco ficar indisponível, restaure as credenciais em `app/config.php` por acesso local/administrativo e execute `php scripts/migrate.php`; não reabra o instalador na internet.
+
+O agente autentica com `X-Agent-Token` obrigatório; credenciais no body ou query string não são aceitas. O token público do portal é separado. Headers CSP permitem o Tailwind CDN; um build local com SRI fica para uma etapa futura.
+
+Para reparar ACLs de uma instalação antiga, execute o Setup atualizado como Administrador no PC do agente; ele corrige e verifica a árvore de `%ProgramData%`. Se houver um checkout do projeto nesse PC, também é possível abrir PowerShell como Administrador e executar `powershell -ExecutionPolicy Bypass -File scripts\reparar-permissoes-agente.ps1`. O reparo falha fechado se não conseguir verificar toda a árvore.
+
+Builds sem Authenticode são permitidos para ambiente interno e produção controlada, usando `installer\Empacotar.ps1 -AllowUnsignedForTesting` ou simplesmente executando o script sem a variável de certificado. Para release público, instale um certificado confiável de Code Signing com chave privada e configure `WIFIDALOJA_SIGNING_CERT_THUMBPRINT` e `WIFIDALOJA_TIMESTAMP_SERVER` antes de executar `installer\Empacotar.ps1`; nesse caso o empacotador assina os executáveis do payload e o Setup final e falha se a assinatura não puder ser validada.
 
 ### O que enviar
 
@@ -120,8 +128,8 @@ Requisitos: administrador, adaptador Wi-Fi, internet (preferência Ethernet), [V
 
 1. Gere o agente: `powershell -ExecutionPolicy Bypass -File installer\Empacotar.ps1`
 2. Publique `WiFiDaLoja-Agent-Setup.exe` em **Super → Instalador** (ou baixe pelo painel da empresa).
-3. No painel, crie o hotspot e copie URL + token.
-4. Execute o setup como administrador — **sem PHP/MySQL local**; portal em `/portal/{token}` na nuvem.
+3. No painel, crie o hotspot e copie a URL do painel e o **token do agente**.
+4. Execute o setup como administrador — **sem PHP/MySQL local**. Agentes já instalados precisam ser revinculados com o novo token após esta atualização; a URL pública `/portal/{token}` permanece inalterada.
 
 ### Portal
 
@@ -160,7 +168,7 @@ Limites por plano: hotspots, clientes cadastrados, usuários.
 ## 5. Gerar o instalador do agente
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File installer\Empacotar.ps1
+	powershell -ExecutionPolicy Bypass -File installer\Empacotar.ps1 -AllowUnsignedForTesting
 ```
 
 Saída: `dist\WiFiDaLoja-Agent-Setup.exe` (+ cópia em `storage/downloads/` para download pelo Super e pelo painel da empresa).

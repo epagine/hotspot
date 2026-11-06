@@ -4,12 +4,17 @@ declare(strict_types=1);
 
 $path = (string) ($GLOBALS['api_path'] ?? '');
 $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
-$body = json_decode((string) file_get_contents('php://input'), true);
-if (!is_array($body)) {
-    $body = $_POST;
-}
+$jsonBody = json_decode((string) file_get_contents('php://input'), true);
+$body = is_array($jsonBody) ? $jsonBody : $_POST;
 
 if ($path === '/auth' && $method === 'POST') {
+    $contentType = strtolower(trim(explode(';', (string) ($_SERVER['CONTENT_TYPE'] ?? ''), 2)[0]));
+    if ($contentType !== 'application/json') {
+        json_out(['ok' => false, 'error' => 'content_type'], 415);
+    }
+    if (!is_array($jsonBody)) {
+        json_out(['ok' => false, 'error' => 'json'], 400);
+    }
     if (rate_limit_is_blocked('api_auth')) {
         json_out(['ok' => false, 'error' => 'rate_limited', 'message' => rate_limit_reject_message()], 429);
     }
@@ -33,8 +38,8 @@ if ($path === '/auth' && $method === 'POST') {
 }
 
 if ($path === '/hotspot/authenticate' && $method === 'POST') {
-    $token = agent_request_token($body);
-    $store = find_store_by_token($token);
+    $token = agent_request_token();
+    $store = find_store_by_agent_token($token);
     if (!$store) {
         json_out(['ok' => false, 'error' => 'token'], 401);
     }
@@ -48,8 +53,8 @@ if ($path === '/hotspot/authenticate' && $method === 'POST') {
 }
 
 if ($path === '/hotspot/status' && $method === 'GET') {
-    $token = agent_request_token($body);
-    $store = find_store_by_token($token);
+    $token = agent_request_token();
+    $store = find_store_by_agent_token($token);
     if (!$store) {
         json_out(['ok' => false, 'error' => 'token'], 401);
     }
@@ -58,8 +63,8 @@ if ($path === '/hotspot/status' && $method === 'GET') {
 }
 
 if ($path === '/hotspot/session' && $method === 'POST') {
-    $token = agent_request_token($body);
-    $store = find_store_by_token($token);
+    $token = agent_request_token();
+    $store = find_store_by_agent_token($token);
     if (!$store) {
         json_out(['ok' => false, 'error' => 'token'], 401);
     }
@@ -67,8 +72,8 @@ if ($path === '/hotspot/session' && $method === 'POST') {
 }
 
 if ($path === '/hotspot/disconnect' && $method === 'POST') {
-    $token = agent_request_token($body);
-    $store = find_store_by_token($token);
+    $token = agent_request_token();
+    $store = find_store_by_agent_token($token);
     if (!$store) {
         json_out(['ok' => false, 'error' => 'token'], 401);
     }
@@ -80,8 +85,8 @@ if ($path === '/hotspot/disconnect' && $method === 'POST') {
 if ($path === '/client' && $method === 'GET') {
     $id = (int) ($_GET['id'] ?? 0);
     $user = current_user();
-    $token = agent_request_token($body);
-    $store = $token !== '' ? find_store_by_token($token) : null;
+    $token = agent_request_token();
+    $store = $token !== '' ? find_store_by_agent_token($token) : null;
     if (!$user && !$store) {
         json_out(['ok' => false, 'error' => 'unauthorized'], 401);
     }
@@ -122,8 +127,8 @@ if ($path === '/client' && $method === 'POST') {
 }
 
 if ($path === '/campaign' && $method === 'GET') {
-    $token = agent_request_token($body);
-    $store = find_store_by_token($token);
+    $token = agent_request_token();
+    $store = find_store_by_agent_token($token);
     if (!$store) {
         json_out(['ok' => false, 'error' => 'token'], 401);
     }
@@ -133,7 +138,7 @@ if ($path === '/campaign' && $method === 'GET') {
 }
 
 if ($path === '/campaign/click' && $method === 'POST') {
-    $token = agent_request_token($body);
+    $token = portal_request_token($body);
     $store = find_store_by_token($token);
     if (!$store) {
         json_out(['ok' => false, 'error' => 'token'], 401);

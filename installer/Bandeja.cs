@@ -227,7 +227,13 @@ internal sealed class TrayApp : ApplicationContext
         {
             return fromStatus;
         }
-        return JsonGet(ReadFileSafe(Storage("agent-config.json")), "wifi_adapter_guid");
+        string response = AgentPipeClient.SendRaw("adapters", 2000);
+        string fromPipe = JsonGet(response, "selected");
+        if (fromPipe.Length > 0)
+        {
+            return fromPipe;
+        }
+        return JsonGet(ReadFileSafe(Storage("authorized.json")), "wifi_adapter_guid");
     }
 
     private void PickAdapter()
@@ -357,7 +363,7 @@ internal sealed class TrayApp : ApplicationContext
     {
         public static string SaveGuid(string guid)
         {
-            string path = Path.Combine(AgentDataDir(), "agent-config.json");
+            string path = Path.Combine(AgentDataDir(), "authorized.json");
             string raw = ReadFileSafe(path);
             if (raw.Length == 0)
             {
@@ -372,7 +378,18 @@ internal sealed class TrayApp : ApplicationContext
             }
             else
             {
-                raw = "{\"wifi_adapter_guid\":\"" + EscapeJson(guid) + "\",\"wifi_isolate_others\":\"1\",\"updated_at\":\"" + DateTime.Now.ToString("s") + "\"}";
+                int close = raw.LastIndexOf('}');
+                if (close < 0)
+                {
+                    raw = "{}";
+                    close = 1;
+                }
+                string prefix = raw.Substring(0, close).TrimEnd();
+                if (!prefix.EndsWith("{", StringComparison.Ordinal) && !prefix.EndsWith(",", StringComparison.Ordinal))
+                {
+                    prefix += ",";
+                }
+                raw = prefix + "\"wifi_adapter_guid\":\"" + EscapeJson(guid) + "\"" + raw.Substring(close);
             }
             File.WriteAllText(path, raw);
             return path;
@@ -632,7 +649,7 @@ internal sealed class TrayApp : ApplicationContext
                 Top = 16,
                 Width = 460,
                 Height = 36,
-                Text = "Cole a URL do painel e o token do hotspot (Painel → Hotspots → Abrir).",
+                Text = "Cole a URL do painel e o token do agente (Painel → Hotspots → Abrir).",
                 ForeColor = Muted
             };
             var url = new TextBox
@@ -660,7 +677,7 @@ internal sealed class TrayApp : ApplicationContext
             f.Controls.Add(lead);
             f.Controls.Add(new Label { Left = 20, Top = 56, Width = 420, Text = "Endereço do painel (https://...)", ForeColor = Muted });
             f.Controls.Add(url);
-            f.Controls.Add(new Label { Left = 20, Top = 116, Width = 420, Text = "Token do hotspot", ForeColor = Muted });
+            f.Controls.Add(new Label { Left = 20, Top = 116, Width = 420, Text = "Token do agente", ForeColor = Muted });
             f.Controls.Add(token);
             var ok = MakeGoldButton("Salvar", 290, 190, 90, 34);
             ok.DialogResult = DialogResult.OK;
@@ -675,7 +692,20 @@ internal sealed class TrayApp : ApplicationContext
             string t = token.Text.Trim();
             if (u.Length < 8 || t.Length < 8)
             {
-                MessageBox.Show("Informe o endereço do painel e o token do hotspot.", "Wi-Fi da Loja");
+                MessageBox.Show("Informe o endereço do painel e o token do agente.", "Wi-Fi da Loja");
+                return;
+            }
+            Uri panelUri;
+            bool securePanelUrl = Uri.TryCreate(u, UriKind.Absolute, out panelUri)
+                && string.IsNullOrEmpty(panelUri.UserInfo)
+                && string.IsNullOrEmpty(panelUri.Query)
+                && string.IsNullOrEmpty(panelUri.Fragment)
+                && panelUri.AbsolutePath == "/"
+                && (panelUri.Scheme == Uri.UriSchemeHttps
+                    || (panelUri.Scheme == Uri.UriSchemeHttp && panelUri.IsLoopback));
+            if (!securePanelUrl)
+            {
+                MessageBox.Show("Use uma URL HTTPS do painel. HTTP so e aceito para loopback local.", "Wi-Fi da Loja");
                 return;
             }
             string json = "{\n  \"panel_url\": \"" + EscapeJson(u) + "\",\n  \"token\": \"" + EscapeJson(t) + "\"\n}\n";

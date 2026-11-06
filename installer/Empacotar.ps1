@@ -1,4 +1,12 @@
+param(
+    [string]$SigningCertThumbprint = $env:WIFIDALOJA_SIGNING_CERT_THUMBPRINT,
+    [string]$TimestampServer = $env:WIFIDALOJA_TIMESTAMP_SERVER,
+    [switch]$AllowUnsignedForTesting
+)
+
 # Gera WiFiDaLoja-Agent-Setup.exe — agente cloud (sem PHP/MySQL/painel local).
+# Em ambiente interno livre, o build pode ser gerado sem assinatura. Quando houver um certificado
+# de Code Signing, basta informar WIFIDALOJA_SIGNING_CERT_THUMBPRINT + TIMESTAMP_SERVER.
 $ErrorActionPreference = "Stop"
 $Root = Split-Path -Parent $PSScriptRoot
 $Dist = Join-Path $Root "dist"
@@ -6,11 +14,46 @@ $Stage = Join-Path $Dist "payload"
 $Zip = Join-Path $Dist "payload.zip"
 $Stub = Join-Path $Dist "SetupStub.exe"
 $OutExe = Join-Path $Dist "WiFiDaLoja-Agent-Setup.exe"
+$script:SigningCertificate = $null
+
+if ($SigningCertThumbprint) {
+    $thumbprint = $SigningCertThumbprint.Replace(' ', '').ToUpperInvariant()
+    foreach ($store in @('Cert:\CurrentUser\My', 'Cert:\LocalMachine\My')) {
+        if (-not (Test-Path $store)) { continue }
+        $script:SigningCertificate = Get-ChildItem $store -ErrorAction SilentlyContinue |
+            Where-Object { $_.Thumbprint -eq $thumbprint -and $_.HasPrivateKey } |
+            Select-Object -First 1
+        if ($script:SigningCertificate) { break }
+    }
+    if (-not $script:SigningCertificate) {
+        throw "Certificado de assinatura com chave privada nao encontrado: $thumbprint"
+    }
+    if (-not $TimestampServer) {
+        throw 'Defina WIFIDALOJA_TIMESTAMP_SERVER para assinar builds de release.'
+    }
+} elseif (-not $AllowUnsignedForTesting) {
+    Write-Warning 'Build sem Authenticode: permitido para distribuicao interna/controle. Passe -AllowUnsignedForTesting para continuar sem certificado.'
+    $AllowUnsignedForTesting = $true
+}
+
+if (-not $script:SigningCertificate) {
+    Write-Warning 'Build sem assinatura Authenticode. Use somente para ambiente interno ou teste controlado; nao e adequado para distribuicao publica.'
+}
+
+function Set-AgentArtifactSignature {
+    param([string]$Path)
+    if (-not $script:SigningCertificate) { return }
+    $signature = Set-AuthenticodeSignature -FilePath $Path -Certificate $script:SigningCertificate `
+        -HashAlgorithm SHA256 -TimestampServer $TimestampServer -ErrorAction Stop
+    if ($signature.Status -ne [System.Management.Automation.SignatureStatus]::Valid) {
+        throw "Assinatura Authenticode falhou em ${Path}: $($signature.StatusMessage)"
+    }
+}
 
 Write-Host "Compilando auxiliares..."
 & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot "compilar.ps1")
 if ($LASTEXITCODE -ne 0) {
-    Write-Host "Aviso: compilei com o que ja existia."
+    throw "A compilacao dos auxiliares falhou; nao vou empacotar binarios existentes."
 }
 
 if (Test-Path $Stage) { Remove-Item $Stage -Recurse -Force }
@@ -35,6 +78,9 @@ foreach ($exe in @("WiFiDaLojaAgent.exe", "HotspotBandeja.exe", "Desinstalar-Hot
     }
     Copy-Item $p $Stage -Force
 }
+if ($script:SigningCertificate) {
+    Get-ChildItem -LiteralPath $Stage -Filter '*.exe' -File | ForEach-Object { Set-AgentArtifactSignature $_.FullName }
+}
 
 Set-Content -Path (Join-Path $Stage "CLOUD_AGENT") -Value "1" -Encoding ASCII
 
@@ -43,7 +89,12 @@ if (-not (Test-Path $versionFile)) {
     throw "Faltando scripts\AGENT_VERSION.txt"
 }
 $agentVersion = (Get-Content $versionFile -Raw).Trim()
+if (-not $agentVersion) {
+    throw "scripts\AGENT_VERSION.txt esta vazio"
+}
 Set-Content -Path (Join-Path $Stage "AGENT_VERSION") -Value $agentVersion -Encoding ASCII -NoNewline
+# Copia tambem o .txt para depuracao
+Copy-Item $versionFile (Join-Path $Stage "scripts\AGENT_VERSION.txt") -Force
 Write-Host "Versao do agente: $agentVersion"
 
 Add-Type -AssemblyName System.IO.Compression.FileSystem
@@ -86,27 +137,58 @@ try {
 } finally {
     $out.Close()
 }
+
+$versionedOut = Join-Path $Dist ("WiFiDaLoja-Agent-Setup-$agentVersion.exe")
+Copy-Item $tmpOut $versionedOut -Force
+
 try {
     if (Test-Path $OutExe) { Remove-Item $OutExe -Force -ErrorAction Stop }
     Move-Item $tmpOut $OutExe -Force
 } catch {
-    Write-Host "Aviso: nao sobrescrevi dist\WiFiDaLoja-Agent-Setup.exe (em uso). Usando arquivo novo: $tmpOut"
-    $OutExe = $tmpOut
+    Write-Host "Aviso: nao sobrescrevi dist\WiFiDaLoja-Agent-Setup.exe (em uso)."
+    Write-Host "Use o arquivo versionado: $versionedOut"
+    if (Test-Path $tmpOut) {
+        $OutExe = $versionedOut
+        Remove-Item $tmpOut -Force -ErrorAction SilentlyContinue
+    } else {
+        $OutExe = $versionedOut
+    }
 }
 
-Copy-Item $OutExe (Join-Path $Root "WiFiDaLoja-Agent-Setup.exe") -Force
+Set-AgentArtifactSignature $versionedOut
+if ($OutExe -ne $versionedOut -and (Test-Path $OutExe)) {
+    Set-AgentArtifactSignature $OutExe
+}
+
+try {
+    Copy-Item $OutExe (Join-Path $Root "WiFiDaLoja-Agent-Setup.exe") -Force -ErrorAction Stop
+} catch {
+    Write-Host "Aviso: nao atualizei WiFiDaLoja-Agent-Setup.exe na raiz (em uso)."
+}
+
 $dl = Join-Path $Root "storage\downloads"
 New-Item -ItemType Directory -Path $dl -Force | Out-Null
 $published = Join-Path $dl "WiFiDaLoja-Agent-Setup.exe"
+$publishedVer = Join-Path $dl ("WiFiDaLoja-Agent-Setup-$agentVersion.exe")
+Copy-Item $versionedOut $publishedVer -Force
 try {
-    Copy-Item $OutExe $published -Force
+    Copy-Item $OutExe $published -Force -ErrorAction Stop
+    # Confere se o download publicado e o mesmo arquivo que acabamos de gerar
+    $srcHash = (Get-FileHash $OutExe -Algorithm SHA256).Hash
+    $dstHash = (Get-FileHash $published -Algorithm SHA256).Hash
+    if ($srcHash -ne $dstHash) {
+        Write-Host "ERRO: storage\downloads\WiFiDaLoja-Agent-Setup.exe NAO bate com o build novo (arquivo antigo em uso?)."
+        Write-Host "Baixe/use: $publishedVer"
+    }
 } catch {
-    Write-Host "Aviso: nao copiei para storage\downloads (arquivo em uso). Feche o .exe e copie de dist\ manualmente."
+    Write-Host "Aviso: nao atualizei storage\downloads\WiFiDaLoja-Agent-Setup.exe (em uso)."
+    Write-Host "Baixe/use a copia versionada: $publishedVer"
 }
-$kb = [math]::Round((Get-Item $OutExe).Length / 1KB, 0)
-Write-Host ("Pronto: " + $OutExe + " (" + $kb + " KB)")
+
+$kb = [math]::Round((Get-Item $versionedOut).Length / 1KB, 0)
+Write-Host ("Pronto v$agentVersion : " + $versionedOut + " (" + $kb + " KB)")
 if (Test-Path $published) {
-    Write-Host "Publicado em storage\downloads\WiFiDaLoja-Agent-Setup.exe"
-} else {
-    Write-Host "Saida em dist\WiFiDaLoja-Agent-Setup.exe (copie para storage\downloads quando puder)."
+    $pubTime = (Get-Item $published).LastWriteTime.ToString("yyyy-MM-dd HH:mm:ss")
+    Write-Host "Publicado: storage\downloads\WiFiDaLoja-Agent-Setup.exe (mtime $pubTime)"
 }
+Write-Host "Sempre confira o titulo do instalador: 'Agente Windows v$agentVersion'"

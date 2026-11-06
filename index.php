@@ -2,7 +2,33 @@
 
 declare(strict_types=1);
 
+if (PHP_VERSION_ID < 80300) {
+    http_response_code(503);
+    header('Content-Type: text/plain; charset=utf-8');
+    echo 'Este painel requer PHP 8.3 ou superior.';
+    exit;
+}
+
 require __DIR__ . '/app/helpers.php';
+
+$canonicalAppUrl = rtrim(trim((string) env('APP_URL', '')), '/');
+$canonicalUrlParts = parse_url($canonicalAppUrl);
+$canonicalHttps = is_array($canonicalUrlParts)
+    && strtolower((string) ($canonicalUrlParts['scheme'] ?? '')) === 'https'
+    && (string) ($canonicalUrlParts['host'] ?? '') !== ''
+    && !isset($canonicalUrlParts['user'])
+    && !isset($canonicalUrlParts['pass'])
+    && !isset($canonicalUrlParts['query'])
+    && !isset($canonicalUrlParts['fragment'])
+    && in_array((string) ($canonicalUrlParts['path'] ?? ''), ['', '/'], true);
+if ($canonicalHttps && !request_is_https()) {
+    $requestUri = (string) ($_SERVER['REQUEST_URI'] ?? '/');
+    if (!str_starts_with($requestUri, '/') || str_starts_with($requestUri, '//')) {
+        $requestUri = '/';
+    }
+    header('Location: ' . $canonicalAppUrl . $requestUri, true, 308);
+    exit;
+}
 
 session_boot();
 send_security_headers();
@@ -323,6 +349,9 @@ switch (true) {
         unset($_SESSION['client_store_id']);
         auth_logout();
         client_redirect(client_url('entrar'));
+        break;
+    case $path === '/cliente/agente/baixar':
+        require __DIR__ . '/app/pages/client-instalador.php';
         break;
     case $path === '/cliente/conta':
         if (is_http_post()) {

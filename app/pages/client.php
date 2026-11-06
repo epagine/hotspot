@@ -85,6 +85,7 @@ if ($mode === 'company') {
         <?php
         $clientNavItems = [
             ['assinatura', 'Assinatura', client_url('painel')],
+            ['agente', 'Agente Windows', client_url('agente')],
             ['conta', 'Conta', client_url('conta')],
         ];
         foreach ($clientNavItems as [$navKey, $navLabel, $navHref]):
@@ -119,6 +120,22 @@ if ($mode === 'company') {
         <?php if (!empty($_SESSION['flash_pay_url'])): ?>
             <p class="pay-box">Link de pagamento<br><a href="<?= h((string) $_SESSION['flash_pay_url']) ?>" target="_blank" rel="noopener"><?= h((string) $_SESSION['flash_pay_url']) ?></a></p>
             <?php unset($_SESSION['flash_pay_url']); ?>
+        <?php endif; ?>
+
+        <?php if ($sec === 'assinatura'): ?>
+            <?php
+            $setupReady = installer_setup_path() !== null;
+            $agentVersion = agent_release_version();
+            ?>
+            <section class="card">
+                <h2>Agente Windows</h2>
+                <p class="hint">Instale no PC da loja a versão mais recente. O agente só valida as regras do seu plano e libera o Wi-Fi.</p>
+                <?php if ($setupReady): ?>
+                    <p><a class="btn" href="<?= h(client_url('agente')) ?>">Baixar agente v<?= h($agentVersion) ?></a></p>
+                <?php else: ?>
+                    <p class="hint">O instalador ainda não está disponível. Fale com o suporte.</p>
+                <?php endif; ?>
+            </section>
         <?php endif; ?>
 
         <?php if ($mode === 'company' && $sec === 'assinatura'): ?>

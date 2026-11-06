@@ -31,6 +31,7 @@ function client_url(string $section = 'painel'): string
         'entrar', 'login' => '/cliente/entrar',
         'sair', 'logout' => '/cliente/sair',
         'conta' => '/cliente/conta',
+        'agente' => '/cliente/agente/baixar',
         default => '/cliente',
     };
 }

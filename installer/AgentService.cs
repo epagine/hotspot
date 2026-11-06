@@ -7,6 +7,7 @@ using System.Management;
 using System.Net;
 using System.Net.NetworkInformation;
 using System.Reflection;
+using System.Security.Cryptography;
 using System.ServiceProcess;
 using System.Text;
 using System.Threading;
@@ -85,6 +86,7 @@ internal static class AgentPaths
     public static string Storage { get; private set; }
     public static string StatusFile { get; private set; }
     public static string AuthFile { get; private set; }
+    public static string ClientsDir { get; private set; }
     public static string ConfigFile { get; private set; }
     public static string CloudFile { get; private set; }
     public static string CommandsDir { get; private set; }
@@ -101,6 +103,7 @@ internal static class AgentPaths
         Directory.CreateDirectory(Storage);
         StatusFile = Path.Combine(Storage, "status.json");
         AuthFile = Path.Combine(Storage, "authorized.json");
+        ClientsDir = Path.Combine(Storage, "clients");
         ConfigFile = Path.Combine(Storage, "agent-config.json");
         CloudFile = Path.Combine(Storage, "cloud.json");
         CommandsDir = Path.Combine(Storage, "commands");
@@ -109,6 +112,7 @@ internal static class AgentPaths
         DnsProxyExe = Path.Combine(InstallRoot, "DnsProxy.exe");
         CaptiveHttpExe = Path.Combine(InstallRoot, "CaptiveHttp.exe");
         Directory.CreateDirectory(CommandsDir);
+        Directory.CreateDirectory(ClientsDir);
         Directory.CreateDirectory(LogDir);
         AgentVersion = ReadVersion();
     }
@@ -120,13 +124,24 @@ internal static class AgentPaths
             string path = Path.Combine(InstallRoot, "AGENT_VERSION");
             if (File.Exists(path))
             {
-                return File.ReadAllText(path).Trim();
+                string fromFile = File.ReadAllText(path).Trim();
+                if (fromFile.Length > 0)
+                {
+                    return fromFile;
+                }
             }
         }
         catch
         {
         }
-        return "2.0.0";
+        try
+        {
+            return AgentRuntimeVersion.Value;
+        }
+        catch
+        {
+        }
+        return "0.0.0";
     }
 }
 
@@ -616,7 +631,7 @@ internal sealed class AgentRuntimeConfig
         WifiAdapterGuid = "";
         WifiIsolateOthers = false;
         Ssid = "WifiDaLoja";
-        WifiPass = "loja1234";
+        WifiPass = "";
         PortalIp = "192.168.137.1";
     }
 }
@@ -653,6 +668,11 @@ internal static class AgentConfigStore
                 var raw = ser.DeserializeObject(File.ReadAllText(AgentPaths.AuthFile)) as Dictionary<string, object>;
                 if (raw != null)
                 {
+                    string adapterGuid = GetStr(raw, "wifi_adapter_guid");
+                    if (!string.IsNullOrEmpty(adapterGuid))
+                    {
+                        cfg.WifiAdapterGuid = adapterGuid;
+                    }
                     if (!string.IsNullOrEmpty(GetStr(raw, "ssid")))
                     {
                         cfg.Ssid = GetStr(raw, "ssid");
@@ -671,7 +691,22 @@ internal static class AgentConfigStore
         catch
         {
         }
+        if (string.IsNullOrWhiteSpace(cfg.WifiPass))
+        {
+            cfg.WifiPass = NewWifiPassphrase();
+            Save(cfg);
+        }
         return cfg;
+    }
+
+    private static string NewWifiPassphrase()
+    {
+        var bytes = new byte[16];
+        using (var random = RandomNumberGenerator.Create())
+        {
+            random.GetBytes(bytes);
+        }
+        return BitConverter.ToString(bytes).Replace("-", "").ToLowerInvariant();
     }
 
     public static void MergeFromSync(Dictionary<string, object> syncCfg)
@@ -688,7 +723,11 @@ internal static class AgentConfigStore
             existing.WifiIsolateOthers = isolate != "0";
         }
         existing.Ssid = GetStr(syncCfg, "wifi_ssid", existing.Ssid);
-        existing.WifiPass = GetStr(syncCfg, "wifi_pass", existing.WifiPass);
+        string syncWifiPass = GetStr(syncCfg, "wifi_pass");
+        if (!string.IsNullOrWhiteSpace(syncWifiPass))
+        {
+            existing.WifiPass = syncWifiPass;
+        }
         existing.PortalIp = GetStr(syncCfg, "portal_ip", existing.PortalIp);
         Save(existing);
     }
@@ -1334,7 +1373,7 @@ internal sealed class HotspotController
         string msg = error ?? "Falha ao controlar o hotspot.";
         if (msg.IndexOf("IDispatch", StringComparison.OrdinalIgnoreCase) >= 0)
         {
-            msg = "Falha ao controlar o hotspot do Windows. Reinstale o agente v2.1.0.";
+            msg = "Falha ao controlar o hotspot do Windows. Reinstale o agente v2.3.0.";
         }
         throw new InvalidOperationException(msg);
     }
@@ -1830,7 +1869,7 @@ internal sealed class ProcessSupervisor
             var psi = new ProcessStartInfo
             {
                 FileName = "netsh",
-                Arguments = "http add urlacl url=http://+:80/ user=Everyone",
+                Arguments = "http add urlacl url=http://+:80/ user=SYSTEM",
                 UseShellExecute = false,
                 CreateNoWindow = true,
                 RedirectStandardOutput = true,
@@ -2130,10 +2169,9 @@ internal sealed class CloudSync
             string url = cloud.PanelUrl.TrimEnd('/') + "/agente/sincronizar";
             var status = engine.BuildStatusPayload();
             var payload = new Dictionary<string, object>();
-            payload["token"] = cloud.Token;
             payload["ack_command_id"] = engine.GetLastAck();
             payload["status"] = status;
-            payload["clients"] = new object[0];
+            payload["clients"] = CollectLocalClients();
             string json = new JavaScriptSerializer().Serialize(payload);
             var req = (HttpWebRequest)WebRequest.Create(url);
             req.Method = "POST";
@@ -2236,7 +2274,7 @@ internal sealed class CloudSync
         string portalUrl = ResolvePublicUrl(GetLink(resp, "portal"), "portal", resp);
         string panelUrl = ResolvePublicUrl(GetLink(resp, "panel"), "panel", resp);
 
-        // Preserva liberacoes locais (IP LAN). Sync na nuvem costuma gravar IP publico e apagava a liberacao.
+        // Fonte da verdade das conexoes: agente (IP LAN). A nuvem so revoga (bloquear no painel).
         var localGrants = ReadAuthStringSet("local_grants");
         foreach (var ip in ReadAuthStringSet("authorized"))
         {
@@ -2245,35 +2283,54 @@ internal sealed class CloudSync
                 localGrants.Add(ip);
             }
         }
-
-        var merged = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        foreach (var ip in localGrants)
+        foreach (var ip in ReadRevokeIps(resp))
         {
-            merged.Add(ip);
+            localGrants.Remove(ip);
+            RemoveClientRecord(ip);
         }
-        if (resp.ContainsKey("authorized"))
+        var policy = resp.ContainsKey("policy") ? resp["policy"] as Dictionary<string, object> : cfg;
+        if (policy == null)
         {
-            var arr = resp["authorized"] as object[];
-            if (arr != null)
+            policy = cfg;
+        }
+        foreach (var ip in ReadStringList(resp, "allow_ips"))
+        {
+            if (IsPrivateLanIp(ip))
             {
-                foreach (var item in arr)
-                {
-                    string ip = (Convert.ToString(item) ?? "").Trim();
-                    if (IsPrivateLanIp(ip))
-                    {
-                        merged.Add(ip);
-                    }
-                }
+                localGrants.Add(ip);
+            }
+        }
+        foreach (var ip in ReadStringList(policy, "allow_ips"))
+        {
+            if (IsPrivateLanIp(ip))
+            {
+                localGrants.Add(ip);
             }
         }
 
+        string localPortal = "http://" + portalIp + "/";
         auth["portal_ip"] = portalIp;
-        auth["portal_url"] = portalUrl;
-        auth["authorized"] = merged.Cast<object>().ToArray();
+        auth["portal_url"] = localPortal;
+        auth["authorized"] = localGrants.Cast<object>().ToArray();
         auth["local_grants"] = localGrants.Cast<object>().ToArray();
+        auth["session_hours"] = GetStr(policy, "session_hours", GetStr(cfg, "session_hours", "2"));
+        auth["max_clients"] = GetStr(policy, "max_clients", GetStr(cfg, "max_clients", "8"));
+        auth["approval_mode"] = GetStr(policy, "approval_mode", GetStr(cfg, "approval_mode", "instant"));
+        auth["service_allowed"] = GetStr(policy, "service_allowed", GetStr(cfg, "service_allowed", "1"));
+        auth["hotspot_enabled"] = GetStr(policy, "hotspot_enabled", GetStr(cfg, "hotspot_enabled", "1"));
+        auth["accept_new_clients"] = GetStr(policy, "accept_new_clients", GetStr(cfg, "accept_new_clients", "1"));
+        auth["require_status_share"] = GetStr(policy, "require_status_share", "1");
+        auth["portal_title"] = GetStr(policy, "portal_title", GetStr(cfg, "portal_title"));
+        auth["portal_subtitle"] = GetStr(policy, "portal_subtitle", GetStr(cfg, "portal_subtitle"));
+        auth["connection_owner"] = "agent";
         auth["allow_suffixes"] = MergeDnsAllowlist(SplitLines(GetStr(cfg, "dns_allowlist")), portalUrl, panelUrl);
         auth["ssid"] = GetStr(cfg, "wifi_ssid");
-        auth["wifi_pass"] = GetStr(cfg, "wifi_pass");
+        string wifiPass = GetStr(cfg, "wifi_pass");
+        if (string.IsNullOrWhiteSpace(wifiPass))
+        {
+            wifiPass = AgentConfigStore.Load().WifiPass;
+        }
+        auth["wifi_pass"] = wifiPass;
         auth["store_name"] = GetStr(cfg, "store_name");
         auth["status_template"] = GetStr(cfg, "status_template", "Estou na {loja} agora! Codigo {codigo}");
         auth["wifi_adapter_guid"] = GetStr(cfg, "wifi_adapter_guid");
@@ -2318,6 +2375,113 @@ internal sealed class CloudSync
         return set;
     }
 
+    private static object[] CollectLocalClients()
+    {
+        var list = new List<object>();
+        try
+        {
+            string dir = AgentPaths.ClientsDir;
+            if (string.IsNullOrEmpty(dir) || !Directory.Exists(dir))
+            {
+                dir = Path.Combine(AgentPaths.Storage, "clients");
+            }
+            if (!Directory.Exists(dir))
+            {
+                return list.ToArray();
+            }
+            var ser = new JavaScriptSerializer();
+            foreach (string file in Directory.GetFiles(dir, "*.json"))
+            {
+                try
+                {
+                    var row = ser.DeserializeObject(File.ReadAllText(file)) as Dictionary<string, object>;
+                    if (row == null)
+                    {
+                        continue;
+                    }
+                    string ip = GetStr(row, "ip");
+                    if (!IsPrivateLanIp(ip))
+                    {
+                        continue;
+                    }
+                    list.Add(row);
+                }
+                catch
+                {
+                }
+            }
+            if (list.Count == 0)
+            {
+                foreach (string ip in ReadAuthStringSet("local_grants"))
+                {
+                    if (!IsPrivateLanIp(ip))
+                    {
+                        continue;
+                    }
+                    var row = new Dictionary<string, object>();
+                    row["ip"] = ip;
+                    row["status_code"] = "LAN" + ip.Replace(".", "");
+                    row["state"] = "online";
+                    row["authorized_at"] = DateTime.Now.ToString("s");
+                    list.Add(row);
+                }
+            }
+        }
+        catch
+        {
+        }
+        return list.ToArray();
+    }
+
+    private static HashSet<string> ReadRevokeIps(Dictionary<string, object> resp)
+    {
+        return ReadStringList(resp, "revoke_ips");
+    }
+
+    private static HashSet<string> ReadStringList(Dictionary<string, object> d, string key)
+    {
+        var set = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        if (d == null || !d.ContainsKey(key))
+        {
+            return set;
+        }
+        var arr = d[key] as object[];
+        if (arr == null)
+        {
+            return set;
+        }
+        foreach (var item in arr)
+        {
+            string s = (Convert.ToString(item) ?? "").Trim();
+            if (s.Length > 0)
+            {
+                set.Add(s);
+            }
+        }
+        return set;
+    }
+
+    private static void RemoveClientRecord(string ip)
+    {
+        try
+        {
+            string dir = AgentPaths.ClientsDir;
+            if (string.IsNullOrEmpty(dir))
+            {
+                dir = Path.Combine(AgentPaths.Storage, "clients");
+            }
+            string safe = (ip ?? "").Replace(':', '_').Replace('/', '_').Replace('\\', '_');
+            string path = Path.Combine(dir, safe + ".json");
+            if (File.Exists(path))
+            {
+                File.Delete(path);
+            }
+        }
+        catch
+        {
+        }
+    }
+
     private static bool IsPrivateLanIp(string ip)
     {
         if (string.IsNullOrWhiteSpace(ip))
@@ -2354,7 +2518,7 @@ internal sealed class CloudSync
         {
             if (kind == "portal")
             {
-                string token = cloud.Token ?? "";
+                string token = GetStr(resp, "portal_token", cloud.Token ?? "");
                 string pathToken = ExtractPortalToken(candidate);
                 if (pathToken.Length > 0)
                 {
@@ -2375,7 +2539,11 @@ internal sealed class CloudSync
             {
                 portalIp = GetStr(cfg, "portal_ip", portalIp);
             }
-            string tok = ExtractPortalToken(candidate);
+            string tok = GetStr(resp, "portal_token");
+            if (tok.Length == 0)
+            {
+                tok = ExtractPortalToken(candidate);
+            }
             if (tok.Length > 0)
             {
                 return "http://" + portalIp + "/portal/" + Uri.EscapeDataString(tok);
@@ -2498,6 +2666,7 @@ internal sealed class CloudSync
         var info = new Dictionary<string, object>();
         info["store_id"] = resp.ContainsKey("store_id") ? resp["store_id"] : 0;
         info["store_name"] = GetStr(resp, "store");
+        info["portal_token"] = GetStr(resp, "portal_token");
         var cfg = resp.ContainsKey("config") ? resp["config"] as Dictionary<string, object> : null;
         if (cfg != null)
         {
@@ -2545,6 +2714,17 @@ internal sealed class CloudSync
             string url = GetStr(raw, "panel_url");
             string token = GetStr(raw, "token");
             if (url.Length < 8 || token.Length < 8)
+            {
+                return null;
+            }
+            Uri panelUri;
+            if (!Uri.TryCreate(url, UriKind.Absolute, out panelUri)
+                || !string.IsNullOrEmpty(panelUri.UserInfo)
+                || !string.IsNullOrEmpty(panelUri.Query)
+                || !string.IsNullOrEmpty(panelUri.Fragment)
+                || panelUri.AbsolutePath != "/"
+                || (panelUri.Scheme != Uri.UriSchemeHttps
+                    && !(panelUri.Scheme == Uri.UriSchemeHttp && panelUri.IsLoopback)))
             {
                 return null;
             }
@@ -2626,8 +2806,8 @@ internal sealed class NamedPipeServer
             {
                 var security = new System.IO.Pipes.PipeSecurity();
                 security.AddAccessRule(new System.IO.Pipes.PipeAccessRule(
-                    new System.Security.Principal.SecurityIdentifier(System.Security.Principal.WellKnownSidType.WorldSid, null),
-                    System.IO.Pipes.PipeAccessRights.FullControl,
+                    new System.Security.Principal.SecurityIdentifier(System.Security.Principal.WellKnownSidType.InteractiveSid, null),
+                    System.IO.Pipes.PipeAccessRights.ReadWrite,
                     System.Security.AccessControl.AccessControlType.Allow));
                 security.AddAccessRule(new System.IO.Pipes.PipeAccessRule(
                     new System.Security.Principal.SecurityIdentifier(System.Security.Principal.WellKnownSidType.LocalSystemSid, null),

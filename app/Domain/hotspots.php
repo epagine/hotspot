@@ -33,6 +33,60 @@ function store_agent_max_clients(int $storeId): int
     return max(1, min($configured, $planMax));
 }
 
+function is_private_lan_ip(string $ip): bool
+{
+    $ip = trim($ip);
+    if ($ip === '' || filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4) === false) {
+        return false;
+    }
+    if (str_starts_with($ip, '192.168.') || str_starts_with($ip, '10.')) {
+        return true;
+    }
+    if (preg_match('/^172\.(1[6-9]|2[0-9]|3[0-1])\./', $ip) === 1) {
+        return true;
+    }
+    return false;
+}
+
+/** Política que o agente só valida; o painel é a fonte da verdade (plano + hotspot). */
+function agent_policy_for_store(array $store): array
+{
+    $sid = (int) ($store['id'] ?? 0);
+    $companyId = (int) ($store['company_id'] ?? 0);
+    $sub = store_subscription_payload($store);
+    $pc = portal_config_for($sid);
+    $acceptNew = $companyId <= 0 || company_within_client_limit($companyId);
+    $allow = [];
+    if ($sid > 0) {
+        $stmt = db()->prepare(
+            "SELECT ip FROM clients WHERE store_id = ? AND state = 'online'"
+        );
+        $stmt->execute([$sid]);
+        foreach ($stmt as $row) {
+            $ip = trim((string) ($row['ip'] ?? ''));
+            if (is_private_lan_ip($ip)) {
+                $allow[] = $ip;
+            }
+        }
+    }
+
+    return [
+        'service_allowed' => !empty($sub['service_allowed']) ? '1' : '0',
+        'hotspot_enabled' => (($store['hotspot_status'] ?? 'ativo') === 'ativo') ? '1' : '0',
+        'accept_new_clients' => $acceptNew ? '1' : '0',
+        'max_clients' => (string) store_agent_max_clients($sid),
+        'session_hours' => (string) max(1, (int) setting_for_store($sid, 'session_hours', '2')),
+        'approval_mode' => setting_for_store($sid, 'approval_mode', 'instant') ?: 'instant',
+        'require_status_share' => '1',
+        'personalized_portal' => ($companyId > 0 && company_has_feature($companyId, 'portal')) ? '1' : '0',
+        'plan' => (string) ($sub['plan'] ?? ''),
+        'plan_label' => (string) ($sub['plan_label'] ?? ''),
+        'portal_title' => (string) ($pc['title'] ?? 'Bem-vindo'),
+        'portal_subtitle' => (string) ($pc['subtitle'] ?? ''),
+        'allow_ips' => array_values(array_unique($allow)),
+    ];
+}
+
 function portal_config_for(int $hotspotId): array
 {
     $stmt = db()->prepare('SELECT * FROM portal_configs WHERE hotspot_id = ?');

@@ -25,8 +25,10 @@ internal sealed class SetupForm : Form
     private readonly TextBox tokenBox;
     private readonly TextBox logBox;
     private readonly Label statusLabel;
+    private readonly Label footerLabel;
     private readonly ProgressPanel bar;
     private readonly Button installBtn;
+    private readonly Button cancelBtn;
     private bool installing;
 
     public SetupForm()
@@ -80,7 +82,7 @@ internal sealed class SetupForm : Form
         urlBox = MakeInput(16, 128, 620);
         card.Controls.Add(urlBox);
 
-        card.Controls.Add(FieldLabel(card, "Token do hotspot", 16, 172));
+        card.Controls.Add(FieldLabel(card, "Token do agente", 16, 172));
         tokenBox = MakeInput(16, 192, 620);
         card.Controls.Add(tokenBox);
 
@@ -92,7 +94,7 @@ internal sealed class SetupForm : Form
             Height = 48,
             ForeColor = Muted,
             Font = new Font("Segoe UI", 8.5f),
-            Text = "Copie URL e token em Painel → Hotspots → Abrir. Em atualizações, os campos são preenchidos automaticamente."
+            Text = "Copie a URL e o token do agente em Painel → Hotspots → Abrir."
         });
         Controls.Add(card);
 
@@ -131,17 +133,17 @@ internal sealed class SetupForm : Form
         installBtn = MakeGoldButton("Instalar agente", 424, 512, 160, 40);
         installBtn.Click += delegate { RunInstall(); };
 
-        var cancel = MakeGhostButton("Cancelar", 592, 512, 84, 40);
-        cancel.Click += delegate { Close(); };
+        cancelBtn = MakeGhostButton("Cancelar", 592, 512, 84, 40);
+        cancelBtn.Click += delegate { Close(); };
 
         Controls.Add(installBtn);
-        Controls.Add(cancel);
+        Controls.Add(cancelBtn);
 
         pathBox.Text = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "WiFiDaLoja");
         pathBox.TextChanged += delegate { LoadExistingCloudFields(pathBox.Text.Trim()); };
         LoadExistingCloudFields(pathBox.Text);
 
-        Controls.Add(new Label
+        footerLabel = new Label
         {
             Left = 24,
             Top = 520,
@@ -150,7 +152,8 @@ internal sealed class SetupForm : Form
             ForeColor = Color.FromArgb(100, 112, 128),
             Font = new Font("Segoe UI", 8f),
             Text = "Windows 10/11 · execute como administrador · agente v" + AgentBuild.Version
-        });
+        };
+        Controls.Add(footerLabel);
     }
 
     private static Label SectionTitle(Control parent, string text, int x, int y)
@@ -276,6 +279,16 @@ internal sealed class SetupForm : Form
         logBox.AppendText(msg + Environment.NewLine);
     }
 
+    private void ShowOutputPane()
+    {
+        logBox.Visible = true;
+        logBox.Height = 48;
+        installBtn.Top = 540;
+        cancelBtn.Top = 540;
+        footerLabel.Top = 548;
+        Height = Math.Min(640, Screen.FromControl(this).WorkingArea.Height);
+    }
+
     private void RunInstall()
     {
         if (installing)
@@ -305,7 +318,20 @@ internal sealed class SetupForm : Form
         }
         if (panelUrl.Length < 8 || token.Length < 8)
         {
-            MessageBox.Show("Informe a URL do painel e o token do hotspot.", Text, MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            MessageBox.Show("Informe a URL do painel e o token do agente.", Text, MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return;
+        }
+        Uri panelUri;
+        bool securePanelUrl = Uri.TryCreate(panelUrl, UriKind.Absolute, out panelUri)
+            && string.IsNullOrEmpty(panelUri.UserInfo)
+            && string.IsNullOrEmpty(panelUri.Query)
+            && string.IsNullOrEmpty(panelUri.Fragment)
+            && panelUri.AbsolutePath == "/"
+            && (panelUri.Scheme == Uri.UriSchemeHttps
+                || (panelUri.Scheme == Uri.UriSchemeHttp && panelUri.IsLoopback));
+        if (!securePanelUrl)
+        {
+            MessageBox.Show("Use uma URL HTTPS do painel. HTTP so e aceito para loopback local.", Text, MessageBoxButtons.OK, MessageBoxIcon.Warning);
             return;
         }
         installing = true;
@@ -328,12 +354,12 @@ internal sealed class SetupForm : Form
             {
                 foreach (var e in zip.Entries)
                 {
+                    string outPath = SafeExtractPath(dest, e.FullName);
                     if (string.IsNullOrEmpty(e.Name) && e.FullName.EndsWith("/"))
                     {
-                        Directory.CreateDirectory(Path.Combine(dest, e.FullName.Replace('/', Path.DirectorySeparatorChar)));
+                        Directory.CreateDirectory(outPath);
                         continue;
                     }
-                    string outPath = Path.Combine(dest, e.FullName.Replace('/', Path.DirectorySeparatorChar));
                     string dir = Path.GetDirectoryName(outPath);
                     if (!string.IsNullOrEmpty(dir))
                     {
@@ -351,7 +377,7 @@ internal sealed class SetupForm : Form
             bar.Value = 70;
             Application.DoEvents();
             string setupPs1 = Path.Combine(dest, "scripts", "instalar-windows.ps1");
-            string args = "-NoProfile -ExecutionPolicy Bypass -File \"" + setupPs1 + "\" -Cloud -PanelUrl \"" + panelUrl.Replace("\"", "`\"") + "\" -Token \"" + token.Replace("\"", "`\"") + "\"";
+            string args = "-NoProfile -ExecutionPolicy Bypass -File \"" + setupPs1 + "\" -Cloud";
             if (isUpdate)
             {
                 args += " -Update";
@@ -366,11 +392,12 @@ internal sealed class SetupForm : Form
                 RedirectStandardOutput = true,
                 RedirectStandardError = true
             };
+            psi.EnvironmentVariables["WIFIDALOJA_PANEL_URL"] = panelUrl;
+            psi.EnvironmentVariables["WIFIDALOJA_AGENT_TOKEN"] = token;
             Process p = Process.Start(psi);
             string output = p.StandardOutput.ReadToEnd() + p.StandardError.ReadToEnd();
             p.WaitForExit();
-            logBox.Visible = true;
-            Height = 640;
+            ShowOutputPane();
             Log(output);
             if (p.ExitCode != 0)
             {
@@ -392,8 +419,7 @@ internal sealed class SetupForm : Form
         catch (Exception ex)
         {
             installing = false;
-            logBox.Visible = true;
-            Height = 640;
+            ShowOutputPane();
             Log("Erro: " + ex.Message);
             statusLabel.Text = ex.Message;
             statusLabel.ForeColor = Color.FromArgb(224, 112, 96);
@@ -419,6 +445,43 @@ internal sealed class SetupForm : Form
                 }
                 StopAgentProcesses(installDir);
                 Thread.Sleep(1500);
+            }
+        }
+    }
+
+    private static string SafeExtractPath(string installDir, string entryName)
+    {
+        if (string.IsNullOrWhiteSpace(entryName) || Path.IsPathRooted(entryName) || entryName.IndexOf(':') >= 0)
+        {
+            throw new InvalidDataException("O pacote contém um caminho inválido.");
+        }
+        string root = Path.GetFullPath(installDir).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
+            + Path.DirectorySeparatorChar;
+        string output = Path.GetFullPath(Path.Combine(root, entryName.Replace('/', Path.DirectorySeparatorChar)));
+        if (!output.StartsWith(root, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidDataException("O pacote tenta gravar fora da pasta de instalação.");
+        }
+        EnsureNoReparsePoints(installDir);
+        EnsureNoReparsePoints(output);
+        return output;
+    }
+
+    private static void EnsureNoReparsePoints(string path)
+    {
+        string fullPath = Path.GetFullPath(path);
+        string current = Path.GetPathRoot(fullPath);
+        string remainder = fullPath.Substring(current.Length);
+        foreach (string component in remainder.Split(new[] { Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar }, StringSplitOptions.RemoveEmptyEntries))
+        {
+            current = Path.Combine(current, component);
+            if (!File.Exists(current) && !Directory.Exists(current))
+            {
+                continue;
+            }
+            if ((File.GetAttributes(current) & FileAttributes.ReparsePoint) != 0)
+            {
+                throw new InvalidDataException("O destino contém um link/junction e não é seguro para extração.");
             }
         }
     }

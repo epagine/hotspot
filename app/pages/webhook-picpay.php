@@ -17,10 +17,21 @@ if (!is_array($payload)) {
     exit;
 }
 
+$referenceId = trim((string) ($payload['referenceId'] ?? ''));
+if ($referenceId === '') {
+    http_response_code(400);
+    echo 'Missing referenceId';
+    exit;
+}
+
 try {
-    picpay_handle_notification((string) ($payload['referenceId'] ?? ''), $payload);
+    picpay_handle_notification($referenceId);
 } catch (Throwable $e) {
     error_log('PicPay webhook: ' . $e->getMessage());
+    http_response_code(500);
+    header('Content-Type: text/plain; charset=utf-8');
+    echo 'Notification processing failed';
+    exit;
 }
 
 http_response_code(200);

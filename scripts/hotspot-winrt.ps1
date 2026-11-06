@@ -3,11 +3,14 @@
 param(
     [Parameter(Mandatory = $true)][ValidateSet("start", "stop", "apply", "status")][string]$Action,
     [string]$Ssid = "WifiDaLoja",
-    [string]$Pass = "loja1234",
+    [string]$Pass = "",
     [int]$MaxClients = 8,
     [string]$AdapterGuid = ""
 )
 $ErrorActionPreference = "Stop"
+if ([string]::IsNullOrWhiteSpace($Pass)) {
+    throw "Informe uma senha Wi-Fi configurada para o hotspot."
+}
 Add-Type -AssemblyName System.Runtime.WindowsRuntime -ErrorAction SilentlyContinue | Out-Null
 
 function Wait-WinRtAction {

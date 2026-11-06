@@ -215,7 +215,7 @@ function app_nav_tw(string $tab, array $items): void
                         <h2><?= h((string) $hot['name']) ?></h2>
                         <p class="hint">
                             <?php if (trim((string) ($hot['city'] ?? '')) !== ''): ?><?= h((string) $hot['city']) ?> · <?php endif; ?>
-                            <a href="/portal/<?= h((string) $hot['token']) ?>" target="_blank" rel="noopener">Abrir portal cativo</a>
+                            Este painel define plano, limites e textos. O agente só valida e libera o Wi-Fi.
                         </p>
                     </div>
                     <div class="hotspot-edit-badges">
@@ -264,19 +264,19 @@ function app_nav_tw(string $tab, array $items): void
                             <ol class="hotspot-install-steps">
                                 <li>Baixe e execute como administrador<?php if ($setupReady): ?> — <a href="/app/instalador/baixar">Baixar setup</a><?php else: ?> (indisponível)<?php endif; ?></li>
                                 <li>URL do painel: <code class="admin-code-break"><?= h($panelUrl) ?></code></li>
-                                <li>Cole o token na instalação ou em <em>Vincular hotspot</em> na bandeja</li>
+                                <li>Cole o token do agente na instalação ou em <em>Vincular hotspot</em> na bandeja</li>
                             </ol>
                             <dl class="hotspot-meta">
-                                <dt>Token</dt>
-                                <dd><code class="token"><?= h((string) $hot['token']) ?></code></dd>
+                                <dt>Token do agente</dt>
+                                <dd><code class="token"><?= h((string) $hot['agent_token']) ?></code></dd>
                                 <dt>SSID atual</dt>
                                 <dd><?= h(setting_for_store((int) $hot['id'], 'wifi_ssid', 'WifiDaLoja')) ?></dd>
                             </dl>
-                            <form method="post" action="/app/hotspots" class="hotspot-danger-action" onsubmit="return confirm('Gerar novo token? O PC precisará ser revinculado na bandeja.');">
+                            <form method="post" action="/app/hotspots" class="hotspot-danger-action" onsubmit="return confirm('Gerar novo token do agente? O PC precisará ser revinculado na bandeja.');">
                                 <?= csrf_field() ?>
                                 <input type="hidden" name="do" value="rotate">
                                 <input type="hidden" name="id" value="<?= (int) $hot['id'] ?>">
-                                <button class="btn ghost btn-sm" type="submit">Renovar token</button>
+                                <button class="btn ghost btn-sm" type="submit">Renovar token do agente</button>
                             </form>
                         </div>
                     </aside>
@@ -300,7 +300,7 @@ function app_nav_tw(string $tab, array $items): void
                                 <h3 class="hotspot-panel-title">Rede Wi-Fi</h3>
                                 <div class="form-grid-2">
                                     <label>SSID<input name="ssid" value="<?= h(setting_for_store((int) $hot['id'], 'wifi_ssid', 'WifiDaLoja')) ?>"></label>
-                                    <label>Senha<input name="wifi_pass" type="password" value="" autocomplete="new-password" placeholder="Deixe em branco para manter"></label>
+                                    <label>Senha<input name="wifi_pass" type="text" value="<?= h(setting_for_store((int) $hot['id'], 'wifi_pass', '')) ?>" autocomplete="off"></label>
                                     <label>Situação
                                         <select name="hotspot_status">
                                             <?php foreach (['ativo' => 'Ativo', 'inativo' => 'Inativo', 'bloqueado' => 'Bloqueado'] as $v => $l): ?>

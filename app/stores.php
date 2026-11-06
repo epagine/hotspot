@@ -49,6 +49,11 @@ function new_store_token(): string
     return bin2hex(random_bytes(16));
 }
 
+function new_agent_token(): string
+{
+    return bin2hex(random_bytes(32));
+}
+
 function migrate_multi_store(PDO $pdo): void
 {
     static $done = false;
@@ -448,17 +453,30 @@ function find_store_by_token(string $token): ?array
     return $row ?: null;
 }
 
-function local_store_portal_url(): ?string
+function find_store_by_agent_token(string $token): ?array
 {
-    $token = trim((string) (cloud_config()['token'] ?? ''));
-    if ($token === '') {
-        $store = find_store(local_store_id());
-        $token = trim((string) ($store['token'] ?? ''));
-    }
+    $token = trim($token);
     if ($token === '') {
         return null;
     }
-    return '/portal/' . rawurlencode($token);
+    $stmt = db()->prepare('SELECT * FROM stores WHERE agent_token = ?');
+    $stmt->execute([$token]);
+    $row = $stmt->fetch();
+    return $row ?: null;
+}
+
+function local_store_portal_url(): ?string
+{
+    $agentToken = trim((string) (cloud_config()['token'] ?? ''));
+    $store = $agentToken !== '' ? find_store_by_agent_token($agentToken) : null;
+    if (!$store) {
+        $store = find_store(local_store_id());
+    }
+    $portalToken = trim((string) ($store['token'] ?? ''));
+    if ($portalToken === '') {
+        return null;
+    }
+    return '/portal/' . rawurlencode($portalToken);
 }
 
 function local_store_id(): int
@@ -466,7 +484,7 @@ function local_store_id(): int
     $cfg = cloud_config();
     $token = (string) ($cfg['token'] ?? '');
     if ($token !== '') {
-        $store = find_store_by_token($token);
+        $store = find_store_by_agent_token($token);
         if ($store) {
             return (int) $store['id'];
         }
@@ -516,7 +534,7 @@ function store_defaults(): array
         'store_name' => 'Nova loja',
         'store_city' => '',
         'wifi_ssid' => 'WifiDaLoja',
-        'wifi_pass' => 'loja1234',
+        'wifi_pass' => '',
         'portal_ip' => '192.168.137.1',
         'max_clients' => '8',
         'approval_mode' => 'instant',
@@ -531,12 +549,16 @@ function create_store(string $name, string $city = '', ?array $settings = null, 
     $name = trim($name) ?: 'Nova loja';
     $city = trim($city);
     $token = $forcedToken ?: new_store_token();
+    $agentToken = new_agent_token();
     $companyId = current_company_id();
     db()->prepare(
-        'INSERT INTO stores (name, city, token, company_id, provider, hotspot_status, created_at) VALUES (?,?,?,?,?,?,?)'
-    )->execute([$name, $city, $token, $companyId > 0 ? $companyId : null, 'windows', 'ativo', date('Y-m-d H:i:s')]);
+        'INSERT INTO stores (name, city, token, agent_token, company_id, provider, hotspot_status, created_at) VALUES (?,?,?,?,?,?,?,?)'
+    )->execute([$name, $city, $token, $agentToken, $companyId > 0 ? $companyId : null, 'windows', 'ativo', date('Y-m-d H:i:s')]);
     $id = (int) db()->lastInsertId();
     $vals = array_merge(store_defaults(), $settings ?? []);
+    if (trim((string) ($vals['wifi_pass'] ?? '')) === '') {
+        $vals['wifi_pass'] = bin2hex(random_bytes(8));
+    }
     $vals['store_name'] = $name;
     $vals['store_city'] = $city;
     foreach ($vals as $k => $v) {
@@ -555,12 +577,12 @@ function create_store_with_trial(string $name, string $city = '', ?array $settin
     return find_store((int) $store['id']) ?? $store;
 }
 
-function rotate_store_token(int $id): string
+function rotate_agent_token(int $id): string
 {
     $wasLocal = is_local_store($id);
     $local = cloud_config();
-    $token = new_store_token();
-    db()->prepare('UPDATE stores SET token = ? WHERE id = ?')->execute([$token, $id]);
+    $token = new_agent_token();
+    db()->prepare('UPDATE stores SET agent_token = ? WHERE id = ?')->execute([$token, $id]);
     if ($wasLocal) {
         write_cloud_config((string) ($local['panel_url'] ?? guess_panel_url()), $token);
     }
@@ -796,12 +818,13 @@ function brand_image_path_for(int $storeId): string
 
 function upsert_synced_clients(int $storeId, array $clients): void
 {
-    if ($clients !== [] && isset($clients['status_code'])) {
+    if ($clients !== [] && (isset($clients['status_code']) || isset($clients['ip']))) {
         $clients = [$clients];
     }
     $store = find_store($storeId);
     $companyId = (int) ($store['company_id'] ?? 0);
-    $sel = db()->prepare('SELECT id FROM clients WHERE store_id = ? AND status_code = ? ORDER BY id DESC LIMIT 1');
+    $selCode = db()->prepare('SELECT id FROM clients WHERE store_id = ? AND status_code = ? ORDER BY id DESC LIMIT 1');
+    $selIp = db()->prepare('SELECT id FROM clients WHERE store_id = ? AND ip = ? AND ip != \'\' ORDER BY id DESC LIMIT 1');
     $upd = db()->prepare(
         'UPDATE clients SET ip = ?, mac = ?, phone = ?, status_text = ?, state = ?, user_agent = ?, created_at = ?, authorized_at = ?, expires_at = ?, company_id = COALESCE(company_id, ?) WHERE id = ?'
     );
@@ -813,20 +836,28 @@ function upsert_synced_clients(int $storeId, array $clients): void
         if (!is_array($c)) {
             continue;
         }
+        $ip = trim((string) ($c['ip'] ?? ''));
         $code = strtoupper(preg_replace('/[^A-Z0-9]/', '', (string) ($c['status_code'] ?? '')) ?? '');
-        if ($code === '') {
+        if ($code === '' && $ip === '') {
             continue;
         }
-        $sel->execute([$storeId, $code]);
-        $id = $sel->fetchColumn();
-        $ip = (string) ($c['ip'] ?? '');
+        if ($code === '') {
+            $code = 'LAN' . strtoupper(substr(sha1($storeId . '|' . $ip), 0, 6));
+        }
+        $id = false;
+        $selCode->execute([$storeId, $code]);
+        $id = $selCode->fetchColumn();
+        if (!$id && $ip !== '') {
+            $selIp->execute([$storeId, $ip]);
+            $id = $selIp->fetchColumn();
+        }
         $mac = $c['mac'] ?? null;
         $phone = $c['phone'] ?? null;
         $text = (string) ($c['status_text'] ?? '');
-        $state = (string) ($c['state'] ?? 'pending');
+        $state = (string) ($c['state'] ?? 'online');
         $ua = (string) ($c['user_agent'] ?? '');
         $created = (string) ($c['created_at'] ?? date('Y-m-d H:i:s'));
-        $auth = $c['authorized_at'] ?? null;
+        $auth = $c['authorized_at'] ?? date('Y-m-d H:i:s');
         $exp = $c['expires_at'] ?? null;
         if ($id) {
             $upd->execute([$ip, $mac, $phone, $text, $state, $ua, $created, $auth, $exp, $companyId > 0 ? $companyId : null, $id]);
@@ -888,7 +919,7 @@ function apply_client_patches(int $storeId, array $patches): void
 function pending_client_patches(int $storeId): array
 {
     $stmt = db()->prepare(
-        'SELECT status_code, state, authorized_at, expires_at FROM clients WHERE store_id = ? AND state IN (\'online\',\'blocked\',\'expired\',\'awaiting_approval\')'
+        "SELECT status_code, ip, state, authorized_at, expires_at FROM clients WHERE store_id = ? AND state = 'blocked'"
     );
     $stmt->execute([$storeId]);
     return $stmt->fetchAll() ?: [];

@@ -47,7 +47,7 @@ if (!$store || (int) ($store['company_id'] ?? 0) !== $companyId) {
 }
 
 if ($do === 'rotate') {
-    rotate_store_token($id);
+    rotate_agent_token($id);
     audit_log('hotspot.rotate_token', $companyId, null, ['id' => $id]);
     $_SESSION['flash_ok'] = 'Token do agente renovado. Revincule o PC em Agente Windows ou na bandeja.';
     header('Location: /app/hotspots/' . $id);

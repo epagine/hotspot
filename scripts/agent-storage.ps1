@@ -1,14 +1,114 @@
 # Caminho persistente do agente (sobrevive a reinstalacao/atualizacao em Program Files).
+function Test-AgentPanelUrl {
+    param([string]$PanelUrl)
+    $uri = $null
+    if (-not [Uri]::TryCreate($PanelUrl, [UriKind]::Absolute, [ref]$uri)) { return $false }
+    if ($uri.UserInfo -or $uri.Query -or $uri.Fragment -or $uri.AbsolutePath -ne '/') { return $false }
+    if ($uri.Scheme -eq 'https') { return $true }
+    return $uri.Scheme -eq 'http' -and $uri.IsLoopback
+}
+
+function Set-AgentStoragePermissions {
+    param([string]$Path)
+    $userSid = [Security.Principal.WindowsIdentity]::GetCurrent().User.Value
+    $rules = @(
+        '*S-1-5-18:(OI)(CI)F',
+        '*S-1-5-32-544:(OI)(CI)F',
+        ('*{0}:(OI)(CI)F' -f $userSid)
+    )
+    $arguments = @($Path, '/inheritance:r', '/grant:r') + $rules + @('/T', '/C')
+    $output = @(& (Join-Path $env:WINDIR 'system32\icacls.exe') @arguments 2>&1)
+    if ($LASTEXITCODE -ne 0 -or ($output -join "`n") -match '(?i)access is denied|acesso negado') {
+        throw 'Nao foi possivel restringir as permissoes dos dados do agente.'
+    }
+    $privateConfig = Join-Path $Path 'agent-config.json'
+    if (Test-Path -LiteralPath $privateConfig) {
+        $privateRules = @($privateConfig, '/inheritance:r', '/grant:r', '*S-1-5-18:F', '*S-1-5-32-544:F')
+        $privateOutput = @(& (Join-Path $env:WINDIR 'system32\icacls.exe') @privateRules 2>&1)
+        if ($LASTEXITCODE -ne 0 -or ($privateOutput -join "`n") -match '(?i)access is denied|acesso negado') {
+            throw 'Nao foi possivel restringir agent-config.json a SYSTEM e Administradores.'
+        }
+    }
+    $paths = @($Path) + @(Get-ChildItem -LiteralPath $Path -Recurse -Force -ErrorAction Stop | ForEach-Object FullName)
+    $untrustedSids = @('S-1-1-0', 'S-1-5-11', 'S-1-5-32-545')
+    $requiredSids = @('S-1-5-18', 'S-1-5-32-544')
+    foreach ($itemPath in $paths) {
+        $acl = Get-Acl -LiteralPath $itemPath -ErrorAction Stop
+        $sids = @()
+        foreach ($rule in $acl.Access) {
+            try {
+                $sid = $rule.IdentityReference.Translate([Security.Principal.SecurityIdentifier]).Value
+            } catch {
+                $sid = $rule.IdentityReference.Value
+            }
+            if ($sid -in $untrustedSids) {
+                throw "Permissao ampla permanece em $itemPath. Execute a instalacao como Administrador."
+            }
+            $sids += $sid
+        }
+        foreach ($requiredSid in $requiredSids) {
+            if ($requiredSid -notin $sids) {
+                throw "ACL incompleta em $itemPath. Execute a instalacao como Administrador."
+            }
+        }
+        if ($itemPath -eq $privateConfig) {
+            if ($userSid -in $sids) {
+                throw 'agent-config.json ainda concede acesso direto ao usuario interativo.'
+            }
+        } elseif ($userSid -notin $sids) {
+            throw "ACL sem acesso para a bandeja em $itemPath. Execute a instalacao como Administrador."
+        }
+    }
+}
+
+function New-AgentWifiPassphrase {
+    $bytes = New-Object byte[] 16
+    $random = [Security.Cryptography.RandomNumberGenerator]::Create()
+    try {
+        $random.GetBytes($bytes)
+    } finally {
+        $random.Dispose()
+    }
+    return ([BitConverter]::ToString($bytes)).Replace('-', '').ToLowerInvariant()
+}
+
 function Get-AgentStorageDir {
-    param([string]$InstallRoot = "")
+    param([string]$InstallRoot = "", [switch]$RestrictAccess)
     $dir = Join-Path $env:ProgramData "WiFiDaLoja"
     if (-not (Test-Path $dir)) {
         New-Item -ItemType Directory -Path $dir -Force | Out-Null
     }
+    if ($RestrictAccess) {
+        Set-AgentStoragePermissions -Path $dir
+    }
     if ($InstallRoot) {
         Import-LegacyAgentStorage -InstallRoot $InstallRoot -TargetDir $dir
     }
+    if ($RestrictAccess) {
+        Set-AgentStoragePermissions -Path $dir
+    }
     return $dir
+}
+
+function Get-AgentWifiConfig {
+    param([string]$StorageDir)
+    $path = Join-Path $StorageDir 'authorized.json'
+    $config = [ordered]@{ ssid = 'WifiDaLoja'; wifi_pass = '' }
+    if (Test-Path $path) {
+        try {
+            $loaded = Get-Content $path -Raw | ConvertFrom-Json
+            if ($loaded) {
+                foreach ($property in $loaded.PSObject.Properties) {
+                    $config[$property.Name] = $property.Value
+                }
+            }
+        } catch {}
+    }
+    if ([string]::IsNullOrWhiteSpace([string]$config.wifi_pass)) {
+        $config.wifi_pass = New-AgentWifiPassphrase
+        [System.IO.File]::WriteAllText($path, ($config | ConvertTo-Json -Depth 6), [System.Text.UTF8Encoding]::new($false))
+    }
+    return [pscustomobject]$config
 }
 
 function Import-LegacyAgentStorage {
@@ -55,7 +155,7 @@ function Test-AgentCloudConfig {
     }
     $url = ([string]$cfg.panel_url).Trim()
     $token = ([string]$cfg.token).Trim()
-    return ($url.Length -ge 8 -and $token.Length -ge 8)
+    return ($token.Length -ge 8 -and (Test-AgentPanelUrl $url))
 }
 
 function Get-AgentVersion {

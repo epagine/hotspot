@@ -892,7 +892,8 @@ function stream_installer_setup(): bool
     if ($path === null) {
         return false;
     }
-    $filename = basename($path);
+    $version = preg_replace('/[^0-9.]+/', '', agent_release_version()) ?: '0.0.0';
+    $filename = 'WiFiDaLoja-Agent-Setup-' . $version . '.exe';
     header('Content-Type: application/octet-stream');
     header('Content-Disposition: attachment; filename="' . $filename . '"');
     header('Content-Length: ' . (string) filesize($path));

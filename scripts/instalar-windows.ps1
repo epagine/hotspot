@@ -6,9 +6,11 @@ param(
 )
 # Instalador do agente Wi-Fi da Loja (administrador).
 $ErrorActionPreference = "Stop"
+if ([string]::IsNullOrWhiteSpace($PanelUrl)) { $PanelUrl = [string]$env:WIFIDALOJA_PANEL_URL }
+if ([string]::IsNullOrWhiteSpace($Token)) { $Token = [string]$env:WIFIDALOJA_AGENT_TOKEN }
 $Root = Split-Path -Parent $PSScriptRoot
 . (Join-Path $PSScriptRoot "agent-storage.ps1")
-$Storage = Get-AgentStorageDir -InstallRoot $Root
+$Storage = Join-Path $env:ProgramData "WiFiDaLoja"
 $Scripts = Join-Path $Root "scripts"
 $Log = Join-Path $Storage "install.log"
 $TaskAgent = "HotspotLoja"
@@ -189,6 +191,14 @@ if (-not (Test-Admin)) {
     exit 1
 }
 
+if ($PanelUrl -and -not (Test-AgentPanelUrl $PanelUrl.TrimEnd('/'))) {
+    Write-Host "A URL do painel deve usar HTTPS; HTTP so e aceito para loopback local."
+    exit 1
+}
+
+$Storage = Get-AgentStorageDir -InstallRoot $Root -RestrictAccess
+$Log = Join-Path $Storage "install.log"
+
 $isCloudAgent = $Cloud -or (Test-CloudAgentInstall)
 
 if (-not $isCloudAgent -and -not (Test-Path (Join-Path $Root "index.php"))) {
@@ -228,6 +238,9 @@ if (-not $isCloudAgent) {
 }
 
 if ($PanelUrl -and $Token) {
+    if (-not (Test-AgentPanelUrl $PanelUrl.TrimEnd('/'))) {
+        throw "URL do painel insegura. Use HTTPS ou loopback local."
+    }
     $cloudJson = @{ panel_url = $PanelUrl.TrimEnd("/"); token = $Token; updated_at = (Get-Date).ToString("s") } | ConvertTo-Json
     Set-Content -Path (Join-Path $Storage "cloud.json") -Value $cloudJson -Encoding UTF8
     Write-Log "Hotspot vinculado ao painel $PanelUrl"
@@ -265,15 +278,23 @@ Write-Log "Servico agente e bandeja configurados"
 foreach ($rule in @("HotspotLoja-Painel-8080", "HotspotLoja-DNS-53", "HotspotLoja-HTTP-80")) {
     Get-NetFirewallRule -DisplayName $rule -ErrorAction SilentlyContinue | Remove-NetFirewallRule -ErrorAction SilentlyContinue
 }
-if (-not $isCloudAgent) {
-    New-NetFirewallRule -DisplayName "HotspotLoja-Painel-8080" -Direction Inbound -Protocol TCP -LocalPort 8080 -Action Allow -Profile Any | Out-Null
+$portalIp = "192.168.137.1"
+$authStatePath = Join-Path $Storage "authorized.json"
+if (Test-Path $authStatePath) {
+    try {
+        $authState = Get-Content $authStatePath -Raw | ConvertFrom-Json
+        $candidatePortalIp = [System.Net.IPAddress]::Parse([string]$authState.portal_ip)
+        if ($candidatePortalIp.AddressFamily -eq [System.Net.Sockets.AddressFamily]::InterNetwork) {
+            $portalIp = $candidatePortalIp.ToString()
+        }
+    } catch {}
 }
-New-NetFirewallRule -DisplayName "HotspotLoja-DNS-53" -Direction Inbound -Protocol UDP -LocalPort 53 -Action Allow -Profile Any | Out-Null
-New-NetFirewallRule -DisplayName "HotspotLoja-HTTP-80" -Direction Inbound -Protocol TCP -LocalPort 80 -Action Allow -Profile Any | Out-Null
-try {
-    netsh http add urlacl url=http://+:80/ user=Everyone 2>$null | Out-Null
-} catch {}
-Write-Log $(if ($isCloudAgent) { "Regras de firewall (53 UDP, 80 TCP) + URL ACL :80" } else { "Regras de firewall (8080 TCP, 53 UDP, 80 TCP) + URL ACL :80" })
+New-NetFirewallRule -DisplayName "HotspotLoja-DNS-53" -Direction Inbound -Protocol UDP -LocalPort 53 -LocalAddress $portalIp -RemoteAddress LocalSubnet -Action Allow -Profile Any | Out-Null
+New-NetFirewallRule -DisplayName "HotspotLoja-HTTP-80" -Direction Inbound -Protocol TCP -LocalPort 80 -LocalAddress $portalIp -RemoteAddress LocalSubnet -Action Allow -Profile Any | Out-Null
+& netsh.exe http delete urlacl url=http://+:80/ 2>$null | Out-Null
+& netsh.exe http add urlacl url=http://+:80/ user=SYSTEM 2>&1 | Out-Null
+if ($LASTEXITCODE -ne 0) { throw "Nao foi possivel reservar a URL ACL HTTP para SYSTEM." }
+Write-Log "Firewall limitado ao IP $portalIp e sub-rede local; URL ACL :80 somente para SYSTEM."
 
 $desktop = [Environment]::GetFolderPath("Desktop")
 $programs = Join-Path ([Environment]::GetFolderPath("StartMenu")) "Programs\Wi-Fi da loja"

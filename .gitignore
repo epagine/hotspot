@@ -19,6 +19,8 @@ storage/logs/
 dist/
 dist-cloud/
 installer/AgentBuild.generated.cs
+installer/AgentRuntimeVersion.generated.cs
+AGENT_VERSION
 runtime/
 WiFiDaLoja-Setup.exe
 WiFiDaLoja-Agent-Setup.exe

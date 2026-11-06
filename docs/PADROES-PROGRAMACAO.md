@@ -238,7 +238,8 @@ Ordem de resolução em `current_store_id()`:
 
 ### Agente
 
-- Token no JSON POST → `find_store_by_token()`.
+- Header obrigatório `X-Agent-Token` → `find_store_by_agent_token()`.
+- Nunca enviar a credencial privada do agente no body ou na query string.
 - Resposta 401 se token inválido.
 - Definir `$GLOBALS['force_store_id']` antes de ler settings da loja.
 
@@ -380,8 +381,9 @@ Local: `app/api/`.
 
 | Endpoint | Método | Auth |
 |----------|--------|------|
-| `/agente/sincronizar` | POST JSON | header `X-Agent-Token` (ou `token` no JSON) |
-| `/api/v1/hotspot/status` | GET | header `X-Agent-Token` (ou `token` no query, legado) |
+| `/agente/sincronizar`, `/agent/brand`, `/api/v1/hotspot/*` | POST/GET | header obrigatório `X-Agent-Token` |
+| `/api/v1/client`, `/api/v1/campaign` | GET | sessão ou header obrigatório `X-Agent-Token` |
+| `/api/v1/campaign/click` | POST JSON | token público do portal no body |
 | `/admin/estado` | GET | sessão admin |
 | `/confirmar` | POST | portal (LAN) |
 
@@ -418,7 +420,7 @@ Preferir URLs canônicas (`/admin/estado`, `/confirmar`, `/arte/{code}.png`). Se
 
 | Arquivo | Função |
 |---------|--------|
-| `cloud.json` | URL do painel + token do hotspot |
+| `cloud.json` | URL do painel + token privado do agente |
 | `command.json` | Comando imediato (`start` / `stop` / `apply`) |
 | `status.json` | Telemetria reportada ao painel |
 | `authorized.json` | IPs autorizados + SSID/senha Wi-Fi |
@@ -428,11 +430,10 @@ Preferir URLs canônicas (`/admin/estado`, `/confirmar`, `/arte/{code}.png`). Se
 
 ### Contrato agente ↔ painel
 
-POST `/agente/sincronizar` (header `X-Agent-Token` ou body `token`):
+POST `/agente/sincronizar` (header obrigatório `X-Agent-Token`):
 
 ```json
 {
-  "token": "...",
   "status": {},
   "clients": [],
   "ack_command_id": "..."
@@ -455,14 +456,13 @@ Scripts PowerShell em `scripts/` — não referenciar do código PHP em produç�
 
 - Senha admin com `password_hash` / `password_verify`
 - Escape HTML sistemático
-- Token por loja para agente
+- Token público do portal separado do token privado do agente
 - HTTPS esperado em produção (webhook PagBank)
 
 ### Limitações conhecidas (documentar, não ignorar)
 
-- Sem CSRF token nos formulários admin
-- Conta admin única, sem RBAC
-- Token do agente sem rotação automática nem expiração
+- Token do agente com rotação manual, sem expiração automática
+- Sem MFA para contas administrativas
 
 ### Ao adicionar features sensíveis
 

@@ -317,17 +317,29 @@ function picpay_create_company_charge(int $companyId, bool $force = false, ?int 
     ];
 }
 
-function picpay_handle_notification(string $referenceId, array $raw = []): void
+function picpay_handle_notification(string $referenceId): void
 {
     $referenceId = trim($referenceId);
     if ($referenceId === '') {
         return;
     }
-    $statusData = picpay_payment_status($referenceId) ?? $raw;
+    $payment = find_payment_by_reference($referenceId);
+    $companyId = company_id_from_reference($referenceId);
+    $storeId = store_id_from_reference($referenceId);
+    $knownTarget = $payment !== null
+        || ($companyId > 0 && find_company($companyId) !== null)
+        || ($storeId > 0 && find_store($storeId) !== null);
+    if (!$knownTarget) {
+        return;
+    }
+
+    $statusData = picpay_payment_status($referenceId);
+    if ($statusData === null) {
+        throw new RuntimeException('Não foi possível confirmar a notificação com o PicPay.');
+    }
     $status = strtolower((string) ($statusData['status'] ?? ''));
     if (!picpay_status_paid($status)) {
         if ($status === 'expired') {
-            $payment = find_payment_by_reference($referenceId);
             if ($payment && ($payment['status'] ?? '') === 'pending') {
                 db()->prepare("UPDATE payments SET status = 'expired' WHERE id = ?")->execute([(int) $payment['id']]);
                 $companyId = (int) ($payment['company_id'] ?? 0);
@@ -346,12 +358,10 @@ function picpay_handle_notification(string $referenceId, array $raw = []): void
         mark_payment_paid($payment, $statusData);
         return;
     }
-    $companyId = company_id_from_reference($referenceId);
     if ($companyId > 0 && find_company($companyId)) {
         pagseguro_record_paid_company($companyId, $referenceId, $statusData);
         return;
     }
-    $storeId = store_id_from_reference($referenceId);
     if ($storeId > 0 && find_store($storeId)) {
         pagseguro_record_paid_store($storeId, $referenceId, $statusData);
     }
