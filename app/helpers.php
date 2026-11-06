@@ -811,18 +811,204 @@ function h(?string $value): string
     return htmlspecialchars((string) $value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
 }
 
-/** Versão publicada do agente Windows (scripts/AGENT_VERSION.txt). */
+function normalize_agent_version(string $raw): ?string
+{
+    if (preg_match('/(\d+\.\d+\.\d+)/', trim($raw), $m) === 1) {
+        return $m[1];
+    }
+
+    return null;
+}
+
+/** Versão no código-fonte. `app/AGENT_VERSION.txt` vai para a hospedagem; scripts/ só existe no PC de build. */
+function agent_source_version(): string
+{
+    $root = dirname(__DIR__);
+    foreach ([
+        $root . DIRECTORY_SEPARATOR . 'app' . DIRECTORY_SEPARATOR . 'AGENT_VERSION.txt',
+        $root . DIRECTORY_SEPARATOR . 'scripts' . DIRECTORY_SEPARATOR . 'AGENT_VERSION.txt',
+    ] as $path) {
+        if (!is_file($path)) {
+            continue;
+        }
+        $version = normalize_agent_version((string) file_get_contents($path));
+        if ($version !== null) {
+            return $version;
+        }
+    }
+
+    return '0.0.0';
+}
+
+function installer_version_sidecar_path(): string
+{
+    return installer_downloads_dir() . DIRECTORY_SEPARATOR . 'WiFiDaLoja-Agent-Setup.version';
+}
+
+function installer_write_published_version(string $version): void
+{
+    $normalized = normalize_agent_version($version);
+    if ($normalized === null) {
+        return;
+    }
+    file_put_contents(installer_version_sidecar_path(), $normalized . "\n");
+}
+
+function installer_read_published_version(): ?string
+{
+    $path = installer_version_sidecar_path();
+    if (!is_file($path)) {
+        return null;
+    }
+
+    return normalize_agent_version((string) file_get_contents($path));
+}
+
+function installer_version_from_filename(string $path): ?string
+{
+    return normalize_agent_version(basename($path));
+}
+
+/** Lê a versão gravada no payload do setup (arquivo AGENT_VERSION). */
+function installer_embedded_version(string $path): ?string
+{
+    if (!is_file($path) || filesize($path) < 64) {
+        return null;
+    }
+    $size = (int) filesize($path);
+    $fp = fopen($path, 'rb');
+    if ($fp === false) {
+        return null;
+    }
+    try {
+        if (fseek($fp, -8, SEEK_END) !== 0) {
+            return null;
+        }
+        $lenBuf = fread($fp, 8);
+        if ($lenBuf === false || strlen($lenBuf) !== 8) {
+            return null;
+        }
+        $parts = unpack('Vlo/Vhi', $lenBuf);
+        if (!is_array($parts)) {
+            return null;
+        }
+        $zipLen = (int) $parts['lo'] + ((int) $parts['hi'] * 4294967296);
+        if ($zipLen < 100 || $zipLen > $size - 16) {
+            return null;
+        }
+        if (fseek($fp, -8 - $zipLen, SEEK_END) !== 0) {
+            return null;
+        }
+        $zipData = fread($fp, $zipLen);
+        if ($zipData === false || strlen($zipData) !== $zipLen) {
+            return null;
+        }
+    } finally {
+        fclose($fp);
+    }
+
+    $fromBytes = installer_version_from_zip_bytes($zipData);
+    if ($fromBytes !== null) {
+        return $fromBytes;
+    }
+    if (!class_exists(ZipArchive::class)) {
+        return null;
+    }
+    $tmp = tempnam(sys_get_temp_dir(), 'wflver');
+    if ($tmp === false) {
+        return null;
+    }
+    try {
+        file_put_contents($tmp, $zipData);
+        $zip = new ZipArchive();
+        if ($zip->open($tmp) !== true) {
+            return null;
+        }
+        $raw = $zip->getFromName('AGENT_VERSION');
+        if ($raw === false) {
+            $raw = $zip->getFromName('scripts/AGENT_VERSION.txt');
+        }
+        if ($raw === false) {
+            $raw = $zip->getFromName('scripts\\AGENT_VERSION.txt');
+        }
+        $zip->close();
+
+        return is_string($raw) ? normalize_agent_version($raw) : null;
+    } finally {
+        @unlink($tmp);
+    }
+}
+
+function installer_version_from_zip_bytes(string $zipData): ?string
+{
+    $offset = 0;
+    $length = strlen($zipData);
+    while ($offset < $length - 30) {
+        $pos = strpos($zipData, "PK\x03\x04", $offset);
+        if ($pos === false || $pos + 30 > $length) {
+            break;
+        }
+        $header = unpack('vcomp/vflag/vmethod/vtime/vdate/Vcrc/Vsize/Vunc/vnameLen/vextraLen', substr($zipData, $pos + 4, 26));
+        if (!is_array($header)) {
+            $offset = $pos + 4;
+            continue;
+        }
+        $nameLen = (int) $header['nameLen'];
+        $extraLen = (int) $header['extraLen'];
+        $size = (int) $header['size'];
+        $method = (int) $header['method'];
+        $nameStart = $pos + 30;
+        if ($nameStart + $nameLen > $length) {
+            break;
+        }
+        $name = str_replace('\\', '/', substr($zipData, $nameStart, $nameLen));
+        $base = basename($name);
+        $dataStart = $nameStart + $nameLen + $extraLen;
+        if (
+            ($base === 'AGENT_VERSION' || $base === 'AGENT_VERSION.txt')
+            && $method === 0
+            && $size > 0
+            && $dataStart + $size <= $length
+        ) {
+            $version = normalize_agent_version(substr($zipData, $dataStart, $size));
+            if ($version !== null) {
+                return $version;
+            }
+        }
+        $offset = $pos + 4;
+    }
+
+    return null;
+}
+
+function published_agent_version(): ?string
+{
+    $setup = installer_setup_path();
+    if ($setup !== null) {
+        $fromExe = installer_embedded_version($setup);
+        if ($fromExe !== null) {
+            installer_write_published_version($fromExe);
+
+            return $fromExe;
+        }
+        $fromName = installer_version_from_filename($setup);
+        if ($fromName !== null) {
+            return $fromName;
+        }
+    }
+
+    return installer_read_published_version();
+}
+
+/** Versão publicada do agente Windows (o .exe em storage/downloads, não o txt do repositório). */
 function agent_release_version(): string
 {
     static $cached = null;
     if ($cached !== null) {
         return $cached;
     }
-    $path = dirname(__DIR__) . '/scripts/AGENT_VERSION.txt';
-    $cached = is_file($path) ? trim((string) file_get_contents($path)) : '0.0.0';
-    if ($cached === '') {
-        $cached = '0.0.0';
-    }
+    $cached = published_agent_version() ?? agent_source_version();
+
     return $cached;
 }
 
@@ -892,7 +1078,7 @@ function stream_installer_setup(): bool
     if ($path === null) {
         return false;
     }
-    $version = preg_replace('/[^0-9.]+/', '', agent_release_version()) ?: '0.0.0';
+    $version = normalize_agent_version(agent_release_version()) ?? '0.0.0';
     $filename = 'WiFiDaLoja-Agent-Setup-' . $version . '.exe';
     header('Content-Type: application/octet-stream');
     header('Content-Disposition: attachment; filename="' . $filename . '"');

@@ -29,7 +29,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if (!move_uploaded_file($tmp, $dest)) {
             throw new RuntimeException('Não foi possível gravar em storage/downloads/.');
         }
-        $_SESSION['flash_ok'] = 'Instalador publicado: ' . $agentName;
+        $version = installer_embedded_version($dest)
+            ?? installer_version_from_filename((string) ($file['name'] ?? ''))
+            ?? null;
+        if ($version !== null) {
+            installer_write_published_version($version);
+            $_SESSION['flash_ok'] = 'Instalador publicado: v' . $version;
+        } else {
+            $_SESSION['flash_ok'] = 'Instalador publicado: ' . $agentName;
+        }
     } catch (Throwable $e) {
         $_SESSION['flash_error'] = $e->getMessage();
     }

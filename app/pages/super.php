@@ -280,18 +280,27 @@ $superNavItems = [
         <?php elseif ($tab === 'instalador'): ?>
             <section class="card card-narrow">
                 <h2>Agente Windows</h2>
-                <p class="hint">Versão publicada: <strong><?= h(agent_release_version()) ?></strong> · pacote cloud (bandeja, hotspot, DNS cativo). Gere com <code>installer\Empacotar.ps1</code> após alterar <code>scripts\AGENT_VERSION.txt</code>.</p>
+                <?php
+                $publishedVersion = published_agent_version();
+                $sourceVersion = agent_source_version();
+                $displayVersion = $publishedVersion ?? $sourceVersion;
+                ?>
+                <p class="hint">Versão publicada: <strong><?= h($displayVersion) ?></strong> — lida do instalador enviado, não do código-fonte. Pacote cloud (bandeja, hotspot, DNS cativo).</p>
                 <?php if ($setupFile): ?>
                     <?php
                     $setupBytes = (int) filesize($setupFile);
                     $setupSize = $setupBytes >= 1048576
                         ? round($setupBytes / 1048576, 1) . ' MB'
                         : max(1, (int) round($setupBytes / 1024)) . ' KB';
+                    $setupWhen = date('d/m/Y H:i', (int) filemtime($setupFile));
                     ?>
                     <div class="actions row">
                         <a class="btn" href="/super/instalador/baixar">Baixar <?= h(installer_agent_filename()) ?></a>
                     </div>
-                    <p class="hint"><?= h(basename($setupFile)) ?> · <?= h($setupSize) ?></p>
+                    <p class="hint"><?= h(basename($setupFile)) ?> · <?= h($setupSize) ?> · <?= h($setupWhen) ?></p>
+                    <?php if ($sourceVersion !== '0.0.0' && version_compare($sourceVersion, $displayVersion, '>')): ?>
+                        <p class="hint">Há um build local <strong><?= h($sourceVersion) ?></strong>. Envie <code>WiFiDaLoja-Agent-Setup-<?= h($sourceVersion) ?>.exe</code> para publicar.</p>
+                    <?php endif; ?>
                 <?php else: ?>
                     <p class="hint">Ainda não publicado. Envie o .exe abaixo ou copie para <code>storage/downloads/</code>.</p>
                 <?php endif; ?>

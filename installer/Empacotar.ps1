@@ -93,6 +93,7 @@ if (-not $agentVersion) {
     throw "scripts\AGENT_VERSION.txt esta vazio"
 }
 Set-Content -Path (Join-Path $Stage "AGENT_VERSION") -Value $agentVersion -Encoding ASCII -NoNewline
+Set-Content -Path (Join-Path $Root "app\AGENT_VERSION.txt") -Value $agentVersion -Encoding ASCII
 # Copia tambem o .txt para depuracao
 Copy-Item $versionFile (Join-Path $Stage "scripts\AGENT_VERSION.txt") -Force
 Write-Host "Versao do agente: $agentVersion"
@@ -171,6 +172,7 @@ New-Item -ItemType Directory -Path $dl -Force | Out-Null
 $published = Join-Path $dl "WiFiDaLoja-Agent-Setup.exe"
 $publishedVer = Join-Path $dl ("WiFiDaLoja-Agent-Setup-$agentVersion.exe")
 Copy-Item $versionedOut $publishedVer -Force
+Set-Content -Path (Join-Path $dl "WiFiDaLoja-Agent-Setup.version") -Value $agentVersion -Encoding ASCII -NoNewline
 try {
     Copy-Item $OutExe $published -Force -ErrorAction Stop
     # Confere se o download publicado e o mesmo arquivo que acabamos de gerar
