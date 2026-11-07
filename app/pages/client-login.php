@@ -65,5 +65,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     </form>
     <p class="saas-auth-footer">Use o e-mail da sua conta Wi-Fi da loja. <a href="/entrar">Painel completo</a></p>
 </section>
+<?php require __DIR__ . '/../partials/forms-busy.js.php'; ?>
 </body>
 </html>

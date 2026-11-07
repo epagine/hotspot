@@ -88,5 +88,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     </form>
     <p class="saas-auth-footer">Use o e-mail e a senha definidos na instalação. <a href="/comecar">Ainda não tem conta?</a></p>
 </section>
+<?php require __DIR__ . '/../partials/forms-busy.js.php'; ?>
 </body>
 </html>

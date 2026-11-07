@@ -73,6 +73,10 @@ internal sealed class TrayApp : ApplicationContext
     private readonly ContextMenuStrip menu;
     private readonly FormsTimer timer;
     private StatusForm statusForm;
+    private bool commandBusy;
+    private FormsTimer commandBusyTimer;
+    private ToolStripItem menuStart;
+    private ToolStripItem menuStop;
 
     public TrayApp()
     {
@@ -123,8 +127,8 @@ internal sealed class TrayApp : ApplicationContext
         strip.Items.Add("Abrir painel do cliente", null, delegate { OpenUrl(ClientPanelUrl()); });
         strip.Items.Add("Abrir hotspot no painel", null, delegate { OpenUrl(AdminPanelUrl()); });
         strip.Items.Add(new ToolStripSeparator());
-        strip.Items.Add("Ligar rede", null, delegate { WriteCommand("start"); });
-        strip.Items.Add("Desligar rede", null, delegate { WriteCommand("stop"); });
+        menuStart = strip.Items.Add("Ligar rede", null, delegate { WriteCommand("start"); });
+        menuStop = strip.Items.Add("Desligar rede", null, delegate { WriteCommand("stop"); });
         strip.Items.Add("Escolher adaptador Wi-Fi", null, delegate { SafePickAdapter(); });
         strip.Items.Add("Vincular hotspot", null, delegate { SafeBindStore(); });
         strip.Items.Add(new ToolStripSeparator());
@@ -505,8 +509,56 @@ internal sealed class TrayApp : ApplicationContext
         File.WriteAllText(Storage("command.json"), json);
     }
 
+    private void SetTrayCommandBusy(bool busy, string action = "")
+    {
+        commandBusy = busy;
+        try
+        {
+            if (menuStart != null)
+            {
+                menuStart.Enabled = !busy;
+                menuStart.Text = busy && action == "start" ? "Processando…" : "Ligar rede";
+            }
+            if (menuStop != null)
+            {
+                menuStop.Enabled = !busy;
+                menuStop.Text = busy && action == "stop" ? "Processando…" : "Desligar rede";
+            }
+            if (statusForm != null && !statusForm.IsDisposed)
+            {
+                statusForm.SetCommandBusy(busy, action);
+            }
+        }
+        catch
+        {
+        }
+        if (busy)
+        {
+            if (commandBusyTimer == null)
+            {
+                commandBusyTimer = new FormsTimer { Interval = 4000 };
+                commandBusyTimer.Tick += delegate
+                {
+                    commandBusyTimer.Stop();
+                    SetTrayCommandBusy(false);
+                };
+            }
+            commandBusyTimer.Stop();
+            commandBusyTimer.Start();
+        }
+        else if (commandBusyTimer != null)
+        {
+            commandBusyTimer.Stop();
+        }
+    }
+
     private void WriteCommand(string action)
     {
+        if (commandBusy)
+        {
+            return;
+        }
+        SetTrayCommandBusy(true, action);
         icon.ShowBalloonTip(2000, "Wi-Fi da loja", action == "start" ? "Ligando a rede..." : "Desligando a rede...", ToolTipIcon.Info);
         ThreadPool.QueueUserWorkItem(delegate
         {
@@ -993,6 +1045,8 @@ internal sealed class TrayApp : ApplicationContext
         private readonly Label boundLbl;
         private readonly LinkLabel adminLink;
         private readonly LinkLabel clientLink;
+        private readonly Button startBtn;
+        private readonly Button stopBtn;
         private bool showPass;
 
         public StatusForm(TrayApp owner)
@@ -1045,13 +1099,13 @@ internal sealed class TrayApp : ApplicationContext
             };
             hot.Controls.Add(showPassBtn);
 
-            var startBtn = MakeGoldButton("Ligar", 16, 610, 100, 34);
+            startBtn = MakeGoldButton("Ligar", 16, 610, 118, 34);
             startBtn.Click += delegate { app.WriteCommand("start"); };
-            var stopBtn = MakeGhostButton("Desligar", 126, 610, 100, 34);
+            stopBtn = MakeGhostButton("Desligar", 140, 610, 110, 34);
             stopBtn.Click += delegate { app.WriteCommand("stop"); };
-            var bindBtn = MakeGhostButton("Vincular…", 236, 610, 110, 34);
+            var bindBtn = MakeGhostButton("Vincular…", 256, 610, 110, 34);
             bindBtn.Click += delegate { app.SafeBindStore(); };
-            var refreshBtn = MakeGhostButton("Atualizar", 356, 610, 100, 34);
+            var refreshBtn = MakeGhostButton("Atualizar", 372, 610, 100, 34);
             refreshBtn.Click += delegate { RefreshData(); };
 
             boundLbl = new Label
@@ -1082,6 +1136,25 @@ internal sealed class TrayApp : ApplicationContext
             Controls.Add(refreshBtn);
             Controls.Add(boundLbl);
             Controls.Add(syncLbl);
+        }
+
+        public void SetCommandBusy(bool busy, string action)
+        {
+            if (IsDisposed)
+            {
+                return;
+            }
+            if (InvokeRequired)
+            {
+                BeginInvoke(new Action(() => SetCommandBusy(busy, action)));
+                return;
+            }
+            startBtn.Enabled = !busy;
+            stopBtn.Enabled = !busy;
+            startBtn.Text = busy && action == "start" ? "Processando…" : "Ligar";
+            stopBtn.Text = busy && action == "stop" ? "Processando…" : "Desligar";
+            startBtn.Cursor = busy ? Cursors.WaitCursor : Cursors.Hand;
+            stopBtn.Cursor = busy ? Cursors.WaitCursor : Cursors.Hand;
         }
 
         private Panel Section(string title, int x, int y, int w, int h)

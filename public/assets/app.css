@@ -114,6 +114,14 @@ textarea:focus {
 .btn.ghost:hover { background: var(--app-hover); border-color: #d4d4d8; }
 .btn-block { display: block; width: 100%; }
 .btn-sm { padding: 5px 10px; font-size: 12px; }
+.btn:disabled,
+.btn.is-busy,
+button[name="do"]:disabled,
+button[name="do"].is-busy {
+  opacity: .72;
+  cursor: wait;
+  pointer-events: none;
+}
 .actions { display: grid; gap: 10px; margin-top: 16px; }
 .code-big { font-size: 40px; letter-spacing: .16em; margin: 8px 0 16px; color: var(--app-ink); font-weight: 600; }
 .code-pill { display: inline-block; border: 1px solid var(--app-line); padding: 6px 10px; border-radius: var(--radius); font-size: 12px; }
@@ -1377,6 +1385,14 @@ body.admin-shell .btn.ghost:hover {
 body.admin-shell .btn-sm {
   padding: 5px 10px;
   font-size: 12px;
+}
+body.admin-shell .btn:disabled,
+body.admin-shell .btn.is-busy,
+body.admin-shell button[name="do"]:disabled,
+body.admin-shell button[name="do"].is-busy {
+  opacity: .72;
+  cursor: wait;
+  pointer-events: none;
 }
 
 /* Tabelas */

@@ -28,7 +28,14 @@ async function shareStatus() {
 }
 
 async function confirmPosted() {
+  if (confirmBtn.disabled) {
+    return;
+  }
+  const idleLabel = confirmBtn.textContent;
   confirmBtn.disabled = true;
+  confirmBtn.classList.add('is-busy');
+  confirmBtn.setAttribute('aria-busy', 'true');
+  confirmBtn.textContent = 'Processando…';
   const phoneEl = document.getElementById('phone');
   const phone = phoneEl ? phoneEl.value : '';
   const res = await fetch(`${portalRoot}/confirmar`, {
@@ -39,6 +46,9 @@ async function confirmPosted() {
   const data = await res.json();
   if (!data.ok) {
     confirmBtn.disabled = false;
+    confirmBtn.classList.remove('is-busy');
+    confirmBtn.removeAttribute('aria-busy');
+    confirmBtn.textContent = idleLabel;
     alert(data.message || 'Não foi possível liberar o Wi-Fi.');
     return;
   }

@@ -86,5 +86,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     </form>
     <p class="saas-auth-footer">Já tem conta? <a href="/entrar">Entrar</a></p>
 </section>
+<?php require __DIR__ . '/../partials/forms-busy.js.php'; ?>
 </body>
 </html>
